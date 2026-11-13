@@ -1,6 +1,6 @@
 # CI: lint, typecheck, testes e build em todo push na main e em todo PR.
 # Actions fixadas por SHA (comentário com a tag), conforme o ADR 0002.
-# O job "ci" agrega os demais e é o check obrigatório da main.
+# O job "ci" agrega os demais; é o check a exigir se a main ganhar proteção de branch.
 name: ci
 
 on:

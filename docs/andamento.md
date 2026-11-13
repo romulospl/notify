@@ -167,7 +167,7 @@ Dados conferidos no GitHub em 13/11/2026:
 
 1. **Concluída:** a [#11 (1.2)](https://github.com/romulospl/notify/issues/11), com `LICENSE` (MIT), esqueleto de pastas, pnpm workspaces, Turborepo e `services/go.mod`. Cada pasta tem um `README.md` com o papel dela e a issue que a cria.
 2. **Concluída:** a [#12 (1.3)](https://github.com/romulospl/notify/issues/12), com Postgres 17.11 e Umami 3.4.1 fixados por digest. 
-   **Concluída:** a [#13 (1.4)](https://github.com/romulospl/notify/issues/13), com CI no GitHub Actions (actions fixadas por SHA, Postgres nos testes e o Compose testado a cada PR).
+   **Concluída:** a [#13 (1.4)](https://github.com/romulospl/notify/issues/13), com CI no GitHub Actions (actions fixadas por SHA, Postgres nos testes e o Compose testado a cada PR). Por decisão de 13/11/2026, a `main` fica **sem proteção de branch**: o CI roda, mas não bloqueia merge nem push direto. Se a proteção for ligada, basta exigir o check `ci`.
 3. **Próximo passo:** o portal ([#57](https://github.com/romulospl/notify/issues/57)) e o gateway ([#61](https://github.com/romulospl/notify/issues/61)) destravam o E2, o E3, o E4 e o E6.
 4. **Pode ser feita a qualquer momento:** a [#32 (5.3)](https://github.com/romulospl/notify/issues/32), normalização de rotas, que não depende de nada.
 5. **Fora do código, sem dependência:**

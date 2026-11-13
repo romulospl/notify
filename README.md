@@ -134,7 +134,7 @@ O workflow [`ci.yml`](.github/workflows/ci.yml) roda em todo push na `main` e em
 | `typescript` | `pnpm install --frozen-lockfile` (falha se o lockfile estiver desatualizado), `lint`, `typecheck`, `test` e `build`, com Postgres disponível em `DATABASE_URL` |
 | `go` | `gofmt`, `go mod tidy -diff`, `go vet` e `go test -race` em `services/`, também com Postgres |
 | `compose` | Sobe o ambiente local com `docker compose` e confere os bancos e o Umami |
-| `ci` | Agrega os anteriores; é o check obrigatório para o merge na `main` |
+| `ci` | Agrega os anteriores em um resultado só. A `main` não tem proteção de branch, então o check não bloqueia merge; se a proteção for ligada, é este o check a exigir |
 
 As actions são fixadas por SHA, com a tag em comentário.
 

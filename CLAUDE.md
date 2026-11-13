@@ -16,7 +16,7 @@ O monorepo tem a estrutura do ADR 0002 (issue #11), mas **ainda não há código
 
 - **Ambiente local:** `docker compose up -d --wait` na raiz sobe PostgreSQL 17 (bancos `umami` e `notify`, cada um com usuário próprio) e Umami 3.4.1 em `http://localhost:3001` (login `admin`/`umami`). O `compose.yaml` da raiz só inclui `infra/compose/dev.yaml`. Imagens fixadas por tag **e digest**; o script de criação dos bancos (`infra/compose/postgres/init/`) só roda com o volume vazio, então mudanças nele exigem `docker compose down -v`. Portas e senhas podem ser trocadas num `.env` (ver `.env.example`). Cada serviço próprio entra no `dev.yaml` na issue que o cria.
 
-- **CI:** `.github/workflows/ci.yml`, jobs `typescript`, `go`, `compose` e o agregador `ci` (check obrigatório da `main`). Testes de integração usam o Postgres do job pela variável `DATABASE_URL` (`postgresql://notify:notify@localhost:5432/notify`). Actions sempre fixadas por SHA com a tag em comentário, e só releases com pelo menos 14 dias. Valide mudanças no workflow com `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest`. Job novo precisa entrar no `needs` do `ci`.
+- **CI:** `.github/workflows/ci.yml`, jobs `typescript`, `go`, `compose` e o agregador `ci` (a `main` não tem proteção de branch por decisão do Romulo; se for ligada, exigir só o `ci`). Testes de integração usam o Postgres do job pela variável `DATABASE_URL` (`postgresql://notify:notify@localhost:5432/notify`). Actions sempre fixadas por SHA com a tag em comentário, e só releases com pelo menos 14 dias. Valide mudanças no workflow com `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest`. Job novo precisa entrar no `needs` do `ci`.
 
 ## Onde está o planejamento
 
