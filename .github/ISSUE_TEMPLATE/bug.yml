@@ -1,0 +1,53 @@
+name: Bug
+description: Algo não funciona como deveria na plataforma, no script ou na ingestão de API.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por relatar. **Falhas de segurança não vão aqui**: use o relato privado descrito no `SECURITY.md`.
+        Não cole chaves de ingestão, senhas nem dados pessoais.
+  - type: dropdown
+    id: componente
+    attributes:
+      label: Componente
+      options:
+        - Portal (cadastro, login, painéis)
+        - Script de rastreamento web
+        - Ingestão de API (OpenTelemetry)
+        - Documentação
+        - Não sei
+    validations:
+      required: true
+  - type: textarea
+    id: o-que-aconteceu
+    attributes:
+      label: O que aconteceu
+      description: O comportamento observado, com mensagens de erro se houver.
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: O que era esperado
+    validations:
+      required: true
+  - type: textarea
+    id: passos
+    attributes:
+      label: Como reproduzir
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: versao
+    attributes:
+      label: Versão
+      description: Versão do script (`/s/vX.Y.Z/`), SDK do OpenTelemetry, navegador ou commit, conforme o caso.
+  - type: textarea
+    id: contexto
+    attributes:
+      label: Contexto adicional
+      description: Framework do site (HTML, SPA, SSR), linguagem da API, capturas de tela.

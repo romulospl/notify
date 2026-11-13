@@ -152,6 +152,7 @@ Dados conferidos no GitHub em 13/11/2026:
 | `LICENSE`, `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `services/go.mod` | Estrutura do monorepo (#11) |
 | `compose.yaml`, `infra/compose/`, `.env.example` | Ambiente local com Postgres 17 e Umami 3.4.1 (#12) |
 | `.github/workflows/ci.yml` | CI com jobs de TypeScript, Go e Compose (#13) |
+| `SECURITY.md`, `CONTRIBUTING.md`, `.github/ISSUE_TEMPLATE/` | Canal de vulnerabilidades, guia de contribuição e modelos de issue (#56) |
 
 ### Commits na `main` (já no GitHub)
 
@@ -168,6 +169,7 @@ Dados conferidos no GitHub em 13/11/2026:
 1. **Concluída:** a [#11 (1.2)](https://github.com/romulospl/notify/issues/11), com `LICENSE` (MIT), esqueleto de pastas, pnpm workspaces, Turborepo e `services/go.mod`. Cada pasta tem um `README.md` com o papel dela e a issue que a cria.
 2. **Concluída:** a [#12 (1.3)](https://github.com/romulospl/notify/issues/12), com Postgres 17.11 e Umami 3.4.1 fixados por digest. 
    **Concluída:** a [#13 (1.4)](https://github.com/romulospl/notify/issues/13), com CI no GitHub Actions (actions fixadas por SHA, Postgres nos testes e o Compose testado a cada PR). Por decisão de 13/11/2026, a `main` fica **sem proteção de branch**: o CI roda, mas não bloqueia merge nem push direto. Se a proteção for ligada, basta exigir o check `ci`.
+   **Concluída:** a [#56 (1.8)](https://github.com/romulospl/notify/issues/56), com `SECURITY.md`, `CONTRIBUTING.md` e modelos de issue (bug, dúvida de tenant, pedido de recurso). **Pendência:** o relato privado de vulnerabilidades do GitHub só existe em repositório público; ao abrir o repositório, ligar em *Settings → Code security → Private vulnerability reporting*.
 3. **Próximo passo:** o portal ([#57](https://github.com/romulospl/notify/issues/57)) e o gateway ([#61](https://github.com/romulospl/notify/issues/61)) destravam o E2, o E3, o E4 e o E6.
 4. **Pode ser feita a qualquer momento:** a [#32 (5.3)](https://github.com/romulospl/notify/issues/32), normalização de rotas, que não depende de nada.
 5. **Fora do código, sem dependência:**

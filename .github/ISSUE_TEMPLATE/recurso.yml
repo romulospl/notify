@@ -1,0 +1,28 @@
+name: Pedido de recurso
+description: Sugira uma métrica, um painel ou uma integração nova.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: Problema
+      description: Que necessidade o recurso resolve e para quem (tenant, operador do SCF, contribuidor).
+    validations:
+      required: true
+  - type: textarea
+    id: proposta
+    attributes:
+      label: Proposta
+      description: Como você imagina a solução.
+    validations:
+      required: true
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: Alternativas consideradas
+  - type: checkboxes
+    id: privacidade
+    attributes:
+      label: Privacidade
+      options:
+        - label: O recurso não exige cookies, storage no navegador nem guardar dados pessoais (como o IP completo).

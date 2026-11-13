@@ -1,0 +1,32 @@
+name: Dúvida de projeto (tenant)
+description: Dúvida sobre cadastro, instalação do script, dual-export OpenTelemetry ou leitura dos painéis.
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Este é o canal público de suporte. Não cole chaves de ingestão, senhas nem dados pessoais.
+  - type: dropdown
+    id: assunto
+    attributes:
+      label: Assunto
+      options:
+        - Cadastro e acesso ao portal
+        - Instalação do script no site
+        - Envio de métricas de API (dual-export OTLP)
+        - Interpretação das métricas
+        - Outro
+    validations:
+      required: true
+  - type: input
+    id: projeto
+    attributes:
+      label: Projeto
+      description: Nome do projeto no notify (opcional).
+  - type: textarea
+    id: duvida
+    attributes:
+      label: Dúvida
+      description: O que você quer fazer, o que já tentou e onde travou.
+    validations:
+      required: true
