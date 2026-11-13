@@ -8,33 +8,59 @@
   ],
   "description": "Atualizações por PR, só com releases de pelo menos 14 dias (ADR 0002).",
   "timezone": "Europe/Berlin",
-  "schedule": ["before 6am on monday"],
+  "schedule": [
+    "before 6am on monday"
+  ],
   "minimumReleaseAge": "14 days",
   "internalChecksFilter": "strict",
   "prConcurrentLimit": 5,
-  "labels": ["dependencies"],
+  "labels": [
+    "dependencies"
+  ],
   "rangeStrategy": "pin",
-  "postUpdateOptions": ["gomodTidy"],
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
   "docker-compose": {
-    "managerFilePatterns": ["/(^|/)infra/compose/.+\\.ya?ml$/"]
+    "managerFilePatterns": [
+      "/(^|/)infra/compose/.+\\.ya?ml$/"
+    ]
   },
   "packageRules": [
     {
+      "description": "Versão maior só abre PR depois de aprovada no Dependency Dashboard (atualizações de segurança passam direto).",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
       "description": "Umami só sobe por PR revisado, nunca agrupado nem automático.",
-      "matchDepNames": ["ghcr.io/umami-software/umami"],
+      "matchDepNames": [
+        "ghcr.io/umami-software/umami"
+      ],
       "groupName": null,
       "automerge": false,
-      "labels": ["dependencies", "umami"]
+      "labels": [
+        "dependencies",
+        "umami"
+      ]
     },
     {
       "description": "Postgres: só minor e patch dentro da mesma versão maior.",
-      "matchDepNames": ["postgres"],
-      "matchUpdateTypes": ["major"],
+      "matchDepNames": [
+        "postgres"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "enabled": false
     },
     {
       "description": "Actions do GitHub agrupadas em um PR.",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "groupName": "github actions"
     }
   ]
