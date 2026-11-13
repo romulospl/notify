@@ -11,7 +11,7 @@ Registro do que já foi feito, das decisões tomadas e dos próximos passos. Atu
 | Quadro do projeto | 45 itens em Ready, 19 em Backlog e 1 em Done |
 | Ferramenta base | **Umami v3.4.1** ([ADR 0001](adr/0001-ferramenta-base.md)) |
 | Arquitetura e stack | Definidas ([ADR 0002](adr/0002-arquitetura-e-stack.md)) |
-| Repositório | Estrutura do monorepo (#11) e ambiente local com Docker Compose (#12) |
+| Repositório | Estrutura do monorepo (#11), ambiente local com Docker Compose (#12) e CI (#13) |
 | Código | Nenhum ainda |
 
 ## 1. MVP definido a partir do RFP
@@ -151,6 +151,7 @@ Dados conferidos no GitHub em 13/11/2026:
 | `docs/andamento.md` | Este registro |
 | `LICENSE`, `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `services/go.mod` | Estrutura do monorepo (#11) |
 | `compose.yaml`, `infra/compose/`, `.env.example` | Ambiente local com Postgres 17 e Umami 3.4.1 (#12) |
+| `.github/workflows/ci.yml` | CI com jobs de TypeScript, Go e Compose (#13) |
 
 ### Commits na `main` (já no GitHub)
 
@@ -160,12 +161,14 @@ Dados conferidos no GitHub em 13/11/2026:
 | `f3a1a60` | `docs: adiciona o README do projeto` (refs #11) |
 | `4d56cc2` | `docs: registra o andamento e a revisão do backlog` |
 | `09b68d5` | `chore: set up monorepo structure and MIT license` (fechou a #11) |
+| `d38c783` | `build(infra): add local docker compose with postgres and umami` (fechou a #12) |
 
 ## 6. Pendências e próximos passos
 
 1. **Concluída:** a [#11 (1.2)](https://github.com/romulospl/notify/issues/11), com `LICENSE` (MIT), esqueleto de pastas, pnpm workspaces, Turborepo e `services/go.mod`. Cada pasta tem um `README.md` com o papel dela e a issue que a cria.
-2. **Concluída:** a [#12 (1.3)](https://github.com/romulospl/notify/issues/12), com Postgres 17.11 e Umami 3.4.1 fixados por digest. **Próximo passo:** a [#13](https://github.com/romulospl/notify/issues/13) (CI).
-3. **Depois da #12:** o portal ([#57](https://github.com/romulospl/notify/issues/57)) e o gateway ([#61](https://github.com/romulospl/notify/issues/61)) destravam o E2, o E3, o E4 e o E6.
+2. **Concluída:** a [#12 (1.3)](https://github.com/romulospl/notify/issues/12), com Postgres 17.11 e Umami 3.4.1 fixados por digest. 
+   **Concluída:** a [#13 (1.4)](https://github.com/romulospl/notify/issues/13), com CI no GitHub Actions (actions fixadas por SHA, Postgres nos testes e o Compose testado a cada PR).
+3. **Próximo passo:** o portal ([#57](https://github.com/romulospl/notify/issues/57)) e o gateway ([#61](https://github.com/romulospl/notify/issues/61)) destravam o E2, o E3, o E4 e o E6.
 4. **Pode ser feita a qualquer momento:** a [#32 (5.3)](https://github.com/romulospl/notify/issues/32), normalização de rotas, que não depende de nada.
 5. **Fora do código, sem dependência:**
    - buscar o código de indicação e enviar o Interest form ([#64](https://github.com/romulospl/notify/issues/64));
