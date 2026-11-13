@@ -8,16 +8,26 @@ Plataforma open source e multi-tenant de **analytics web e de API** para projeto
 
 ## Estado atual
 
-O monorepo tem a estrutura do ADR 0002 (issue #11), mas **ainda não há código de aplicação**: cada pasta tem só um `README.md` dizendo o que vai nela e qual issue a cria.
+O monorepo tem a estrutura do ADR 0002 (issue #11). O único código de aplicação até agora é o **esqueleto do portal** (`apps/portal`, issue #57): login com Better Auth, rotas privadas e layout. As outras pastas têm só um `README.md` dizendo o que vai nela e qual issue a cria.
 
-- **TypeScript:** pnpm workspaces (`apps/*`, `packages/*`, `examples/*`) + Turborepo. Comandos na raiz: `pnpm install`, `pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm test` (todos via `turbo run`). Hoje não executam tarefa nenhuma.
+- **TypeScript:** pnpm workspaces (`apps/*`, `packages/*`, `examples/*`) + Turborepo. Comandos na raiz: `pnpm install`, `pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm test` (todos via `turbo run`). Hoje só o portal tem tarefas.
 - **Go:** um módulo só em `services/` (`github.com/romulospl/notify/services`, Go 1.26). Rodar `go` de dentro de `services/`.
 - **Versões novas:** o `pnpm-workspace.yaml` tem `minimumReleaseAge: 20160` (14 dias), então o pnpm recusa releases mais novas que isso. Fixe versões exatas no `package.json`.
 
-- **Ambiente local:** `docker compose up -d --wait` na raiz sobe PostgreSQL 17 (bancos `umami` e `notify`, cada um com usuário próprio) e Umami 3.4.1 em `http://localhost:3001` (login `admin`/`umami`). O `compose.yaml` da raiz só inclui `infra/compose/dev.yaml`. Imagens fixadas por tag **e digest**; o script de criação dos bancos (`infra/compose/postgres/init/`) só roda com o volume vazio, então mudanças nele exigem `docker compose down -v`. Portas e senhas podem ser trocadas num `.env` (ver `.env.example`). Cada serviço próprio entra no `dev.yaml` na issue que o cria.
+- **Ambiente local:** `docker compose up -d --wait` na raiz sobe PostgreSQL 17 (bancos `umami` e `notify`, cada um com usuário próprio) e Umami 3.4.1 em `http://localhost:3001` (login `admin`/`umami`). O `compose.yaml` da raiz só inclui `infra/compose/dev.yaml`. Imagens fixadas por tag **e digest**; o script de criação dos bancos (`infra/compose/postgres/init/`) só roda com o volume vazio, então mudanças nele exigem `docker compose down -v`. Portas e senhas podem ser trocadas num `.env` (ver `.env.example`). Cada serviço próprio entra no `dev.yaml` na issue que o cria. O portal já está lá (porta 3000), com `RUN_MIGRATIONS=true`.
 
 - **CI:** `.github/workflows/ci.yml`, jobs `typescript`, `go`, `compose` e o agregador `ci` (a `main` não tem proteção de branch por decisão do Romulo; se for ligada, exigir só o `ci`). Testes de integração usam o Postgres do job pela variável `DATABASE_URL` (`postgresql://notify:notify@localhost:5432/notify`). Actions sempre fixadas por SHA com a tag em comentário, e só releases com pelo menos 14 dias. Valide mudanças no workflow com `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest`. Job novo precisa entrar no `needs` do `ci`.
 - **Release e dependências:** `.github/workflows/release.yml` roda ao publicar uma release; gera SBOM e publica, assina (cosign keyless) e atesta uma imagem para cada `Dockerfile` em `apps/*/` ou `services/*/` (o nome da imagem é o da pasta, e o contexto do build é a raiz do repositório). O `renovate.json` impõe 14 dias de espera e trata o Umami à parte; o `docker-compose` manager lê `infra/compose/*.yaml`. Valide mudanças com `npx --yes --package renovate -- renovate-config-validator --strict renovate.json`.
+
+## Portal (`apps/portal`)
+
+- Next.js 16 (App Router, `src/proxy.ts` no lugar do antigo `middleware.ts`), Better Auth com Drizzle, Tailwind 4, Vitest. Interface em inglês; comentários e docs em português.
+- Toda página privada chama `requireSession()` ou `requireOperator()` de `src/lib/session.ts`. O `proxy.ts` é só um redirecionamento otimista e **não** substitui essa checagem.
+- Variáveis lidas por `src/lib/env.ts`; no `next build` ele usa valores inertes, então não acesse o banco em tempo de build.
+- Esquema em `src/lib/db/schema.ts` (colunas em snake_case); depois de mudar, `pnpm db:generate --name <descricao>` e commite o SQL de `drizzle/`.
+- O cadastro pela API está desligado (`disableSignUp`) até a #17/#60. Usuários de teste: `pnpm user:create` (senha em `PORTAL_USER_PASSWORD`).
+- A sessão não guarda IP (`databaseHooks` em `src/lib/auth.ts`); a telemetria do Better Auth e do Next fica desligada.
+- TypeScript fixado em 6.0 e ESLint em 9, porque os plugins do `eslint-config-next` ainda não aceitam TypeScript 7 nem ESLint 10.
 
 ## Onde está o planejamento
 

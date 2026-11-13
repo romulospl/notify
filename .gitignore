@@ -23,3 +23,6 @@ services/bin/
 .idea/
 .vscode/
 *.log
+
+# Next.js
+next-env.d.ts

@@ -1,5 +1,5 @@
-# Ambiente local: PostgreSQL (bancos umami e notify) e Umami v3.4.1.
-# Portal, gateway e coletor entram aqui nas issues que os criam.
+# Ambiente local: PostgreSQL (bancos umami e notify), Umami v3.4.1 e o portal.
+# Gateway e coletor entram aqui nas issues que os criam.
 # Valores padrão são só para desenvolvimento; sobrescreva em um .env na raiz.
 
 services:
@@ -40,6 +40,30 @@ services:
     init: true
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/heartbeat"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  portal:
+    build:
+      context: ../..
+      dockerfile: apps/portal/Dockerfile
+    image: notify-portal:dev
+    environment:
+      DATABASE_URL: postgresql://notify:${NOTIFY_DB_PASSWORD:-notify}@postgres:5432/notify
+      BETTER_AUTH_SECRET: ${PORTAL_AUTH_SECRET:-dev-only-portal-auth-secret-change-me}
+      BETTER_AUTH_URL: http://localhost:${PORTAL_PORT:-3000}
+      # Aplica as migrações do Drizzle na subida.
+      RUN_MIGRATIONS: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${PORTAL_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/auth/ok >/dev/null"]
       interval: 5s
       timeout: 5s
       retries: 20

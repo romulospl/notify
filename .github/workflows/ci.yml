@@ -94,12 +94,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Sobe o ambiente local
-        run: docker compose up -d --wait --wait-timeout 180
-      - name: Confere bancos e Umami
+        run: docker compose up -d --build --wait --wait-timeout 300
+      - name: Confere bancos, Umami e portal
         run: |
           docker compose exec -T postgres psql -U postgres -Atc \
             "select count(*) from pg_database where datname in ('umami','notify')" | grep -qx 2
           curl -fsS http://127.0.0.1:3001/api/heartbeat
+          curl -fsS http://127.0.0.1:3000/api/auth/ok
+          # Rota privada sem sessão redireciona para o login.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/dashboard)" = 307
       - name: Logs em caso de falha
         if: failure()
         run: docker compose logs
