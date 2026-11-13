@@ -138,6 +138,22 @@ O workflow [`ci.yml`](.github/workflows/ci.yml) roda em todo push na `main` e em
 
 As actions são fixadas por SHA, com a tag em comentário.
 
+### Cadeia de suprimentos
+
+- **Dependências travadas:** `pnpm-lock.yaml` e `services/go.sum` commitados; o CI falha com lockfile ausente ou desatualizado.
+- **Espera de 14 dias:** o pnpm recusa versões mais novas (`minimumReleaseAge`) e o [Renovate](renovate.json) só abre PR para releases com pelo menos 14 dias. O Umami nunca é atualizado em grupo nem automaticamente.
+- **Release:** ao publicar uma release no GitHub (tag `vX.Y.Z`), o workflow [`release.yml`](.github/workflows/release.yml) anexa um SBOM (SPDX, gerado com syft) e, para cada `Dockerfile` em `apps/*` e `services/*`, publica a imagem em `ghcr.io/romulospl/notify/<nome>`, assinada com cosign (keyless) e com o SBOM da imagem como atestado.
+
+Para verificar uma imagem publicada:
+
+```bash
+cosign verify ghcr.io/romulospl/notify/<nome>:<versão> \
+  --certificate-identity-regexp '^https://github.com/romulospl/notify/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+Para conferir o SBOM atestado, troque `verify` por `verify-attestation --type spdxjson` no mesmo comando.
+
 ## Privacidade
 
 A meta é conformidade com a GDPR **sem banner de consentimento**:

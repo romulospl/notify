@@ -153,6 +153,7 @@ Dados conferidos no GitHub em 13/11/2026:
 | `compose.yaml`, `infra/compose/`, `.env.example` | Ambiente local com Postgres 17 e Umami 3.4.1 (#12) |
 | `.github/workflows/ci.yml` | CI com jobs de TypeScript, Go e Compose (#13) |
 | `SECURITY.md`, `CONTRIBUTING.md`, `.github/ISSUE_TEMPLATE/` | Canal de vulnerabilidades, guia de contribuição e modelos de issue (#56) |
+| `renovate.json`, `.github/workflows/release.yml` | Renovate e release com SBOM e imagens assinadas (#55) |
 
 ### Commits na `main` (já no GitHub)
 
@@ -163,6 +164,8 @@ Dados conferidos no GitHub em 13/11/2026:
 | `4d56cc2` | `docs: registra o andamento e a revisão do backlog` |
 | `09b68d5` | `chore: set up monorepo structure and MIT license` (fechou a #11) |
 | `d38c783` | `build(infra): add local docker compose with postgres and umami` (fechou a #12) |
+| `9e21e2f` | `ci: add github actions workflow with lint, tests and postgres (#66)` (fechou a #13) |
+| `22c37d1` | `docs: add security policy, contributing guide and issue templates (#67)` (fechou a #56) |
 
 ## 6. Pendências e próximos passos
 
@@ -170,6 +173,7 @@ Dados conferidos no GitHub em 13/11/2026:
 2. **Concluída:** a [#12 (1.3)](https://github.com/romulospl/notify/issues/12), com Postgres 17.11 e Umami 3.4.1 fixados por digest. 
    **Concluída:** a [#13 (1.4)](https://github.com/romulospl/notify/issues/13), com CI no GitHub Actions (actions fixadas por SHA, Postgres nos testes e o Compose testado a cada PR). Por decisão de 13/11/2026, a `main` fica **sem proteção de branch**: o CI roda, mas não bloqueia merge nem push direto. Se a proteção for ligada, basta exigir o check `ci`.
    **Concluída:** a [#56 (1.8)](https://github.com/romulospl/notify/issues/56), com `SECURITY.md`, `CONTRIBUTING.md` e modelos de issue (bug, dúvida de tenant, pedido de recurso). **Pendência:** o relato privado de vulnerabilidades do GitHub só existe em repositório público; ao abrir o repositório, ligar em *Settings → Code security → Private vulnerability reporting*.
+   **Concluída:** a [#55 (1.7)](https://github.com/romulospl/notify/issues/55), com Renovate (14 dias de espera) e o workflow de release com SBOM, imagens no GHCR assinadas com cosign e o comando de verificação no README. **Pendência:** instalar o app do Renovate no repositório (github.com/apps/renovate), que é uma ação da conta; sem ele o `renovate.json` não tem efeito.
 3. **Próximo passo:** o portal ([#57](https://github.com/romulospl/notify/issues/57)) e o gateway ([#61](https://github.com/romulospl/notify/issues/61)) destravam o E2, o E3, o E4 e o E6.
 4. **Pode ser feita a qualquer momento:** a [#32 (5.3)](https://github.com/romulospl/notify/issues/32), normalização de rotas, que não depende de nada.
 5. **Fora do código, sem dependência:**
