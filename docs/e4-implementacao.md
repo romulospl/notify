@@ -4,10 +4,10 @@ Registro da implementação do épico [E4 (#4)](https://github.com/romulospl/not
 
 ## 1. Situação
 
-| Issue | O que é | Situação |
-|---|---|---|
-| [#28 (4.1)](https://github.com/romulospl/notify/issues/28) | Painel web do tenant com as 7 métricas mínimas | Feita |
-| [#29 (4.2)](https://github.com/romulospl/notify/issues/29) | Painel web global do SCF, com comparação entre projetos | Pendente |
+| Issue | O que é | PR | Commit |
+|---|---|---|---|
+| [#28 (4.1)](https://github.com/romulospl/notify/issues/28) | Painel web do tenant com as 7 métricas mínimas | [#89](https://github.com/romulospl/notify/pull/89) | `9755566` |
+| [#29 (4.2)](https://github.com/romulospl/notify/issues/29) | Painel web global do SCF, com comparação entre projetos | — | Em revisão |
 
 ## 2. #28: painel web do tenant
 
@@ -49,9 +49,51 @@ Além disso: a variação de cada indicador sobre o período anterior de mesmo t
 
 **Conferido no navegador** com o Umami 3.4.1 local e cerca de 160 visualizações de teste: claro e escuro, desktop e 390px de largura, períodos de 7 e 30 dias e de 12 meses.
 
-## 3. Limites e pendências
+## 3. #29: painel web global do SCF
 
-- **#29:** o painel global compara todos os projetos. Pela API do Umami, isso é uma leitura por site para cada período, o que cresce com o número de projetos. Se pesar, a alternativa (ler o banco do Umami direto ou guardar um resumo) muda o que o ADR 0002 decidiu e vira ADR novo.
-- **Sem cache:** cada abertura do painel faz 6 chamadas ao Umami. Para os pilotos isso basta.
+**Onde:** `/operator/web` (`apps/portal/src/app/(private)/operator/web/`), com links no cabeçalho do operador ("Web analytics") e em `/operator`. Quem não é operador recebe 404.
+
+**O que mostra:**
+
+- uma tabela com todos os projetos **ativos**: sites, visualizações (com uma barra proporcional), visitantes, duração média e rejeição, mais a variação sobre o período anterior;
+- filtro por nome ou slug, ordenação clicando no cabeçalho e o mesmo seletor de período do painel do tenant;
+- caixas de seleção para comparar de 2 a 4 projetos lado a lado, com as 7 métricas (as listas trazem as 5 primeiras linhas).
+
+Tudo por GET (links e formulários): funciona sem JavaScript, e a URL guarda o estado, o que permite mandar uma comparação para outra pessoa. Os projetos selecionados que o filtro esconde continuam na comparação.
+
+**Leitura do Umami:** `src/lib/umami/overview.ts`.
+
+- `getWebOverview` lê só o `/stats` de cada site;
+- `compareProjects` faz 5 chamadas por site dos projetos escolhidos;
+- as duas passam por um limitador único, que conta **chamadas HTTP** (não sites): no máximo 8 leituras dos painéis globais ao mesmo tempo no processo, somando a tabela, a comparação e outros operadores com a página aberta;
+- os IDs do Umami vêm de `listActiveTenantSites` (`src/lib/data/operator/sites.ts`), nunca da URL. Um `tenantId` desconhecido, repetido, removido ou pendente é descartado antes de qualquer chamada.
+
+**Escolhas:**
+
+- **Não precisou de ADR:** a tabela faz uma chamada por site, não seis, o que cabe no ADR 0002 (leitura pela API do Umami) para a escala dos pilotos. Com centenas de sites, ler o banco do Umami direto ou guardar um resumo muda o ADR 0002 e vira ADR novo.
+- **Projeto com vários sites soma os sites.** Visitantes também, porque o Umami conta sessões por site: quem visita dois sites do mesmo projeto conta duas vezes. Nas listas da comparação, cada site contribui com as 10 primeiras linhas, então a soma é aproximada quando um item fica fora do top 10 de algum site.
+- **Projeto removido ou pendente não aparece**, como manda o spec do E2 (seção 6); o operador ainda o abre em `/operator/tenants/[tenantId]`. Projeto ativo sem site aparece com zeros.
+- **Falha parcial:** se algum site de um projeto não responde, o projeto inteiro aparece como "Unavailable" (em vez de números parciais), e os outros continuam. O log registra só a contagem.
+- **Nova regra de lint:** `src/lib/umami/read.ts` lê pelo ID do Umami sem conferir o tenant, então só `src/lib/umami/` pode importá-lo, como o `http.ts` (spec do E2, seção 4). `test/lint-boundaries.test.ts` cobre a regra.
+- O seletor de período e o texto de variação viraram componentes (`src/components/`), usados pelos dois painéis.
+
+**Testes:** `test/operator-web.test.ts` cobre:
+
+- quais projetos entram e a soma dos sites;
+- a falha parcial;
+- cada projeto recebendo os números dos próprios sites (o Umami falso devolve números diferentes por site);
+- o limite de 8 chamadas simultâneas, medido no Umami falso, na tabela, na comparação e na página inteira;
+- a comparação: listas somadas, IDs descartados e o limite de 4 projetos;
+- a página renderizada: filtro, ordenação, período ativo, comparação, seleção preservada pelo filtro e o aviso com um projeto só.
+
+A suíte de isolamento ganhou dois casos: o membro de tenant recebe 404 no painel global, e o projeto removido sai da lista. Conferido que tirar o filtro de projeto ativo, ou aceitar qualquer ID na comparação, faz os testes falharem.
+
+**Revisão independente** de um worker Codex: sem falha de acesso nem de validação da URL. Apontou dois bugs, corrigidos com teste: o limite contava sites em vez de chamadas (na comparação, 8 sites viravam 40 chamadas), e o filtro tirava da comparação os projetos que escondia.
+
+**Conferido no navegador** com dois projetos com dados no Umami 3.4.1 local: comparação, filtro, ordenação, modo escuro e um projeto cujo site sumiu do Umami, que aparece como indisponível.
+
+## 4. Limites e pendências
+
+- **Sem cache:** cada abertura do painel do tenant faz 6 chamadas ao Umami, e a do painel global, uma por site. Para os pilotos isso basta.
 - **Período personalizado e fuso do usuário** ficaram de fora; tudo é UTC.
 - Eventos customizados (#50) e filtros por página ou referenciador ficam para depois do MVP.
