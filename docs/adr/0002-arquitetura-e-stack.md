@@ -1,6 +1,6 @@
 # 0002. Arquitetura e stack do produto
 
-- **Status:** Aceito
+- **Status:** Aceito. A ferramenta de IaC foi substituída pelo [ADR 0004](0004-hospedagem-e-backup.md): OpenTofu no lugar do Terraform (licença).
 - **Data:** 13/11/2026
 - **Depende de:** [ADR 0001](0001-ferramenta-base.md)
 
