@@ -172,17 +172,25 @@ export async function createIngestKey(
 }
 
 // Revoga a chave. O coletor deixa de aceitá-la em até 60 segundos (cache dele).
-// Devolve falso para chave de outro tenant ou já revogada. Tenant removido
-// ainda pode revogar: só reduz o acesso.
-export async function revokeIngestKey(ctx: TenantContext, keyId: string): Promise<boolean> {
-  if (!UUID_REGEX.test(keyId)) return false;
+// Verdadeiro: revogou agora. Falso: a chave é do tenant, mas já estava
+// revogada (um clique duplo, por exemplo). Nulo: a chave não existe ou é de
+// outro tenant, e quem chama responde 404. Tenant removido ainda pode
+// revogar: só reduz o acesso.
+export async function revokeIngestKey(ctx: TenantContext, keyId: string): Promise<boolean | null> {
+  if (!UUID_REGEX.test(keyId)) return null;
   return db.transaction(async (tx) => {
     const [revoked] = await tx
       .update(ingestKey)
       .set({ revokedAt: new Date() })
       .where(and(eq(ingestKey.id, keyId), eq(ingestKey.tenantId, ctx.tenantId), isNull(ingestKey.revokedAt)))
       .returning({ prefix: ingestKey.prefix, apiServiceId: ingestKey.apiServiceId });
-    if (!revoked) return false;
+    if (!revoked) {
+      const [own] = await tx
+        .select({ id: ingestKey.id })
+        .from(ingestKey)
+        .where(and(eq(ingestKey.id, keyId), eq(ingestKey.tenantId, ctx.tenantId)));
+      return own ? false : null;
+    }
     await tx.insert(auditLog).values({
       actorUserId: ctx.userId,
       action: "ingest_key.revoked",

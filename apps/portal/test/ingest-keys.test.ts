@@ -189,7 +189,9 @@ describe("isolamento e status do tenant", () => {
     expect(await getApiService(a, ofB.service.id)).toBeNull();
     expect(await listIngestKeys(a, ofB.service.id)).toBeNull();
     expect(await createIngestKey(a, ofB.service.id)).toBeNull();
-    expect(await revokeIngestKey(a, ofB.firstKey.summary.id)).toBe(false);
+    expect(await revokeIngestKey(a, ofB.firstKey.summary.id)).toBeNull();
+    expect(await revokeIngestKey(a, randomUUID())).toBeNull();
+    expect(await revokeIngestKey(a, "not-a-uuid")).toBeNull();
     expect(await getApiService(a, "not-a-uuid")).toBeNull();
 
     const keysOfB = await listIngestKeys(b, ofB.service.id);
