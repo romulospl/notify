@@ -222,9 +222,37 @@ terraform {
 
 Depois rode `tofu init -migrate-state`. As credenciais vêm de `AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY`.
 
+## Monitoramento
+
+Uma VM separada, em outro data center (`fsn1`), testa de fora o portal e a ingestão a cada 15 segundos e manda e-mail quando algo cai ([ADR 0005](adr/0005-monitoramento-externo.md)). Ela é criada pelo mesmo `tofu apply` (saída `monitor_ipv4`).
+
+1. No `inventory/production.yml`, acrescente o host `monitor` com o `monitor_ipv4` (veja o `.example`).
+2. Em `group_vars/all.yml`, preencha `monitor_alert_email`, `monitor_smtp_smarthost` (`host:porta`), `monitor_smtp_from` e, se o SMTP pedir login, `monitor_smtp_username`. No `secrets.yml`, preencha `monitor_smtp_password`.
+3. **Recomendado:** configure um serviço externo de sinal de vida (qualquer um que receba um POST periódico e avise quando ele parar) e ponha a URL em `monitor_deadman_url`. Sem isso, se a VM de monitoramento cair, ninguém fica sabendo.
+4. Rode, de `infra/ansible/`:
+
+   ```bash
+   ansible-playbook monitoring.yml -e @secrets.yml
+   ```
+
+| Alerta | Quando |
+|---|---|
+| `EndpointDown` | Portal, gateway web ou ingestão de API sem resposta 2xx por 1 minuto |
+| `TLSCertificateExpiringSoon` | Certificado vencendo em menos de 14 dias (a renovação automática falhou) |
+| `ProbeFailing` | O Prometheus não consegue nem pedir o teste de um alvo ao blackbox |
+| `ProberDown` | O blackbox exporter, que faz os testes, está fora do ar |
+
+Para ver o Prometheus e o Alertmanager, abra um túnel e acesse `http://127.0.0.1:9090` e `http://127.0.0.1:9093`:
+
+```bash
+ssh -N -L 9090:127.0.0.1:9090 -L 9093:127.0.0.1:9093 root@<monitor_ipv4>
+```
+
+**Ingestão de API:** quando o coletor (#30) for publicado na produção, ponha a URL pública dele em `monitor_api_url` e rode o playbook de novo.
+
 ## O que ainda falta
 
 - **Domínio e DNS na IaC:** hoje os registros são criados à mão (ADR 0004).
 - **SMTP de produção:** escolher o provedor e pôr a URL em `smtp_url`.
-- **Monitoramento e alertas:** [#15](https://github.com/romulospl/notify/issues/15).
-- **Coletor OTLP:** entra no `prod.yaml` e no Caddyfile na issue que o cria ([#30](https://github.com/romulospl/notify/issues/30)).
+- **Monitorar a ingestão de API**, quando o coletor for publicado (`monitor_api_url`).
+- **Coletor OTLP:** ainda não está no `prod.yaml` nem no Caddyfile; a publicação fica com o E5 ([#30](https://github.com/romulospl/notify/issues/30)).
