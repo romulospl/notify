@@ -1,0 +1,50 @@
+# Aplicação: arquivos do Compose, .env com os segredos, imagens conferidas com
+# cosign e a pilha no ar.
+- name: Pastas da aplicação
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ notify_root }}/infra/compose/postgres/init"
+    - "{{ notify_root }}/infra/caddy"
+
+- name: Copia o Compose, o Postgres com WAL-G e o Caddyfile do repositório
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../{{ item.src }}"
+    dest: "{{ notify_root }}/infra/{{ item.src }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - { src: compose/prod.yaml }
+    - { src: compose/postgres/Dockerfile }
+    - { src: compose/postgres/backup.sh, mode: "0755" }
+    - { src: compose/postgres/restore.sh, mode: "0755" }
+    - { src: compose/postgres/init/01-databases.sh, mode: "0755" }
+    - { src: compose/postgres/init/02-ingest-roles.sh, mode: "0755" }
+    - { src: caddy/Caddyfile }
+
+- name: Segredos e configuração da pilha (.env)
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ notify_root }}/infra/compose/.env"
+    mode: "0600"
+  no_log: true
+
+- name: Confere a assinatura das imagens (cosign)
+  ansible.builtin.command: >-
+    cosign verify {{ item }}
+    --certificate-identity-regexp '{{ cosign_identity_regexp }}'
+    --certificate-oidc-issuer {{ cosign_oidc_issuer }}
+  loop:
+    - "{{ portal_image }}"
+    - "{{ ingest_web_image }}"
+  changed_when: false
+  tags: [images]
+
+- name: Sobe a pilha
+  ansible.builtin.command:
+    cmd: docker compose -f prod.yaml up -d --build --wait --remove-orphans
+    chdir: "{{ notify_root }}/infra/compose"
+  tags: [images]
+  register: notify_compose_up
+  changed_when: "'Started' in notify_compose_up.stderr or 'Recreated' in notify_compose_up.stderr or 'Created' in notify_compose_up.stderr"

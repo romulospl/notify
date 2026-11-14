@@ -1,0 +1,53 @@
+# Volume da Hetzner com os dados (criado em ext4 pelo OpenTofu), montado em
+# /srv/notify. Sobrevive se a VM for recriada.
+- name: Confere o volume de dados
+  ansible.builtin.stat:
+    path: "{{ data_volume_device }}"
+  register: data_volume_device_stat
+  failed_when: not data_volume_device_stat.stat.exists
+
+- name: Pasta de montagem
+  ansible.builtin.file:
+    path: "{{ notify_data_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Monta o volume na subida da VM
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '\s{{ notify_data_dir }}\s'
+    line: "{{ data_volume_device }} {{ notify_data_dir }} ext4 discard,nofail,defaults 0 0"
+  register: data_volume_fstab
+
+# Sem o módulo mount de propósito: ele exige a coleção ansible.posix, e o
+# deploy usa só ansible.builtin.
+- name: Monta o volume agora
+  ansible.builtin.command: mount {{ notify_data_dir }}  # noqa: command-instead-of-module
+  when: data_volume_fstab.changed or not (ansible_facts['mounts'] | selectattr('mount', 'equalto', notify_data_dir) | list)
+  changed_when: true
+
+- name: Confere que /srv/notify é o volume certo (e não a pasta no disco da VM)
+  ansible.builtin.shell: |
+    set -o pipefail
+    [ "$(findmnt -n -o SOURCE --mountpoint {{ notify_data_dir }} | xargs -r readlink -f)" = "$(readlink -f {{ data_volume_device }})" ]
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+# Com nofail, a VM sobe mesmo sem o volume; o Docker e o backup não. Sem isso,
+# o Postgres criaria um banco vazio no disco da VM e a retenção do backup
+# acabaria apagando os backups bons.
+- name: Pasta de ajustes do serviço do Docker
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    mode: "0755"
+
+- name: Docker só sobe com o volume montado
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/docker.service.d/10-notify-data.conf
+    content: |
+      [Unit]
+      RequiresMountsFor={{ notify_data_dir }}
+    mode: "0644"
+  notify: Recarrega o systemd (volume)

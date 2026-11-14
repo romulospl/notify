@@ -1,0 +1,10 @@
+[Unit]
+Description=notify: backup base diário do Postgres
+
+[Timer]
+OnCalendar={{ backup_on_calendar }}
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

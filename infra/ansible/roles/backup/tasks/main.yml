@@ -1,0 +1,23 @@
+# Backup base diário do Postgres (o WAL vai continuamente pelo archive_command).
+- name: Serviço do backup
+  ansible.builtin.template:
+    src: notify-backup.service.j2
+    dest: /etc/systemd/system/notify-backup.service
+    mode: "0644"
+  notify: Recarrega o systemd
+
+- name: Timer do backup
+  ansible.builtin.template:
+    src: notify-backup.timer.j2
+    dest: /etc/systemd/system/notify-backup.timer
+    mode: "0644"
+  notify: Recarrega o systemd
+
+- name: Aplica os arquivos do systemd agora
+  ansible.builtin.meta: flush_handlers
+
+- name: Timer ligado
+  ansible.builtin.systemd_service:
+    name: notify-backup.timer
+    state: started
+    enabled: true

@@ -1,0 +1,71 @@
+# Docker Engine e Compose do repositório oficial da Docker, e o cosign para
+# conferir a assinatura das imagens antes do deploy.
+- name: Arquitetura da VM no formato do Docker
+  ansible.builtin.set_fact:
+    docker_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_facts['architecture']] }}"
+
+- name: Pasta das chaves do apt
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Chave do repositório da Docker
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/debian/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Confere a impressão digital da chave da Docker
+  ansible.builtin.shell: |
+    set -o pipefail
+    gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc | awk -F: '/^fpr/ {print $10; exit}'
+  args:
+    executable: /bin/bash
+  register: docker_key_fpr
+  changed_when: false
+  failed_when: docker_key_fpr.stdout != "9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
+
+- name: Repositório da Docker
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/docker.list
+    content: >-
+      deb [arch={{ docker_arch }} signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/debian {{ ansible_facts['distribution_release'] }} stable
+    mode: "0644"
+
+- name: Instala o Docker e o Compose
+  ansible.builtin.apt:
+    name: [docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin, docker-compose-plugin]
+    state: present
+    update_cache: true
+
+# userland-proxy desligado: o Caddy vê o IP real do cliente também em IPv6, e o
+# gateway trunca esse IP (ver infra/caddy/Caddyfile).
+- name: Configuração do Docker
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    content: |
+      {
+        "userland-proxy": false,
+        "ipv6": true,
+        "ip6tables": true,
+        "live-restore": true,
+        "log-driver": "json-file",
+        "log-opts": {"max-size": "20m", "max-file": "5"}
+      }
+    mode: "0644"
+  notify: Reinicia o Docker
+
+- name: Docker ligado
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Instala o cosign
+  ansible.builtin.get_url:
+    url: "https://github.com/sigstore/cosign/releases/download/{{ cosign_version }}/cosign-linux-{{ docker_arch }}"
+    dest: /usr/local/bin/cosign
+    checksum: "sha256:{{ cosign_sha256[docker_arch] }}"
+    mode: "0755"

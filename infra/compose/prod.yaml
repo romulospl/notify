@@ -1,0 +1,201 @@
+# Produção (#14, ADR 0004): uma VM na Hetzner, com o Caddy como única porta de
+# entrada (80 e 443). Postgres, Umami, portal e gateway ficam só na rede
+# interna. O Ansible copia este arquivo, o Caddyfile e o .env para a VM e sobe
+# tudo com `docker compose -f prod.yaml up -d`.
+#
+# Diferenças do ambiente local (dev.yaml):
+# - imagens do portal e do gateway vêm do GHCR, por digest, já conferidas com
+#   cosign pelo Ansible (PORTAL_IMAGE e INGEST_WEB_IMAGE);
+# - o Postgres é a variante Debian com WAL-G (postgres/Dockerfile), com o
+#   arquivamento contínuo de WAL no Object Storage;
+# - nenhuma porta publicada além das do Caddy; o Postgres escuta só no
+#   loopback da VM, para o túnel SSH de administração;
+# - sem Mailpit: o SMTP vem de SMTP_URL;
+# - todas as senhas e chaves são obrigatórias (sem valor padrão).
+#
+# O coletor OTLP (#30) entra aqui na issue que o cria.
+
+# Nome fixo do projeto: contêineres notify-<serviço>-1 e rede notify_internal.
+name: notify
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  postgres:
+    build:
+      context: ./postgres
+    image: notify-postgres-walg:17.11-walg3.0.9
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      UMAMI_DB_PASSWORD: ${UMAMI_DB_PASSWORD:?}
+      NOTIFY_DB_PASSWORD: ${NOTIFY_DB_PASSWORD:?}
+      NOTIFY_INGEST_DB_PASSWORD: ${NOTIFY_INGEST_DB_PASSWORD:?}
+      NOTIFY_COLLECTOR_DB_PASSWORD: ${NOTIFY_COLLECTOR_DB_PASSWORD:?}
+      # WAL-G (ADR 0004): WAL contínuo e backups base no Object Storage,
+      # cifrados no cliente antes de sair da VM.
+      WALG_S3_PREFIX: ${WALG_S3_PREFIX:?}
+      AWS_ENDPOINT: ${WALG_S3_ENDPOINT:?}
+      AWS_REGION: ${WALG_S3_REGION:?}
+      AWS_ACCESS_KEY_ID: ${WALG_S3_ACCESS_KEY:?}
+      AWS_SECRET_ACCESS_KEY: ${WALG_S3_SECRET_KEY:?}
+      AWS_S3_FORCE_PATH_STYLE: "true"
+      WALG_LIBSODIUM_KEY: ${WALG_LIBSODIUM_KEY:?}
+      WALG_LIBSODIUM_KEY_TRANSFORM: hex
+      WALG_COMPRESSION_METHOD: brotli
+      # Backups base mantidos pelo notify-backup (um por dia).
+      WALG_RETAIN_FULL: ${WALG_RETAIN_FULL:-7}
+      PGHOST: /var/run/postgresql
+      PGUSER: postgres
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=wal-g wal-push %p
+      # No máximo 60 s de dados fora do backup quando há pouca escrita.
+      - -c
+      - archive_timeout=60
+    volumes:
+      # Dados num volume da Hetzner montado em /srv/notify (sobrevive à VM).
+      - ${NOTIFY_DATA_DIR:-/srv/notify}/postgres:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Só o loopback da VM, para o túnel SSH de administração. O firewall da
+      # Hetzner não abre esta porta.
+      - "127.0.0.1:${POSTGRES_ADMIN_PORT:-5432}:5432"
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d notify && pg_isready -U postgres -d umami"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    logging: *logging
+    networks: [internal]
+
+  umami:
+    # Mesma imagem do ambiente local; só sobe de versão por PR (CLAUDE.md).
+    image: ghcr.io/umami-software/umami:3.4.1@sha256:e69d1a7932e9dab0fc523edc7be1f3a53f3c261f57856fc2167ae74a8fc022e8
+    environment:
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD:?}@postgres:5432/umami
+      APP_SECRET: ${UMAMI_APP_SECRET:?}
+      DISABLE_TELEMETRY: "1"
+      CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-x-notify-client-ip}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Sem porta publicada e sem rota no Caddy (#62, infra/README.md).
+    init: true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      internal:
+        # IP fixo só para o túnel SSH de administração (infra/scripts/admin-tunnel.sh):
+        # a VM alcança a rede interna sem publicar porta.
+        ipv4_address: 172.30.0.20
+
+  portal:
+    image: ${PORTAL_IMAGE:?}
+    environment:
+      DATABASE_URL: postgresql://notify:${NOTIFY_DB_PASSWORD:?}@postgres:5432/notify
+      BETTER_AUTH_SECRET: ${PORTAL_AUTH_SECRET:?}
+      BETTER_AUTH_URL: https://${PORTAL_HOST:?}
+      RUN_MIGRATIONS: "true"
+      UMAMI_URL: http://umami:3000
+      # Gerada depois da primeira subida (docs/deploy.md); sem ela o portal
+      # sobe, mas não cria sites.
+      UMAMI_API_KEY: ${UMAMI_API_KEY:-}
+      SMTP_URL: ${SMTP_URL:?}
+      MAIL_FROM: ${MAIL_FROM:?}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/auth/ok >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+    logging: *logging
+    networks: [internal]
+
+  ingest-web:
+    image: ${INGEST_WEB_IMAGE:?}
+    environment:
+      DATABASE_URL: postgresql://notify_ingest:${NOTIFY_INGEST_DB_PASSWORD:?}@postgres:5432/notify
+      UMAMI_URL: http://umami:3000
+      CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-x-notify-client-ip}
+      # O X-Forwarded-For só vale vindo do Caddy, que tem IPs fixos na rede.
+      TRUSTED_PROXIES: 172.30.0.10,fd30:6e6f:7466::10
+      PROOF_SECRET: ${INGEST_PROOF_SECRET:?}
+      RATE_LIMIT: ${INGEST_RATE_LIMIT:-20}
+      RATE_BURST: ${INGEST_RATE_BURST:-40}
+      FINGERPRINT_LIMIT: ${INGEST_FINGERPRINT_LIMIT:-50}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      umami:
+        condition: service_healthy
+      # A visão ingest_site vem das migrações que o portal aplica ao subir.
+      portal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/ingest-web", "-healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+    logging: *logging
+    networks: [internal]
+
+  caddy:
+    # Caddy 2.11.7, fixado por digest. Única porta de entrada: TLS automático
+    # (Let's Encrypt) para PORTAL_HOST e INGEST_HOST.
+    image: caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
+    environment:
+      PORTAL_HOST: ${PORTAL_HOST:?}
+      INGEST_HOST: ${INGEST_HOST:?}
+      ACME_EMAIL: ${ACME_EMAIL:?}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${NOTIFY_DATA_DIR:-/srv/notify}/caddy:/data
+    depends_on:
+      portal:
+        condition: service_healthy
+      ingest-web:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      internal:
+        ipv4_address: 172.30.0.10
+        ipv6_address: fd30:6e6f:7466::10
+
+# IPv4 e IPv6: com o userland-proxy desligado (Ansible, papel docker), o Caddy
+# só atende clientes IPv6 (registro AAAA) se a rede tiver IPv6.
+networks:
+  internal:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+        - subnet: fd30:6e6f:7466::/64

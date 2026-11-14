@@ -1,0 +1,12 @@
+# Backup base do Postgres no Object Storage (infra/compose/postgres/backup.sh).
+[Unit]
+Description=notify: backup base do Postgres (WAL-G)
+After=docker.service
+Requires=docker.service
+# Nunca faz backup de um banco que não está no volume de dados.
+RequiresMountsFor={{ notify_data_dir }}
+
+[Service]
+Type=oneshot
+WorkingDirectory={{ notify_root }}/infra/compose
+ExecStart=/usr/bin/docker compose -f prod.yaml exec -T -u postgres postgres notify-backup

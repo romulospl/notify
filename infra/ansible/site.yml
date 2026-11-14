@@ -1,0 +1,48 @@
+# Deploy completo e idempotente da VM de produção (#14, ADR 0004).
+- name: Produção do notify
+  hosts: notify
+  become: true
+  pre_tasks:
+    - name: Confere os segredos obrigatórios
+      ansible.builtin.assert:
+        that:
+          - item is defined
+          - item | length > 0
+        fail_msg: "Falta um segredo em secrets.yml (veja secrets.example.yml)."
+        quiet: true
+      loop:
+        - "{{ postgres_password | default('') }}"
+        - "{{ umami_db_password | default('') }}"
+        - "{{ notify_db_password | default('') }}"
+        - "{{ notify_ingest_db_password | default('') }}"
+        - "{{ notify_collector_db_password | default('') }}"
+        - "{{ umami_app_secret | default('') }}"
+        - "{{ portal_auth_secret | default('') }}"
+        - "{{ ingest_proof_secret | default('') }}"
+        - "{{ smtp_url | default('') }}"
+        - "{{ walg_s3_access_key | default('') }}"
+        - "{{ walg_s3_secret_key | default('') }}"
+        - "{{ walg_libsodium_key | default('') }}"
+      no_log: true
+
+    - name: Confere a chave do backup (32 bytes em hexadecimal)
+      ansible.builtin.assert:
+        that: walg_libsodium_key is regex('^[0-9a-f]{64}$')
+        fail_msg: "walg_libsodium_key precisa ter 64 caracteres hexadecimais (openssl rand -hex 32)."
+        quiet: true
+      no_log: true
+
+    - name: Confere que as imagens vão por digest
+      ansible.builtin.assert:
+        that:
+          - portal_image is regex('@sha256:[0-9a-f]{64}$')
+          - ingest_web_image is regex('@sha256:[0-9a-f]{64}$')
+        fail_msg: "portal_image e ingest_web_image precisam terminar em @sha256:<digest>."
+        quiet: true
+
+  roles:
+    - base
+    - docker
+    - data_volume
+    - notify
+    - backup

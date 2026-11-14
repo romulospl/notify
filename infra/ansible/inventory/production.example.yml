@@ -1,0 +1,7 @@
+# Copie para production.yml (fora do git) e preencha com as saídas do OpenTofu:
+#   tofu -chdir=infra/opentofu output
+all:
+  hosts:
+    notify:
+      ansible_host: 203.0.113.20          # server_ipv4
+      data_volume_device: /dev/disk/by-id/scsi-0HC_Volume_12345678  # data_volume_device
