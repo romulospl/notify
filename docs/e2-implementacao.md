@@ -4,7 +4,7 @@ Registro da implementação do épico [E2 (#2)](https://github.com/romulospl/not
 
 ## 1. Situação
 
-As 9 issues de código do E2 estão na `main` (a #57, esqueleto do portal, já existia antes). Sete estão fechadas; a #20 e a #21 continuam abertas só pela parte que depende do coletor (#30, E5). Cada PR foi mergeado por rebase com o CI verde, então cada issue tem o próprio commit.
+As 9 issues de código do E2 estão na `main` (a #57, esqueleto do portal, já existia antes). Oito estão fechadas; a #21 continua aberta só pelo caso que depende do exporter do coletor (#31, E5). Cada PR foi mergeado por rebase com o CI verde, então cada issue tem o próprio commit.
 
 | Issue | O que é | PR | Commit |
 |---|---|---|---|
@@ -16,9 +16,9 @@ As 9 issues de código do E2 estão na `main` (a #57, esqueleto do portal, já e
 | — | Correção da #59: nome de serviço repetido em pedidos simultâneos | [#76](https://github.com/romulospl/notify/pull/76) | `a6534fa` |
 | [#17 (2.2)](https://github.com/romulospl/notify/issues/17) | Cadastro self-service do projeto | [#77](https://github.com/romulospl/notify/pull/77) | `6f0a1cf` |
 | [#19 (2.4)](https://github.com/romulospl/notify/issues/19) | Operador SCF, comando de administração e seed | [#78](https://github.com/romulospl/notify/pull/78) | `b262905` |
-| [#20 (2.5)](https://github.com/romulospl/notify/issues/20) | Remoção e reativação de projeto (parte do portal; falta o coletor, #30) | [#88](https://github.com/romulospl/notify/pull/88) | `f83dc69` |
+| [#20 (2.5)](https://github.com/romulospl/notify/issues/20) | Remoção e reativação de projeto (o coletor, #30, recusa a chave do projeto removido; teste da transição na branch `test/e2-collector-isolation`) | [#88](https://github.com/romulospl/notify/pull/88) | `f83dc69` |
 | — | Correção da #59: ações de chave com ID de outro tenant respondem 404 | [#88](https://github.com/romulospl/notify/pull/88) | `de177f7` |
-| [#21 (2.6)](https://github.com/romulospl/notify/issues/21) | Suíte de isolamento (falta a parte do coletor, #30) | [#88](https://github.com/romulospl/notify/pull/88) | `f867a3d` |
+| [#21 (2.6)](https://github.com/romulospl/notify/issues/21) | Suíte de isolamento (falta o caso do exporter, #31) | [#88](https://github.com/romulospl/notify/pull/88) | `f867a3d` |
 
 O spec do E2 e o ADR 0003 entraram junto, no commit `75658a7`.
 
@@ -132,13 +132,14 @@ O spec do E2 e o ADR 0003 entraram junto, no commit `75658a7`.
 - **Telas:** formulário e histórico de status em `/operator/tenants/[tenantId]` (`status-form.tsx`, ações em `actions.ts`). As ações chamam `requireOperatorContext()` antes de tudo, então membro de tenant recebe 404.
 - **Ingestão:** nada mudou no gateway nem nas visões. `ingest_site` e `ingest_key_active` (migração 0002) já exigem `tenant.status = 'active'`, então o gateway web passa a descartar os eventos em até 1 minuto (o cache dele). O teste `services/ingest-web/e2e/tenant_status_test.go` confere isso de ponta a ponta, com o Umami de verdade.
 - **O que já existia e continua valendo:** o membro de projeto removido ainda entra, vê o aviso com o motivo em `/dashboard` e não cadastra site, serviço nem chave (só revoga chave).
-- **Falta (E5):** o coletor (#30) recusar com `401` a métrica de tenant removido, guardando a consulta à visão por no máximo 60 segundos.
+- **Ingestão de API:** o coletor (#30) lê a mesma visão `ingest_key_active`, então recusa com `401` (HTTP) ou `Unauthenticated` (gRPC) a chave de projeto removido, com cache de no máximo 60 segundos. O teste `services/collector/e2e/isolation_test.go` confere a transição: a chave aceita passa a ser recusada depois da remoção e volta a valer depois da reativação.
 
 ### #21: testes de isolamento
 
 - **Suíte única** em `apps/portal/test/isolation.test.ts`, com os casos da seção 8 do spec: dois tenants (A e B) com site, serviço e chave, um operador e um usuário sem projeto.
 - Os casos passam pelo que o navegador alcança (páginas e server actions, com a sessão simulada, inclusive o `update-user` do Better Auth) e pelo que a ingestão lê (as visões, consultadas como `notify_ingest` e `notify_collector`).
-- **Casos que dependem do coletor (#30)** estão como `it.todo`: métrica com a chave de A dizendo ser de B, cache de 60 segundos da chave revogada e métrica de tenant removido. O contrato do banco para os três já é testado.
+- **A parte do coletor** fica no e2e dele: chave de tenant removido recusada (`services/collector/e2e/e2e_test.go`, da #30) e chave revogada ou tenant removido **depois** de aceitos, recusados em até o cache, com reativação (`isolation_test.go`).
+- **Falta um caso**, que segue como `it.todo`: métrica com a chave de A dizendo ser de B é gravada como A. Ele depende do exporter que grava as métricas (#31, PR #97).
 - **Conferido que a suíte pega falhas:** tirar o filtro de tenant de `getApiService` faz o caso de URL falhar, e manter o tenant ativo no e2e faz o page view a mais aparecer no Umami.
 - Cada painel novo (#28 e #37) acrescenta os próprios casos a esta suíte.
 - O helper `test/helpers/as-role.ts` (consulta como outro papel do banco) saiu de `tenant-model.test.ts` para ser usado pelas duas suítes.
@@ -211,10 +212,9 @@ O job `compose` do CI, além de subir o ambiente, confere as permissões dos usu
 
 ## 7. Limites e pendências
 
-**O que falta no E2 depende do coletor (#30, E5):**
+**O que falta no E2 depende do exporter do coletor (#31, E5):**
 
-- **#20:** recusar com `401` a métrica de API de tenant removido, com a consulta à visão guardada por no máximo 60 segundos.
-- **#21:** trocar os três `it.todo` da suíte por testes contra o coletor.
+- **#21:** o caso "métrica com a chave de A dizendo ser de B é gravada como A", hoje um `it.todo`. Quando o exporter gravar as métricas, o teste vai para o e2e do coletor.
 
 **Ficou para outros épicos:**
 
