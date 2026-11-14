@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { requireTenantContext } from "@/lib/access";
 import { listSites } from "@/lib/data/sites";
 import { SiteForm } from "./site-form";
 
 export const metadata: Metadata = { title: "Websites" };
 
-// Sites web do tenant (#17). Cada site vira um site no Umami (#58).
+// Sites web do tenant (#17). Cada site vira um site no Umami (#58); o nome leva
+// ao painel do site (#28).
 export default async function SitesPage() {
   const ctx = await requireTenantContext();
   const sites = await listSites(ctx);
@@ -44,7 +46,11 @@ export default async function SitesPage() {
           )}
           {sites.map((site) => (
             <tr key={site.id}>
-              <td className="py-2">{site.name}</td>
+              <td className="py-2">
+                <Link href={`/sites/${site.id}`} className="font-medium hover:underline">
+                  {site.name}
+                </Link>
+              </td>
               <td className="py-2">{site.domain}</td>
               <td className="py-2 font-mono text-xs">{site.umamiWebsiteId}</td>
             </tr>

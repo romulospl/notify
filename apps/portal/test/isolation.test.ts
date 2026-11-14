@@ -30,6 +30,7 @@ import {
 } from "@/app/(private)/operator/tenants/[tenantId]/actions";
 import OperatorTenantPage from "@/app/(private)/operator/tenants/[tenantId]/page";
 import ServicePage from "@/app/(private)/services/[serviceId]/page";
+import SitePage from "@/app/(private)/sites/[siteId]/page";
 import { createKeyAction, createServiceAction, revokeKeyAction } from "@/app/(private)/services/actions";
 import { createSiteAction } from "@/app/(private)/sites/actions";
 import { startFakeUmami, type FakeUmami } from "./fake-umami";
@@ -410,6 +411,30 @@ describe("tenant B removido", () => {
     await expect(removeTenantAction(randomUUID(), idle, form({ reason: "Spam" }))).rejects.toMatchObject(NOT_FOUND);
   });
   it.todo("métrica de API de B removido é recusada pelo coletor com 401 (#30)");
+});
+
+describe("painel web do site (#28)", () => {
+  const sitePage = (siteId: string) =>
+    SitePage({ params: Promise.resolve({ siteId }), searchParams: Promise.resolve({}) });
+
+  it("membro de A abre o próprio painel; o de B responde 404 sem chamar o Umami", async () => {
+    asMember(A);
+    await expect(sitePage(A.siteId)).resolves.toBeTruthy();
+    expect(umami.requests.length).toBeGreaterThan(0);
+    expect(umami.requests.every((r) => r.path.startsWith(`/api/websites/${A.umamiWebsiteId}/`))).toBe(true);
+    umami.requests.length = 0;
+
+    await expect(sitePage(B.siteId)).rejects.toMatchObject(NOT_FOUND);
+    // Nem com o ID do site de B no Umami no lugar do ID do portal.
+    await expect(sitePage(B.umamiWebsiteId)).rejects.toMatchObject(NOT_FOUND);
+    expect(umami.requests).toEqual([]);
+  });
+
+  it("operador abre o painel de um site: 404 (D2)", async () => {
+    asOperator();
+    await expect(sitePage(A.siteId)).rejects.toMatchObject(NOT_FOUND);
+    expect(umami.requests).toEqual([]);
+  });
 });
 
 describe("usuário sem projeto", () => {

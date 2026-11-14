@@ -1,7 +1,11 @@
 import "server-only";
 import type { TenantContext } from "../access";
+import type { Period } from "../period";
 import { getSite } from "../data/sites";
 import { umamiRequest } from "./http";
+
+// As páginas tratam a falha do Umami sem importar o cliente HTTP (regra de lint).
+export { UmamiError } from "./http";
 
 // Leitura de estatísticas web. Recebe o ID do site do portal, nunca o do
 // Umami: o ID do Umami só é obtido depois de conferir que o site é do tenant
@@ -29,4 +33,73 @@ export async function getSiteStats(
     endAt: String(range.endAt.getTime()),
   });
   return umamiRequest<SiteStats>(`/api/websites/${found.umamiWebsiteId}/stats?${query}`);
+}
+
+// Painel web do tenant (#28): as 7 métricas mínimas de um site num período.
+// Conferido no Umami 3.4.1 (pendência do ADR 0001):
+// - /stats: visualizações, visitantes, visitas, rejeições e tempo total, com o
+//   período anterior de mesmo tamanho em `comparison`;
+// - /metrics?type=referrer|country|device|browser: listas ordenadas em que `y`
+//   conta visitantes (sessões únicas), não visualizações;
+// - /pageviews: série por hora, dia ou mês, só com os baldes que têm dados.
+
+export const TOP_LIMIT = 10;
+
+const BREAKDOWNS = ["referrer", "country", "device", "browser"] as const;
+export type Breakdown = (typeof BREAKDOWNS)[number];
+
+export type RankedItem = { name: string; visitors: number };
+
+export type SiteDashboard = {
+  totals: Totals;
+  previous: Totals;
+  // Um ponto por balde do período, inclusive os vazios.
+  series: { at: Date; pageviews: number; visitors: number }[];
+  breakdowns: Record<Breakdown, RankedItem[]>;
+};
+
+type Point = { x: string; y: number };
+
+// Nulo quando o site não é do tenant do contexto (ou está arquivado): nesse
+// caso nenhuma chamada chega ao Umami.
+export async function getSiteDashboard(
+  ctx: TenantContext,
+  siteId: string,
+  period: Period,
+): Promise<SiteDashboard | null> {
+  const found = await getSite(ctx, siteId);
+  if (!found) return null;
+  const base = `/api/websites/${found.umamiWebsiteId}`;
+  const range = `startAt=${period.startAt.getTime()}&endAt=${period.endAt.getTime()}`;
+
+  const [stats, series, ...lists] = await Promise.all([
+    umamiRequest<SiteStats>(`${base}/stats?${range}`),
+    umamiRequest<{ pageviews: Point[]; sessions: Point[] }>(
+      `${base}/pageviews?${range}&unit=${period.unit}&timezone=UTC`,
+    ),
+    ...BREAKDOWNS.map((type) =>
+      umamiRequest<Point[]>(`${base}/metrics?${range}&type=${type}&limit=${TOP_LIMIT}`),
+    ),
+  ]);
+
+  const byTime = (points: Point[]) => new Map(points.map((p) => [Date.parse(p.x), Number(p.y)]));
+  const pageviews = byTime(series.pageviews);
+  const sessions = byTime(series.sessions);
+  const { comparison, ...totals } = stats;
+
+  return {
+    totals,
+    previous: comparison,
+    series: period.buckets.map((at) => ({
+      at,
+      pageviews: pageviews.get(at.getTime()) ?? 0,
+      visitors: sessions.get(at.getTime()) ?? 0,
+    })),
+    breakdowns: Object.fromEntries(
+      BREAKDOWNS.map((type, i) => [
+        type,
+        lists[i]!.map((p) => ({ name: p.x ?? "", visitors: Number(p.y) })),
+      ]),
+    ) as Record<Breakdown, RankedItem[]>,
+  };
 }

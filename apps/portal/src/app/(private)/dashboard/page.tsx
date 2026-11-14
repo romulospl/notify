@@ -35,7 +35,7 @@ export default async function DashboardPage() {
   return (
     <section>
       <h1 className="text-2xl font-semibold">{project.name}</h1>
-      <p className="mt-2 text-zinc-500">Your web and API analytics will appear here.</p>
+      <p className="mt-2 text-zinc-500">Open a website to see its analytics. API analytics will appear here.</p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">
         <Link
@@ -57,6 +57,22 @@ export default async function DashboardPage() {
           </p>
         </Link>
       </div>
+
+      {sites.length > 0 && (
+        <>
+          <h2 className="mt-8 text-lg font-semibold">Web analytics</h2>
+          <ul className="mt-2 divide-y divide-zinc-200 border-y border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+            {sites.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-sm">
+                <Link href={`/sites/${s.id}`} className="font-medium hover:underline">
+                  {s.name}
+                </Link>
+                <span className="text-zinc-500">{s.domain}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </section>
   );
 }
