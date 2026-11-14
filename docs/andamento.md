@@ -12,7 +12,7 @@ Registro do que já foi feito, das decisões tomadas e dos próximos passos. Atu
 | Ferramenta base | **Umami v3.4.1** ([ADR 0001](adr/0001-ferramenta-base.md)) |
 | Arquitetura e stack | Definidas ([ADR 0002](adr/0002-arquitetura-e-stack.md)) |
 | Repositório | Estrutura do monorepo (#11), ambiente local com Docker Compose (#12), CI (#13), Renovate e releases assinadas (#55) |
-| Código | Portal com o E2 feito até onde dá sem o coletor: a #20 e a #21 só esperam a parte do coletor (#30), detalhado em [`e2-implementacao.md`](e2-implementacao.md). No E3, script de rastreamento (#22) e gateway de ingestão (#61) |
+| Código | Portal com o E2 feito até onde dá sem o coletor: a #20 e a #21 só esperam a parte do coletor (#30). No E4, painel web do tenant (#28), detalhado em [`e4-implementacao.md`](e4-implementacao.md), detalhado em [`e2-implementacao.md`](e2-implementacao.md). No E3, script de rastreamento (#22) e gateway de ingestão (#61) |
 
 ## 1. MVP definido a partir do RFP
 
@@ -174,7 +174,7 @@ O portal lê o Umami com uma conta de serviço que enxerga tudo, então o isolam
 | `.github/workflows/ci.yml` | CI com jobs de TypeScript, Go e Compose (#13) |
 | `SECURITY.md`, `CONTRIBUTING.md`, `.github/ISSUE_TEMPLATE/` | Canal de vulnerabilidades, guia de contribuição e modelos de issue (#56) |
 | `renovate.json`, `.github/workflows/release.yml` | Renovate e release com SBOM e imagens assinadas (#55) |
-| `apps/portal/` | Portal Next.js: login (#57), modelo de tenant (#16), Umami (#58), camada única de dados (#18), chaves de ingestão (#59), cadastro com confirmação de e-mail (#60 e #17) e operador SCF (#19), remoção e reativação de projeto (#20) e suíte de isolamento (#21) |
+| `apps/portal/` | Portal Next.js: login (#57), modelo de tenant (#16), Umami (#58), camada única de dados (#18), chaves de ingestão (#59), cadastro com confirmação de e-mail (#60 e #17) e operador SCF (#19), remoção e reativação de projeto (#20), suíte de isolamento (#21) e painel web do tenant (#28) |
 | `infra/compose/postgres/init/02-ingest-roles.sh` | Usuários `notify_ingest` e `notify_collector` do banco (#16) |
 | `packages/tracker/`, `services/ingest-web/` | Script de rastreamento (#22) e gateway de ingestão web (#61), do E3 |
 
@@ -218,6 +218,7 @@ O portal lê o Umami com uma conta de serviço que enxerga tudo, então o isolam
 3. **Concluída:** a [#57 (2.7)](https://github.com/romulospl/notify/issues/57), esqueleto do portal com login (Better Auth + Drizzle), rotas privadas, imagem Docker e portal no Compose.
    **E2 completo até onde dá sem o coletor:** concluídas a #16, #58, #18, #59, #60, #17 e #19 em 13/11/2026. Em 14/11/2026 entraram a parte do portal da [#20](https://github.com/romulospl/notify/issues/20) (remover e reativar projeto, com histórico no `audit_log`; o gateway web já descarta os eventos do projeto removido) e a [#21](https://github.com/romulospl/notify/issues/21) (suíte de isolamento em `apps/portal/test/isolation.test.ts`). As duas ficam abertas só pelo que depende do coletor ([#30](https://github.com/romulospl/notify/issues/30), E5): recusar a métrica de API de projeto removido e trocar os três `it.todo` da suíte por testes contra o coletor. Detalhes em [`e2-implementacao.md`](e2-implementacao.md).
    **E3:** concluídas a [#22](https://github.com/romulospl/notify/issues/22) (script de rastreamento) e a [#61](https://github.com/romulospl/notify/issues/61) (gateway de ingestão web), pelos PRs #74 e #75.
+   **E4:** em 14/11/2026, a [#28](https://github.com/romulospl/notify/issues/28) (painel web do tenant com as 7 métricas, em `/sites/[siteId]`), que também confirmou a pendência do ADR 0001 sobre as métricas do Umami. Falta a [#29](https://github.com/romulospl/notify/issues/29) (painel global do SCF), que pode pedir um ADR se a leitura de todos os sites pela API do Umami pesar. Detalhes em [`e4-implementacao.md`](e4-implementacao.md).
 4. **Pode ser feita a qualquer momento:** a [#32 (5.3)](https://github.com/romulospl/notify/issues/32), normalização de rotas, que não depende de nada.
 5. **Fora do código, sem dependência:**
    - buscar o código de indicação e enviar o Interest form ([#64](https://github.com/romulospl/notify/issues/64));
