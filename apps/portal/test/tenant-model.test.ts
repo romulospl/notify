@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, sql } from "@/lib/db";
 import { runMigrations } from "@/lib/db/migrate";
 import { apiService, ingestKey, site, tenant, tenantMember, user } from "@/lib/db/schema";
+import { asRole } from "./helpers/as-role";
 
 const DOMAIN = "@tenant-test.notify.invalid";
 const SLUG = "tenant-test-";
@@ -42,22 +43,6 @@ async function createKey(serviceId: string, tenantId: string, createdBy: string)
   await db.insert(ingestKey).values({ apiServiceId: serviceId, tenantId, prefix, keyHash, createdBy });
   return prefix;
 }
-
-// Roda uma consulta como outro papel do banco, dentro de uma transação desfeita no fim.
-async function asRole<T>(role: string, query: string): Promise<T[]> {
-  let rows: T[] = [];
-  await sql
-    .begin(async (tx) => {
-      await tx.unsafe(`SET LOCAL ROLE ${role}`);
-      rows = (await tx.unsafe(query)) as unknown as T[];
-      throw new Rollback();
-    })
-    .catch((error) => {
-      if (!(error instanceof Rollback)) throw error;
-    });
-  return rows;
-}
-class Rollback extends Error {}
 
 async function cleanup() {
   const tenants = await db.select({ id: tenant.id }).from(tenant).where(like(tenant.slug, `${SLUG}%`));
