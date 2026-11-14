@@ -36,9 +36,10 @@ O spec do E2 e o ADR 0003 entraram junto, no commit `75658a7`.
 
 - `/operator` lista todos os projetos, inclusive removidos, com contagens de membros, sites, serviços e chaves ativas.
 - `/operator/tenants/[tenantId]` mostra membros, sites e serviços de um projeto. Das chaves, só o prefixo e as datas.
+- Na mesma tela, remove o projeto (com motivo obrigatório) ou o reativa, e vê o histórico de status: quem, quando e por quê (#20).
 - Operador só nasce pelo comando de administração (`pnpm operator:create`).
 
-**Ainda não existem:** os painéis com métricas web (E4) e de API (E6), e a remoção de projeto (#20).
+**Ainda não existem:** os painéis com métricas web (E4) e de API (E6), e a recusa da ingestão de API de projeto removido, que depende do coletor (#30).
 
 ## 3. O que cada issue entregou
 
@@ -120,6 +121,27 @@ O spec do E2 e o ADR 0003 entraram junto, no commit `75658a7`.
 - **Visão global** em `src/lib/data/operator/tenants.ts` e nas telas `/operator` e `/operator/tenants/[tenantId]`, só leitura.
 - **Seed de desenvolvimento** (`pnpm db:seed`, senha em `SEED_PASSWORD`): 2 projetos de teste (cada um com dono, serviço e chave) e 1 operador. Pode rodar mais de uma vez. Com `UMAMI_API_KEY`, cria também um site no Umami por projeto.
 
+### #20: remoção e reativação de projeto (parte do portal)
+
+- **Funções** `removeTenant` e `reactivateTenant` em `src/lib/data/operator/tenants.ts`, as únicas escritas do operador. Recebem `OperatorContext`, travam a linha do tenant (`SELECT ... FOR UPDATE`) e gravam status, `status_changed_at`, `status_changed_by` e `status_reason`, mais uma linha no `audit_log` (`tenant.removed` ou `tenant.reactivated`, com o status anterior e o motivo).
+- **Escolhas:**
+  - o motivo da remoção é obrigatório (3 a 500 caracteres), porque o projeto o vê no painel; o da reativação é opcional e fica só no `audit_log` (a coluna `status_reason` volta a nulo);
+  - remover o que já está removido, ou reativar o que não está, não grava nada (devolve `"unchanged"`); dois operadores ao mesmo tempo geram um registro só;
+  - reativar vale só para `removed`. Um tenant `pending` não é aprovado por aqui: isso fica para o cadastro com aprovação (#49).
+- **Telas:** formulário e histórico de status em `/operator/tenants/[tenantId]` (`status-form.tsx`, ações em `actions.ts`). As ações chamam `requireOperatorContext()` antes de tudo, então membro de tenant recebe 404.
+- **Ingestão:** nada mudou no gateway nem nas visões. `ingest_site` e `ingest_key_active` (migração 0002) já exigem `tenant.status = 'active'`, então o gateway web passa a descartar os eventos em até 1 minuto (o cache dele). O teste `services/ingest-web/e2e/tenant_status_test.go` confere isso de ponta a ponta, com o Umami de verdade.
+- **O que já existia e continua valendo:** o membro de projeto removido ainda entra, vê o aviso com o motivo em `/dashboard` e não cadastra site, serviço nem chave (só revoga chave).
+- **Falta (E5):** o coletor (#30) recusar com `401` a métrica de tenant removido, guardando a consulta à visão por no máximo 60 segundos.
+
+### #21: testes de isolamento
+
+- **Suíte única** em `apps/portal/test/isolation.test.ts`, com os casos da seção 8 do spec: dois tenants (A e B) com site, serviço e chave, um operador e um usuário sem projeto.
+- Os casos passam pelo que o navegador alcança (páginas e server actions, com a sessão simulada, inclusive o `update-user` do Better Auth) e pelo que a ingestão lê (as visões, consultadas como `notify_ingest` e `notify_collector`).
+- **Casos que dependem do coletor (#30)** estão como `it.todo`: métrica com a chave de A dizendo ser de B, cache de 60 segundos da chave revogada e métrica de tenant removido. O contrato do banco para os três já é testado.
+- **Conferido que a suíte pega falhas:** tirar o filtro de tenant de `getApiService` faz o caso de URL falhar, e manter o tenant ativo no e2e faz o page view a mais aparecer no Umami.
+- Cada painel novo (#28 e #37) acrescenta os próprios casos a esta suíte.
+- O helper `test/helpers/as-role.ts` (consulta como outro papel do banco) saiu de `tenant-model.test.ts` para ser usado pelas duas suítes.
+
 ## 4. Como rodar localmente
 
 Na raiz do repositório:
@@ -158,7 +180,7 @@ Detalhes de cada parte estão no [README do portal](../apps/portal/README.md).
 
 ## 5. Testes
 
-84 testes no portal (`pnpm test` na raiz ou em `apps/portal`), contra um Postgres real; o Umami é simulado (`test/fake-umami.ts`) e o envio de e-mail também.
+107 testes no portal, mais 3 pendentes do coletor (`pnpm test` na raiz ou em `apps/portal`), contra um Postgres real; o Umami é simulado (`test/fake-umami.ts`) e o envio de e-mail também.
 
 | Arquivo | Cobre |
 |---|---|
@@ -169,10 +191,11 @@ Detalhes de cada parte estão no [README do portal](../apps/portal/README.md).
 | `ingest-keys.test.ts` | Formato, limite com pedidos simultâneos, revogação, `audit_log` e chave fora dos logs |
 | `email-flows.test.ts` | Cadastro, confirmação, redefinição de senha e limites de tentativa |
 | `onboarding.test.ts` | Quem pode criar projeto, criação, slug e corrida |
-| `operator.test.ts` | Gatilho da D2, comando de administração, seed e visão global |
+| `operator.test.ts` | Gatilho da D2, comando de administração, seed, visão global, remoção e reativação |
+| `isolation.test.ts` | Suíte de isolamento da seção 8 do spec (#21) |
 | `auth.test.ts` | Login, sessão sem IP e papel nunca vindo do cliente |
 
-O job `compose` do CI, além de subir o ambiente, confere as permissões dos usuários de ingestão, a conta de serviço no Umami, o Mailpit e a tela de cadastro.
+O job `compose` do CI, além de subir o ambiente, confere as permissões dos usuários de ingestão, a conta de serviço no Umami, o Mailpit e a tela de cadastro, e roda os testes ponta a ponta do gateway, entre eles o de tenant removido (`services/ingest-web/e2e/tenant_status_test.go`).
 
 ## 6. Variáveis de ambiente novas
 
@@ -187,10 +210,10 @@ O job `compose` do CI, além de subir o ambiente, confere as permissões dos usu
 
 ## 7. Limites e pendências
 
-**Issues que faltam no E2:**
+**O que falta no E2 depende do coletor (#30, E5):**
 
-- **#21, testes de isolamento:** juntar numa suíte única os casos da seção 8 do spec, com dois tenants e um operador. Vários casos já existem espalhados pelos testes acima.
-- **#20, remoção de projeto:** a parte do portal (remover, reativar, registrar no `audit_log`) pode ser feita já. A recusa da ingestão de API depende do coletor (#30, E5), que deve guardar a consulta à visão por no máximo 60 segundos.
+- **#20:** recusar com `401` a métrica de API de tenant removido, com a consulta à visão guardada por no máximo 60 segundos.
+- **#21:** trocar os três `it.todo` da suíte por testes contra o coletor.
 
 **Ficou para outros épicos:**
 
