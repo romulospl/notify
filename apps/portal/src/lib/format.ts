@@ -101,3 +101,21 @@ const BUCKET_LONG: Record<PeriodUnit, Intl.DateTimeFormat> = {
 export function bucketLabel(unit: PeriodUnit, at: Date, long = false): string {
   return (long ? BUCKET_LONG : BUCKET_FORMATS)[unit].format(at) + (long && unit === "hour" ? " UTC" : "");
 }
+
+export type Delta = { direction: "up" | "down" | "flat"; text: string } | null;
+
+// Variação relativa; nula quando o período anterior não tem base.
+export function relativeDelta(current: number, before: number, base = before): Delta {
+  if (base <= 0 || before <= 0) return null;
+  const change = (current - before) / before;
+  if (Math.abs(change) < 0.005) return { direction: "flat", text: "No change" };
+  return { direction: change > 0 ? "up" : "down", text: formatPercent(Math.abs(change)) };
+}
+
+// Variação em pontos percentuais, para a taxa de rejeição.
+export function pointsDelta(current: number, before: number, visits: number, previousVisits: number): Delta {
+  if (visits <= 0 || previousVisits <= 0) return null;
+  const pts = Math.round((current - before) * 100);
+  if (pts === 0) return { direction: "flat", text: "No change" };
+  return { direction: pts > 0 ? "up" : "down", text: `${Math.abs(pts)} pts` };
+}

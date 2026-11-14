@@ -15,6 +15,7 @@ const DB = 'import { db } from "@/lib/db";\nexport const x = db;\n';
 const DB_RELATIVE = 'import { db } from "../../lib/db";\nexport const x = db;\n';
 const DRIVER = 'import postgres from "postgres";\nexport const x = postgres;\n';
 const UMAMI = 'import { umamiRequest } from "@/lib/umami/http";\nexport const x = umamiRequest;\n';
+const UMAMI_READ = 'import { readStats } from "@/lib/umami/read";\nexport const x = readStats;\n';
 const SCHEMA = 'import { site } from "@/lib/db/schema";\nexport const x = site;\n';
 const DATA = 'import { listSites } from "@/lib/data/sites";\nexport const x = listSites;\n';
 
@@ -24,6 +25,9 @@ describe("camada única de acesso a dados", () => {
     expect(await restrictedImports("src/app/api/x/route.ts", DB_RELATIVE)).toBe(1);
     expect(await restrictedImports("src/app/x.ts", DRIVER)).toBe(1);
     expect(await restrictedImports("src/app/x.ts", UMAMI)).toBe(1);
+    // As leituras pelo ID do Umami também são internas a src/lib/umami/.
+    expect(await restrictedImports("src/app/x.ts", UMAMI_READ)).toBe(1);
+    expect(await restrictedImports("src/lib/data/x.ts", UMAMI_READ)).toBe(1);
     expect(await restrictedImports("src/lib/other.ts", DB)).toBe(1);
   });
 
@@ -39,6 +43,7 @@ describe("camada única de acesso a dados", () => {
 
   it("src/lib/umami/ chama o Umami, mas lê o banco só por src/lib/data/", async () => {
     expect(await restrictedImports("src/lib/umami/x.ts", UMAMI)).toBe(0);
+    expect(await restrictedImports("src/lib/umami/x.ts", UMAMI_READ)).toBe(0);
     expect(await restrictedImports("src/lib/umami/x.ts", DB)).toBe(1);
     expect(await restrictedImports("src/lib/umami/x.ts", DATA)).toBe(0);
   });

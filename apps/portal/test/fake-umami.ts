@@ -19,6 +19,16 @@ export type FakeUmami = {
   series: { pageviews: { x: string; y: number }[]; sessions: { x: string; y: number }[] } | null;
   // Simula o Umami fora do ar nas leituras de estatísticas.
   down: boolean;
+  // Sites cujas leituras falham (500), para testar falha parcial (#29).
+  failWebsites: Set<string>;
+  // Totais do /stats por site (o período anterior fica com os mesmos números);
+  // sem entrada, o padrão de 7 visualizações, 3 visitantes, 4 visitas, 1
+  // rejeição e 60 s.
+  statsBy: Map<string, { pageviews: number; visitors: number; visits: number; bounces: number; totaltime: number }>;
+  // Atraso das leituras e o máximo de leituras ao mesmo tempo, para testar o
+  // limite de chamadas simultâneas.
+  delayMs: number;
+  maxInFlight: number;
   close: () => Promise<void>;
 };
 
@@ -43,7 +53,10 @@ export async function startFakeUmami(apiKey: string): Promise<FakeUmami> {
   const requests: FakeUmami["requests"] = [];
   const createBodies: unknown[] = [];
   const queries: string[] = [];
-  const state = { metrics: { ...DEFAULT_METRICS }, series: null as FakeUmami["series"], down: false };
+  const state = { metrics: { ...DEFAULT_METRICS }, series: null as FakeUmami["series"], down: false, delayMs: 0, maxInFlight: 0 };
+  const failWebsites = new Set<string>();
+  const statsBy: FakeUmami["statsBy"] = new Map();
+  let inFlight = 0;
 
   const server: Server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://fake");
@@ -81,8 +94,18 @@ export async function startFakeUmami(apiKey: string): Promise<FakeUmami> {
         websites.delete(match[1]!);
         return send(200, { ok: true });
       }
-      if (method === "GET" && match[2] && state.down) return send(500, { error: "Internal error" });
+      if (method === "GET" && match[2]) {
+        inFlight++;
+        state.maxInFlight = Math.max(state.maxInFlight, inFlight);
+        if (state.delayMs > 0) await new Promise((r) => setTimeout(r, state.delayMs));
+        inFlight--;
+      }
+      if (method === "GET" && match[2] && (state.down || failWebsites.has(match[1]!))) {
+        return send(500, { error: "Internal error" });
+      }
       if (method === "GET" && match[2] === "/stats") {
+        const custom = statsBy.get(match[1]!);
+        if (custom) return send(200, { ...custom, comparison: { ...custom } });
         const totals = { pageviews: 7, visitors: 3, visits: 4, bounces: 1, totaltime: 60 };
         return send(200, { ...totals, comparison: { ...totals, pageviews: 5 } });
       }
@@ -124,6 +147,20 @@ export async function startFakeUmami(apiKey: string): Promise<FakeUmami> {
     },
     set series(value) {
       state.series = value;
+    },
+    failWebsites,
+    statsBy,
+    get delayMs() {
+      return state.delayMs;
+    },
+    set delayMs(value) {
+      state.delayMs = value;
+    },
+    get maxInFlight() {
+      return state.maxInFlight;
+    },
+    set maxInFlight(value) {
+      state.maxInFlight = value;
     },
     get down() {
       return state.down;

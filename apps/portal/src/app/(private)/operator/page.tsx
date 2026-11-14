@@ -9,7 +9,8 @@ const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone
 
 // Área do operador SCF (#19): todos os projetos, só leitura. Quem não é
 // operador recebe 404. As rotas sob /operator são as únicas que aceitam um
-// tenantId na URL. Os painéis comparativos web e de API entram no E4 e no E6.
+// tenantId na URL. O painel comparativo web fica em /operator/web (#29); o de
+// API entra no E6.
 export default async function OperatorPage() {
   const ctx = await requireOperatorContext();
   const tenants = await listTenants(ctx);
@@ -19,8 +20,12 @@ export default async function OperatorPage() {
     <section>
       <h1 className="text-2xl font-semibold">SCF overview</h1>
       <p className="mt-2 text-zinc-500">
-        {tenants.length} project{tenants.length === 1 ? "" : "s"}, {active} active. Cross-project web and API
-        metrics will appear here.
+        {tenants.length} project{tenants.length === 1 ? "" : "s"}, {active} active. Compare web metrics across
+        projects in{" "}
+        <Link href="/operator/web" className="underline">
+          web analytics
+        </Link>
+        ; API metrics will appear here.
       </p>
 
       <div className="mt-8 overflow-x-auto">

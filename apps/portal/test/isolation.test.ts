@@ -20,6 +20,7 @@ import { getSite, listSites } from "@/lib/data/sites";
 import { db, sql } from "@/lib/db";
 import { runMigrations } from "@/lib/db/migrate";
 import { account, apiService, auditLog, ingestKey, site, tenant, tenantMember, user } from "@/lib/db/schema";
+import { listActiveTenantSites } from "@/lib/data/operator/sites";
 import { getSiteStats } from "@/lib/umami/stats";
 import DashboardPage from "@/app/(private)/dashboard/page";
 import OperatorPage from "@/app/(private)/operator/page";
@@ -29,6 +30,7 @@ import {
   type StatusActionState,
 } from "@/app/(private)/operator/tenants/[tenantId]/actions";
 import OperatorTenantPage from "@/app/(private)/operator/tenants/[tenantId]/page";
+import OperatorWebPage from "@/app/(private)/operator/web/page";
 import ServicePage from "@/app/(private)/services/[serviceId]/page";
 import SitePage from "@/app/(private)/sites/[siteId]/page";
 import { createKeyAction, createServiceAction, revokeKeyAction } from "@/app/(private)/services/actions";
@@ -234,9 +236,13 @@ describe("membro de A diante dos recursos de B", () => {
     expect(await tenantStatus(B.tenantId)).toBe("active");
   });
 
-  it("abre /operator e o detalhe de um tenant: 404", async () => {
+  it("abre /operator, o painel web global e o detalhe de um tenant: 404", async () => {
     asMember(A);
     await expect(OperatorPage()).rejects.toMatchObject(NOT_FOUND);
+    await expect(OperatorWebPage({ searchParams: Promise.resolve({ compare: [A.tenantId, B.tenantId] }) })).rejects.toMatchObject(
+      NOT_FOUND,
+    );
+    expect(umami.requests).toEqual([]);
     await expect(
       OperatorTenantPage({ params: Promise.resolve({ tenantId: B.tenantId }) }),
     ).rejects.toMatchObject(NOT_FOUND);
@@ -369,6 +375,10 @@ describe("tenant B removido", () => {
     expect(await collectorKey(B.keyPrefix)).toBeNull();
     expect(await acceptsWeb(A.umamiWebsiteId)).toBe(true);
     expect(await collectorKey(A.keyPrefix)).not.toBeNull();
+    // Fora das comparações do painel global (#29), mas A continua.
+    const active = (await listActiveTenantSites({ userId: operatorId } as never)).map((p) => p.tenantId);
+    expect(active).toContain(A.tenantId);
+    expect(active).not.toContain(B.tenantId);
 
     // Quem é de B ainda entra, mas não cadastra nada.
     asMember(B);

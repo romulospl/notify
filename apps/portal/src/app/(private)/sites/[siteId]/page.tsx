@@ -10,13 +10,18 @@ import {
   browserName,
   bucketLabel,
   countryName,
+  type Delta,
   deviceName,
   formatCount,
   formatDuration,
   formatPercent,
+  pointsDelta,
   referrerName,
+  relativeDelta,
 } from "@/lib/format";
-import { parsePeriodKey, PERIODS, type PeriodKey, resolvePeriod } from "@/lib/period";
+import { DeltaText } from "@/components/delta-text";
+import { PeriodPicker } from "@/components/period-picker";
+import { parsePeriodKey, resolvePeriod } from "@/lib/period";
 import { getSiteDashboard, type RankedItem, type SiteDashboard, UmamiError } from "@/lib/umami/stats";
 import { PageviewsChart } from "./pageviews-chart";
 
@@ -71,7 +76,7 @@ export default async function SitePage({
     return (
       <section>
         {header}
-        <PeriodPicker siteId={site.id} current={period.key} />
+        <PeriodPicker current={period.key} href={(key) => `/sites/${site.id}?period=${key}`} />
         <p role="alert" className="mt-6 text-zinc-500">
           Web analytics is unavailable right now. Try again in a few minutes.
         </p>
@@ -94,7 +99,7 @@ export default async function SitePage({
   return (
     <section>
       {header}
-      <PeriodPicker siteId={site.id} current={period.key} />
+      <PeriodPicker current={period.key} href={(key) => `/sites/${site.id}?period=${key}`} />
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatTile
@@ -168,46 +173,6 @@ export default async function SitePage({
   );
 }
 
-// Seletor de período: uma linha acima de tudo o que ele filtra.
-function PeriodPicker({ siteId, current }: { siteId: string; current: PeriodKey }) {
-  return (
-    <nav aria-label="Period" className="mt-6 flex flex-wrap gap-2 text-sm">
-      {(Object.keys(PERIODS) as PeriodKey[]).map((key) => (
-        <Link
-          key={key}
-          href={`/sites/${siteId}?period=${key}`}
-          aria-current={key === current ? "page" : undefined}
-          className={
-            key === current
-              ? "rounded-md bg-zinc-900 px-3 py-1.5 font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-              : "rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
-          }
-        >
-          {PERIODS[key].label}
-        </Link>
-      ))}
-    </nav>
-  );
-}
-
-type Delta = { direction: "up" | "down" | "flat"; text: string } | null;
-
-// Variação relativa; nula quando o período anterior não tem base.
-function relativeDelta(current: number, before: number, base = before): Delta {
-  if (base <= 0 || before <= 0) return null;
-  const change = (current - before) / before;
-  if (Math.abs(change) < 0.005) return { direction: "flat", text: "No change" };
-  return { direction: change > 0 ? "up" : "down", text: formatPercent(Math.abs(change)) };
-}
-
-// Variação em pontos percentuais, para a taxa de rejeição.
-function pointsDelta(current: number, before: number, visits: number, previousVisits: number): Delta {
-  if (visits <= 0 || previousVisits <= 0) return null;
-  const pts = Math.round((current - before) * 100);
-  if (pts === 0) return { direction: "flat", text: "No change" };
-  return { direction: pts > 0 ? "up" : "down", text: `${Math.abs(pts)} pts` };
-}
-
 function StatTile({
   label,
   value,
@@ -221,24 +186,14 @@ function StatTile({
   vs: string;
   upIsGood?: boolean;
 }) {
-  const good = delta && delta.direction !== "flat" && (delta.direction === "up") === upIsGood;
-  const tone = !delta || delta.direction === "flat"
-    ? "text-zinc-500"
-    : good
-      ? "text-[#006300] dark:text-[#0ca30c]"
-      : "text-[#d03b3b]";
   return (
     <div className={card}>
       <p className="text-sm text-zinc-500">{label}</p>
       <p className="mt-1 text-2xl font-semibold">{value}</p>
-      <p className={`mt-1 text-xs ${tone}`}>
+      <p className="mt-1 text-xs">
         {delta ? (
           <>
-            {delta.direction !== "flat" && (
-              <span aria-hidden>{delta.direction === "up" ? "▲ " : "▼ "}</span>
-            )}
-            <span className="sr-only">{delta.direction === "up" ? "Up " : delta.direction === "down" ? "Down " : ""}</span>
-            {delta.text} <span className="text-zinc-500">{vs}</span>
+            <DeltaText delta={delta} upIsGood={upIsGood} /> <span className="text-zinc-500">{vs}</span>
           </>
         ) : (
           <span className="text-zinc-500">No data for the previous period</span>

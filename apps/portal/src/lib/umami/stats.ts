@@ -2,24 +2,24 @@ import "server-only";
 import type { TenantContext } from "../access";
 import type { Period } from "../period";
 import { getSite } from "../data/sites";
-import { umamiRequest } from "./http";
+import {
+  type Breakdown,
+  BREAKDOWNS,
+  type Point,
+  readBreakdown,
+  readSeries,
+  readStats,
+  type SiteStats,
+  type Totals,
+} from "./read";
 
 // As páginas tratam a falha do Umami sem importar o cliente HTTP (regra de lint).
 export { UmamiError } from "./http";
+export type { Breakdown, SiteStats, Totals };
 
 // Leitura de estatísticas web. Recebe o ID do site do portal, nunca o do
 // Umami: o ID do Umami só é obtido depois de conferir que o site é do tenant
 // do contexto (ADR 0003). Site de outro tenant devolve nulo sem chamar o Umami.
-
-type Totals = {
-  pageviews: number;
-  visitors: number;
-  visits: number;
-  bounces: number;
-  totaltime: number;
-};
-
-export type SiteStats = Totals & { comparison: Totals };
 
 export async function getSiteStats(
   ctx: TenantContext,
@@ -28,11 +28,7 @@ export async function getSiteStats(
 ): Promise<SiteStats | null> {
   const found = await getSite(ctx, siteId);
   if (!found) return null;
-  const query = new URLSearchParams({
-    startAt: String(range.startAt.getTime()),
-    endAt: String(range.endAt.getTime()),
-  });
-  return umamiRequest<SiteStats>(`/api/websites/${found.umamiWebsiteId}/stats?${query}`);
+  return readStats(found.umamiWebsiteId, range);
 }
 
 // Painel web do tenant (#28): as 7 métricas mínimas de um site num período.
@@ -45,9 +41,6 @@ export async function getSiteStats(
 
 export const TOP_LIMIT = 10;
 
-const BREAKDOWNS = ["referrer", "country", "device", "browser"] as const;
-export type Breakdown = (typeof BREAKDOWNS)[number];
-
 export type RankedItem = { name: string; visitors: number };
 
 export type SiteDashboard = {
@@ -58,8 +51,6 @@ export type SiteDashboard = {
   breakdowns: Record<Breakdown, RankedItem[]>;
 };
 
-type Point = { x: string; y: number };
-
 // Nulo quando o site não é do tenant do contexto (ou está arquivado): nesse
 // caso nenhuma chamada chega ao Umami.
 export async function getSiteDashboard(
@@ -69,20 +60,14 @@ export async function getSiteDashboard(
 ): Promise<SiteDashboard | null> {
   const found = await getSite(ctx, siteId);
   if (!found) return null;
-  const base = `/api/websites/${found.umamiWebsiteId}`;
-  const range = `startAt=${period.startAt.getTime()}&endAt=${period.endAt.getTime()}`;
-
+  const id = found.umamiWebsiteId;
   const [stats, series, ...lists] = await Promise.all([
-    umamiRequest<SiteStats>(`${base}/stats?${range}`),
-    umamiRequest<{ pageviews: Point[]; sessions: Point[] }>(
-      `${base}/pageviews?${range}&unit=${period.unit}&timezone=UTC`,
-    ),
-    ...BREAKDOWNS.map((type) =>
-      umamiRequest<Point[]>(`${base}/metrics?${range}&type=${type}&limit=${TOP_LIMIT}`),
-    ),
+    readStats(id, period),
+    readSeries(id, period),
+    ...BREAKDOWNS.map((type) => readBreakdown(id, type, period, TOP_LIMIT)),
   ]);
 
-  const byTime = (points: Point[]) => new Map(points.map((p) => [Date.parse(p.x), Number(p.y)]));
+  const byTime = (points: Point[]) => new Map(points.map((p) => [Date.parse(p.x ?? ""), Number(p.y)]));
   const pageviews = byTime(series.pageviews);
   const sessions = byTime(series.sessions);
   const { comparison, ...totals } = stats;

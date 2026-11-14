@@ -14,9 +14,14 @@ export default async function PrivateLayout({ children }: { children: React.Reac
           <nav className="flex gap-4 text-sm">
             {/* D2: o operador não é membro de tenant, então não tem "Project". */}
             {isOperator ? (
-              <Link href="/operator" className="hover:underline">
-                SCF overview
-              </Link>
+              <>
+                <Link href="/operator" className="hover:underline">
+                  SCF overview
+                </Link>
+                <Link href="/operator/web" className="hover:underline">
+                  Web analytics
+                </Link>
+              </>
             ) : (
               <>
                 <Link href="/dashboard" className="hover:underline">

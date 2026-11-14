@@ -21,7 +21,8 @@ const dbDrivers = {
   message: "O cliente do banco fica em src/lib/db/. Use as funções de src/lib/data/.",
 };
 const umamiHttp = {
-  group: ["@/lib/umami/http", "**/umami/http"],
+  // read.ts lê pelo ID do Umami, sem conferir o tenant: também é interno.
+  group: ["@/lib/umami/http", "**/umami/http", "@/lib/umami/read", "**/umami/read"],
   message: "Só src/lib/umami/ chama o Umami. Use as funções públicas de lá.",
 };
 
