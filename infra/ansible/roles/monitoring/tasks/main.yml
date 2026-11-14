@@ -1,0 +1,76 @@
+# Monitoramento externo (#15, ADR 0005): Prometheus, blackbox e Alertmanager
+# numa VM separada da produção.
+- name: Pastas do monitoramento
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ monitor_root }}/prometheus/rules"
+    - "{{ monitor_root }}/prometheus/targets"
+    - "{{ monitor_root }}/blackbox"
+    - "{{ monitor_root }}/alertmanager"
+
+- name: Pasta dos segredos do Alertmanager (o processo roda como nobody)
+  ansible.builtin.file:
+    path: "{{ monitor_root }}/alertmanager/secrets"
+    state: directory
+    owner: "65534"
+    group: "65534"
+    mode: "0700"
+
+- name: Copia o Compose e as configurações do repositório
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../monitoring/{{ item }}"
+    dest: "{{ monitor_root }}/{{ item }}"
+    mode: "0644"
+  loop:
+    - compose.yaml
+    - prometheus/prometheus.yml
+    - prometheus/rules/alerts.yml
+    - blackbox/blackbox.yml
+
+- name: Alvos dos testes (hosts públicos da produção)
+  ansible.builtin.template:
+    src: endpoints.yml.j2
+    dest: "{{ monitor_root }}/prometheus/targets/endpoints.yml"
+    mode: "0644"
+
+- name: Configuração do Alertmanager
+  ansible.builtin.template:
+    src: alertmanager.yml.j2
+    dest: "{{ monitor_root }}/alertmanager/alertmanager.yml"
+    mode: "0644"
+
+- name: Senha do SMTP
+  ansible.builtin.copy:
+    dest: "{{ monitor_root }}/alertmanager/secrets/smtp_password"
+    content: "{{ monitor_smtp_password | default('') }}"
+    owner: "65534"
+    group: "65534"
+    mode: "0400"
+  no_log: true
+
+- name: URL do sinal de vida
+  ansible.builtin.copy:
+    dest: "{{ monitor_root }}/alertmanager/secrets/deadman_url"
+    content: "{{ monitor_deadman_url | default('') }}"
+    owner: "65534"
+    group: "65534"
+    mode: "0400"
+  no_log: true
+
+- name: Sobe o monitoramento
+  ansible.builtin.command:
+    cmd: docker compose up -d --wait --remove-orphans
+    chdir: "{{ monitor_root }}"
+  register: monitoring_compose_up
+  changed_when: "'Started' in monitoring_compose_up.stderr or 'Recreated' in monitoring_compose_up.stderr or 'Created' in monitoring_compose_up.stderr"
+
+# Prometheus, blackbox e Alertmanager releem a configuração com SIGHUP, sem
+# reiniciar (o compose up não recria por mudança em arquivo montado).
+- name: Recarrega as configurações
+  ansible.builtin.command:
+    cmd: docker compose kill -s SIGHUP prometheus blackbox alertmanager
+    chdir: "{{ monitor_root }}"
+  changed_when: false

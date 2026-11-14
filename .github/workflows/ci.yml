@@ -238,7 +238,8 @@ jobs:
             python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 sh -c '
               pip install -q --root-user-action=ignore ansible-core==2.21.5 ansible-lint==26.10.1 &&
               ansible-playbook --syntax-check -i inventory/production.example.yml site.yml &&
-              ansible-lint --offline site.yml roles'
+              ansible-playbook --syntax-check -i inventory/production.example.yml monitoring.yml &&
+              ansible-lint --offline site.yml monitoring.yml roles'
       - name: Caddyfile
         run: |
           docker run --rm -v "$PWD/infra/caddy:/etc/caddy:ro" \
@@ -250,10 +251,22 @@ jobs:
           docker compose build portal ingest-web
           infra/compose/test/prod-stack-test.sh
 
+  # Monitoramento externo (#15, ADR 0005): sobe Prometheus, blackbox e
+  # Alertmanager com a configuração do Ansible e confere o sinal de vida, o
+  # e-mail de alerta quando um alvo cai e o de resolvido quando ele volta.
+  monitoring:
+    name: monitoring
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Alertas de ponta a ponta
+        run: infra/monitoring/test/monitoring-test.sh
+
   ci:
     name: ci
     if: always()
-    needs: [node, go, compose, infra]
+    needs: [node, go, compose, infra, monitoring]
     runs-on: ubuntu-24.04
     steps:
       - name: Todos os jobs passaram

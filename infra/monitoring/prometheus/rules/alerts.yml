@@ -1,0 +1,55 @@
+# Alertas do monitoramento externo (#15). Textos em inglês, como a interface.
+groups:
+  - name: notify-endpoints
+    rules:
+      # Portal, ingestão web ou ingestão de API sem resposta 2xx por 1 minuto.
+      - alert: EndpointDown
+        expr: probe_success{job="endpoints"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.component }} is down"
+          description: "{{ $labels.instance }} has not answered with 2xx for over a minute."
+
+      # O certificado do Caddy renova sozinho ~30 dias antes; 14 dias quer dizer
+      # que a renovação está falhando (DNS, porta 80 ou Let's Encrypt).
+      - alert: TLSCertificateExpiringSoon
+        expr: probe_ssl_earliest_cert_expiry{job="endpoints"} - time() < 14 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS certificate of {{ $labels.component }} expires in less than 14 days"
+          description: "{{ $labels.instance }}: the automatic renewal is probably failing."
+
+      # O Prometheus não conseguiu nem pedir o teste ao blackbox (módulo
+      # inexistente, blackbox sem responder em /probe): probe_success some em
+      # vez de ir a 0, e o EndpointDown não dispararia.
+      - alert: ProbeFailing
+        expr: up{job="endpoints"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.component }} is not being checked"
+          description: "The probe request for {{ $labels.instance }} itself fails, so its availability is unknown."
+
+      # Sem o blackbox, nenhum alvo é testado e nenhum EndpointDown dispara.
+      - alert: ProberDown
+        expr: up{job="blackbox"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The blackbox prober is down"
+          description: "Endpoints are not being checked."
+
+      # Sempre ativo: vai para o sinal de vida externo (se configurado). Se ele
+      # parar de chegar, quem cai é o próprio monitoramento.
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "Monitoring is alive"

@@ -1,0 +1,103 @@
+# Testes de unidade das regras (#15): promtool test rules alerts.test.yml
+# Rodam no teste do monitoramento (test/monitoring-test.sh). Ficam fora de
+# prometheus/rules/, que o Prometheus carrega inteira.
+rule_files:
+  - ../prometheus/rules/alerts.yml
+
+evaluation_interval: 15s
+
+tests:
+  # Alvo fora do ar: dispara depois de 1 minuto, não antes.
+  - interval: 15s
+    input_series:
+      - series: 'probe_success{job="endpoints", instance="https://app.example.org/api/auth/ok", component="portal"}'
+        values: "1 1 0x8"
+    alert_rule_test:
+      - eval_time: 45s
+        alertname: EndpointDown
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: EndpointDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: endpoints
+              instance: https://app.example.org/api/auth/ok
+              component: portal
+            exp_annotations:
+              summary: "portal is down"
+              description: "https://app.example.org/api/auth/ok has not answered with 2xx for over a minute."
+
+  # O pedido ao blackbox falha: sem probe_success, mas com up=0.
+  - interval: 15s
+    input_series:
+      - series: 'up{job="endpoints", instance="https://e.example.org/healthz", component="ingest-web"}'
+        values: "0x12"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ProbeFailing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: endpoints
+              instance: https://e.example.org/healthz
+              component: ingest-web
+            exp_annotations:
+              summary: "ingest-web is not being checked"
+              description: "The probe request for https://e.example.org/healthz itself fails, so its availability is unknown."
+
+  # Certificado com 10 dias de validade: alerta depois de 1 hora.
+  - interval: 1m
+    input_series:
+      - series: 'probe_ssl_earliest_cert_expiry{job="endpoints", instance="https://e.example.org/healthz", component="ingest-web"}'
+        values: "864000x120"
+    alert_rule_test:
+      - eval_time: 75m
+        alertname: TLSCertificateExpiringSoon
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: endpoints
+              instance: https://e.example.org/healthz
+              component: ingest-web
+            exp_annotations:
+              summary: "TLS certificate of ingest-web expires in less than 14 days"
+              description: "https://e.example.org/healthz: the automatic renewal is probably failing."
+
+  # Certificado com 60 dias: nada.
+  - interval: 1m
+    input_series:
+      - series: 'probe_ssl_earliest_cert_expiry{job="endpoints", instance="https://e.example.org/healthz", component="ingest-web"}'
+        values: "5184000x120"
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: TLSCertificateExpiringSoon
+        exp_alerts: []
+
+  # Blackbox fora do ar.
+  - interval: 15s
+    input_series:
+      - series: 'up{job="blackbox", instance="blackbox:9115"}'
+        values: "0x12"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ProberDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: blackbox
+              instance: blackbox:9115
+            exp_annotations:
+              summary: "The blackbox prober is down"
+              description: "Endpoints are not being checked."
+
+  # O sinal de vida está sempre ativo.
+  - interval: 15s
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: Watchdog
+        exp_alerts:
+          - exp_labels:
+              severity: none
+            exp_annotations:
+              summary: "Monitoring is alive"

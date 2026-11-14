@@ -69,3 +69,21 @@ variable "object_storage_secret_key" {
   type        = string
   sensitive   = true
 }
+
+# Monitoramento externo (#15, ADR 0005): VM separada, em outro data center,
+# para continuar avisando se a VM de produção cair inteira.
+variable "monitor_location" {
+  description = "Local da VM de monitoramento; diferente de `location`, para não cair junto."
+  type        = string
+  default     = "fsn1"
+
+  validation {
+    condition     = contains(["nbg1", "fsn1", "hel1"], var.monitor_location)
+    error_message = "Use um local da UE: nbg1, fsn1 ou hel1."
+  }
+}
+
+variable "monitor_server_type" {
+  description = "Tipo da VM de monitoramento (a menor serve). Confira com `hcloud server-type list`."
+  type        = string
+}

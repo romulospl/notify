@@ -1,0 +1,12 @@
+# Módulos do blackbox exporter (#15).
+modules:
+  # GET que precisa responder 2xx em até 10 s, sem seguir redirecionamento.
+  # Em produção os alvos são https://; o certificado precisa ser válido.
+  http_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      follow_redirects: false
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: true

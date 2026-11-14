@@ -131,3 +131,49 @@ resource "aws_s3_bucket" "backup" {
     prevent_destroy = true
   }
 }
+
+# Monitoramento externo (#15, ADR 0005). Só SSH das redes de administração:
+# Prometheus e Alertmanager escutam no loopback e são acessados por túnel.
+resource "hcloud_firewall" "monitor" {
+  name   = "notify-monitor"
+  labels = local.labels
+
+  rule {
+    description = "SSH de administração"
+    direction   = "in"
+    protocol    = "tcp"
+    port        = "22"
+    source_ips  = var.admin_cidrs
+  }
+
+  rule {
+    description = "Ping"
+    direction   = "in"
+    protocol    = "icmp"
+    source_ips  = ["0.0.0.0/0", "::/0"]
+  }
+}
+
+resource "hcloud_server" "monitor" {
+  name         = "notify-monitor"
+  server_type  = var.monitor_server_type
+  image        = var.server_image
+  location     = var.monitor_location
+  ssh_keys     = [hcloud_ssh_key.admin.id]
+  firewall_ids = [hcloud_firewall.monitor.id]
+  labels       = merge(local.labels, { role = "monitor" })
+  user_data    = file("${path.module}/cloud-init.yaml")
+
+  public_net {
+    ipv4_enabled = true
+    ipv6_enabled = true
+  }
+
+  lifecycle {
+    precondition {
+      condition     = var.monitor_location != var.location
+      error_message = "O monitoramento precisa ficar em outro local da Hetzner, não no mesmo da produção."
+    }
+    ignore_changes = [user_data, image, ssh_keys]
+  }
+}

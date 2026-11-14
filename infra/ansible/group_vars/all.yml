@@ -33,3 +33,15 @@ walg_s3_prefix: s3://CONFIRA/postgres
 walg_retain_full: 7
 # Horário do backup base diário (systemd OnCalendar, em UTC).
 backup_on_calendar: "*-*-* 03:15:00 UTC"
+
+# Monitoramento externo (#15, ADR 0005), na VM `monitor`.
+monitor_root: /opt/notify-monitor
+# Para onde vão os alertas e por qual SMTP (a senha fica em secrets.yml).
+monitor_alert_email: ops@example.org
+monitor_smtp_smarthost: smtp.example.org:587
+monitor_smtp_from: "notify monitor <monitor@example.org>"
+monitor_smtp_username: ""
+monitor_smtp_require_tls: true
+# URL OTLP da ingestão de API, quando o coletor (#30) estiver publicado na
+# produção. Vazia, a ingestão de API não é testada.
+monitor_api_url: ""

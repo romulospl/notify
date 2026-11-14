@@ -27,3 +27,8 @@ output "location" {
   description = "Local da Hetzner (data residency), para a documentação e o WAL-G."
   value       = var.location
 }
+
+output "monitor_ipv4" {
+  description = "IPv4 da VM de monitoramento (inventário do Ansible, host `monitor`)."
+  value       = hcloud_server.monitor.ipv4_address
+}

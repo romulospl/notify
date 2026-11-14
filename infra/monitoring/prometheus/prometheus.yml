@@ -1,0 +1,35 @@
+# Prometheus do monitoramento externo (#15). Os alvos vêm de targets/*.yml
+# (gerados pelo Ansible a partir dos hosts públicos), com o rótulo `component`
+# (portal, ingest-web, ingest-api) que aparece nos alertas.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: [alertmanager:9093]
+
+scrape_configs:
+  # Cada alvo é testado pelo blackbox exporter: o Prometheus pede
+  # /probe?target=<url> e recebe probe_success, tempo e validade do TLS.
+  - job_name: endpoints
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    file_sd_configs:
+      - files: [/etc/prometheus/targets/*.yml]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  - job_name: blackbox
+    static_configs:
+      - targets: [blackbox:9115]

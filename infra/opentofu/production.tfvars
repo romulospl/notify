@@ -2,10 +2,14 @@
 # ambiente (ver variables.tf). Ajuste antes do primeiro apply:
 #   tofu -chdir=infra/opentofu apply -var-file=production.tfvars
 
-location         = "nbg1"
-server_type      = "CONFIRA: hcloud server-type list"
-data_volume_size = 40
-backup_bucket    = "CONFIRA: nome único, ex.: notify-backup-<sufixo>"
+location    = "nbg1"
+server_type = "CONFIRA: hcloud server-type list"
+
+# Monitoramento externo (#15): outro local, a menor VM serve.
+monitor_location    = "fsn1"
+monitor_server_type = "CONFIRA: hcloud server-type list"
+data_volume_size    = 40
+backup_bucket       = "CONFIRA: nome único, ex.: notify-backup-<sufixo>"
 
 # Chave pública de quem administra e redes que podem entrar por SSH.
 admin_ssh_public_key = "CONFIRA: ssh-ed25519 AAAA... admin@notify"

@@ -1,0 +1,18 @@
+# Monitoramento externo da produção (#15, ADR 0005). Uso, de infra/ansible:
+#   ansible-playbook monitoring.yml -e @secrets.yml
+- name: Monitoramento do notify
+  hosts: monitor
+  become: true
+  pre_tasks:
+    - name: Confere a configuração dos alertas
+      ansible.builtin.assert:
+        that:
+          - monitor_alert_email | default('') | length > 0
+          - monitor_smtp_smarthost | default('') is regex('^[^:]+:[0-9]+$')
+          - monitor_smtp_from | default('') | length > 0
+        fail_msg: "Preencha monitor_alert_email, monitor_smtp_smarthost (host:porta) e monitor_smtp_from."
+        quiet: true
+  roles:
+    - base
+    - docker
+    - monitoring

@@ -1,0 +1,24 @@
+# Só para o teste do monitoramento (test/monitoring-test.sh e o job
+# `monitoring` do CI): um alvo que o teste derruba, o Mailpit no lugar do SMTP
+# e um receptor do sinal de vida. Nunca use em produção.
+services:
+  target:
+    image: caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
+    command: ["caddy", "respond", "--listen", ":8080", "ok"]
+
+  deadman:
+    image: caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
+    command: ["caddy", "respond", "--listen", ":8080", "--access-log", "pong"]
+
+  mailpit:
+    image: axllent/mailpit:v1.32.0@sha256:0790692be935ea4420d085694f7985b1f692ca6a8771ab0e0bd8ba75ac180498
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1:${MAILPIT_TEST_PORT:-18025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
