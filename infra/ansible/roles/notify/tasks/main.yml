@@ -22,6 +22,7 @@
     - { src: compose/postgres/init/01-databases.sh, mode: "0755" }
     - { src: compose/postgres/init/02-ingest-roles.sh, mode: "0755" }
     - { src: caddy/Caddyfile }
+  register: notify_files
 
 - name: Segredos e configuração da pilha (.env)
   ansible.builtin.template:
@@ -48,3 +49,12 @@
   tags: [images]
   register: notify_compose_up
   changed_when: "'Started' in notify_compose_up.stderr or 'Recreated' in notify_compose_up.stderr or 'Created' in notify_compose_up.stderr"
+
+# O Caddy não relê o Caddyfile sozinho; recarrega sem derrubar conexões.
+- name: Recarrega o Caddy se o Caddyfile mudou
+  ansible.builtin.command:
+    cmd: docker compose -f prod.yaml exec -T caddy caddy reload --config /etc/caddy/Caddyfile
+    chdir: "{{ notify_root }}/infra/compose"
+  when: notify_files.results | selectattr('item.src', 'equalto', 'caddy/Caddyfile') | selectattr('changed') | list | length > 0
+  changed_when: true
+  tags: [images]

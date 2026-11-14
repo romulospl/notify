@@ -176,7 +176,9 @@ services:
       - "443:443"
       - "443:443/udp"
     volumes:
-      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # A pasta, não o arquivo: o Ansible troca o Caddyfile por renomeação, e um
+      # arquivo montado sozinho continuaria apontando para a versão antiga.
+      - ../caddy:/etc/caddy:ro
       - ${NOTIFY_DATA_DIR:-/srv/notify}/caddy:/data
     depends_on:
       portal:
