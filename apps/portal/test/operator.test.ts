@@ -7,7 +7,14 @@ import { promisify } from "node:util";
 import { eq, inArray, like } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { OperatorContext } from "@/lib/access";
-import { getTenantDetail, listTenants } from "@/lib/data/operator/tenants";
+import {
+  getTenantDetail,
+  listTenants,
+  REASON_MAX,
+  reactivateTenant,
+  removeTenant,
+  TenantStatusError,
+} from "@/lib/data/operator/tenants";
 import { db, sql } from "@/lib/db";
 import { runMigrations } from "@/lib/db/migrate";
 import { apiService, auditLog, ingestKey, session, tenant, tenantMember, user } from "@/lib/db/schema";
@@ -18,7 +25,9 @@ const DOMAIN = "@operator-test.notify.invalid";
 const SLUG = "operator-test-";
 const PASSWORD = "operator-password-123";
 // Só o teste monta o contexto à mão; no portal ele vem de requireOperatorContext().
-const operator = { userId: "test-operator" } as OperatorContext;
+// O userId é preenchido no beforeAll com um operador de verdade, porque
+// tenant.status_changed_by aponta para user.id.
+let operator = { userId: "test-operator" } as OperatorContext;
 
 // Roda um script do portal com o banco dos testes e sem Umami.
 async function script(name: string, args: string[], env: Record<string, string> = {}) {
@@ -66,6 +75,7 @@ async function cleanup() {
 beforeAll(async () => {
   await runMigrations();
   await cleanup();
+  operator = { userId: (await createUser("operator")).id } as OperatorContext;
 });
 
 afterAll(async () => {
@@ -237,5 +247,105 @@ describe("visão global do operador", () => {
     ]);
     expect(await getTenantDetail(operator, randomUUID())).toBeNull();
     expect(await getTenantDetail(operator, "not-a-uuid")).toBeNull();
+  });
+});
+
+describe("remoção e reativação de projeto (#20)", () => {
+  async function auditOf(tenantId: string) {
+    return db.select().from(auditLog).where(eq(auditLog.tenantId, tenantId)).orderBy(auditLog.at);
+  }
+
+  it("remover grava status, quem, quando e motivo, e registra no audit_log", async () => {
+    const t = await createTenant();
+    const before = Date.now();
+
+    expect(await removeTenant(operator, t.id, { reason: "  Not a Stellar project  " })).toBe("changed");
+
+    const [row] = await db.select().from(tenant).where(eq(tenant.id, t.id));
+    expect(row).toMatchObject({
+      status: "removed",
+      statusChangedBy: operator.userId,
+      statusReason: "Not a Stellar project",
+    });
+    expect(row!.statusChangedAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect(await auditOf(t.id)).toMatchObject([
+      {
+        action: "tenant.removed",
+        actorUserId: operator.userId,
+        details: { from: "active", reason: "Not a Stellar project" },
+      },
+    ]);
+  });
+
+  it("remover exige motivo e limita o tamanho, sem gravar nada", async () => {
+    const t = await createTenant();
+    for (const reason of ["", "  ", "no", "x".repeat(REASON_MAX + 1)]) {
+      await expect(removeTenant(operator, t.id, { reason })).rejects.toBeInstanceOf(TenantStatusError);
+    }
+    const [row] = await db.select().from(tenant).where(eq(tenant.id, t.id));
+    expect(row!.status).toBe("active");
+    expect(await auditOf(t.id)).toEqual([]);
+  });
+
+  it("remover de novo não muda nada nem duplica o registro, mesmo com pedidos simultâneos", async () => {
+    const t = await createTenant();
+    const results = await Promise.all([
+      removeTenant(operator, t.id, { reason: "first" }),
+      removeTenant(operator, t.id, { reason: "second" }),
+    ]);
+    expect(results.sort()).toEqual(["changed", "unchanged"]);
+    expect(await removeTenant(operator, t.id, { reason: "third" })).toBe("unchanged");
+    expect(await auditOf(t.id)).toHaveLength(1);
+  });
+
+  it("reativar volta a active, limpa o motivo e registra a observação (D6)", async () => {
+    const t = await createTenant();
+    await removeTenant(operator, t.id, { reason: "Spam" });
+
+    expect(await reactivateTenant(operator, t.id, { reason: "Removed by mistake" })).toBe("changed");
+
+    const [row] = await db.select().from(tenant).where(eq(tenant.id, t.id));
+    expect(row).toMatchObject({ status: "active", statusReason: null, statusChangedBy: operator.userId });
+    expect((await auditOf(t.id)).map((a) => [a.action, a.details])).toEqual([
+      ["tenant.removed", { from: "active", reason: "Spam" }],
+      ["tenant.reactivated", { from: "removed", reason: "Removed by mistake" }],
+    ]);
+    // Sem observação também vale.
+    await removeTenant(operator, t.id, { reason: "Spam again" });
+    expect(await reactivateTenant(operator, t.id)).toBe("changed");
+  });
+
+  it("reativar só vale para projeto removido", async () => {
+    const active = await createTenant();
+    expect(await reactivateTenant(operator, active.id)).toBe("unchanged");
+    const [pending] = await db
+      .insert(tenant)
+      .values({ name: "Pending", slug: `${SLUG}${randomUUID()}`, status: "pending" })
+      .returning();
+    expect(await reactivateTenant(operator, pending!.id)).toBe("unchanged");
+    expect(await auditOf(active.id)).toEqual([]);
+    expect(await auditOf(pending!.id)).toEqual([]);
+  });
+
+  it("projeto inexistente ou ID inválido devolve nulo", async () => {
+    expect(await removeTenant(operator, randomUUID(), { reason: "Spam" })).toBeNull();
+    expect(await removeTenant(operator, "not-a-uuid", { reason: "Spam" })).toBeNull();
+    expect(await reactivateTenant(operator, randomUUID())).toBeNull();
+  });
+
+  it("o detalhe mostra quem mudou o status e o histórico, do mais novo ao mais antigo", async () => {
+    const t = await createTenant();
+    await removeTenant(operator, t.id, { reason: "Spam" });
+    await reactivateTenant(operator, t.id, { reason: "Appeal accepted" });
+    await removeTenant(operator, t.id, { reason: "Spam again" });
+
+    const [op] = await db.select().from(user).where(eq(user.id, operator.userId));
+    const detail = await getTenantDetail(operator, t.id);
+    expect(detail!.tenant).toMatchObject({ status: "removed", statusChangedBy: op!.email, statusReason: "Spam again" });
+    expect(detail!.statusHistory).toMatchObject([
+      { action: "tenant.removed", actor: op!.email, reason: "Spam again" },
+      { action: "tenant.reactivated", actor: op!.email, reason: "Appeal accepted" },
+      { action: "tenant.removed", actor: op!.email, reason: "Spam" },
+    ]);
   });
 });

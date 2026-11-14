@@ -2,20 +2,29 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireOperatorContext } from "@/lib/access";
-import { getTenantDetail } from "@/lib/data/operator/tenants";
+import { getTenantDetail, REASON_MAX } from "@/lib/data/operator/tenants";
+import { TenantStatusForm } from "./status-form";
 
 export const metadata: Metadata = { title: "Project details" };
 
 const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC" });
+const dateTimeFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" });
 
-// Detalhe de um projeto para o operador SCF (#19), só leitura. Das chaves de
-// ingestão aparecem só o prefixo e as datas.
+const HISTORY_LABEL: Record<string, string> = {
+  "tenant.created": "Created",
+  "tenant.removed": "Removed",
+  "tenant.reactivated": "Reactivated",
+};
+
+// Detalhe de um projeto para o operador SCF (#19). Das chaves de ingestão
+// aparecem só o prefixo e as datas. A única escrita é remover ou reativar o
+// projeto (#20).
 export default async function OperatorTenantPage({ params }: { params: Promise<{ tenantId: string }> }) {
   const { tenantId } = await params;
   const ctx = await requireOperatorContext();
   const detail = await getTenantDetail(ctx, tenantId);
   if (!detail) notFound();
-  const { tenant, members, sites, services } = detail;
+  const { tenant, statusHistory, members, sites, services } = detail;
 
   return (
     <section>
@@ -27,8 +36,13 @@ export default async function OperatorTenantPage({ params }: { params: Promise<{
         <span className="font-mono">{tenant.slug}</span> · created {dateFormat.format(tenant.createdAt)} ·{" "}
         <span className="capitalize">{tenant.status}</span>
         {tenant.status !== "active" && ` since ${dateFormat.format(tenant.statusChangedAt)}`}
+        {tenant.status !== "active" && tenant.statusChangedBy && ` by ${tenant.statusChangedBy}`}
       </p>
       {tenant.statusReason && <p className="mt-1 text-sm text-zinc-500">Reason: {tenant.statusReason}</p>}
+
+      <h2 className="mt-8 text-lg font-semibold">{tenant.status === "removed" ? "Reactivate" : "Remove"} project</h2>
+      {/* key: o formulário recomeça vazio depois de mudar o status. */}
+      <TenantStatusForm key={tenant.status} tenantId={tenant.id} status={tenant.status} reasonMax={REASON_MAX} />
 
       <h2 className="mt-8 text-lg font-semibold">Members</h2>
       <ul className="mt-2 divide-y divide-zinc-200 border-y border-zinc-200 text-sm dark:divide-zinc-800 dark:border-zinc-800">
@@ -85,6 +99,20 @@ export default async function OperatorTenantPage({ params }: { params: Promise<{
           </table>
         </div>
       ))}
+
+      <h2 className="mt-8 text-lg font-semibold">Status history</h2>
+      <ul className="mt-2 divide-y divide-zinc-200 border-y border-zinc-200 text-sm dark:divide-zinc-800 dark:border-zinc-800">
+        {statusHistory.length === 0 && <li className="py-2 text-zinc-500">No changes recorded.</li>}
+        {statusHistory.map((h, i) => (
+          <li key={i} className="py-2">
+            <span className="font-medium">{HISTORY_LABEL[h.action] ?? h.action}</span>{" "}
+            <span className="text-zinc-500">
+              {dateTimeFormat.format(h.at)} UTC by {h.actor ?? "an administrator"}
+            </span>
+            {h.reason && <p className="mt-1 text-zinc-500">{h.reason}</p>}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
