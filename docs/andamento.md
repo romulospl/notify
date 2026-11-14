@@ -11,7 +11,7 @@ Registro do que já foi feito, das decisões tomadas e dos próximos passos. Atu
 | Quadro do projeto | 16 itens em Done, 3 em In progress, 27 em Ready e 19 em Backlog |
 | Ferramenta base | **Umami v3.4.1** ([ADR 0001](adr/0001-ferramenta-base.md)) |
 | Arquitetura e stack | Definidas ([ADR 0002](adr/0002-arquitetura-e-stack.md)) |
-| Repositório | Estrutura do monorepo (#11), ambiente local com Docker Compose (#12), CI (#13), Renovate e releases assinadas (#55) |
+| Repositório | Estrutura do monorepo (#11), ambiente local com Docker Compose (#12), CI (#13), Renovate e releases assinadas (#55), IaC da produção na Hetzner (#14, [ADR 0004](adr/0004-hospedagem-e-backup.md)) |
 | Código | Portal com o E2 feito até onde dá sem o coletor: a #20 e a #21 só esperam a parte do coletor (#30). No E4, painéis web do tenant (#28) e do SCF (#29), detalhados em [`e4-implementacao.md`](e4-implementacao.md), detalhado em [`e2-implementacao.md`](e2-implementacao.md). No E3, script de rastreamento (#22) e gateway de ingestão (#61) |
 
 ## 1. MVP definido a partir do RFP
@@ -209,6 +209,8 @@ O portal lê o Umami com uma conta de serviço que enxerga tudo, então o isolam
 | `de8f308` | `docs: record project removal and the isolation suite` (PR #88) |
 | `9755566` | `feat(portal): add tenant web dashboard with the seven minimum metrics` (PR #89, fechou a #28) |
 | `55d3943` | `docs: record the tenant web dashboard and the umami metrics check` (PR #89) |
+| `962ad22` | `feat(portal): add scf web overview with project comparison` (PR #93, fechou a #29) |
+| `d0fe1a4` | `docs: record the scf web overview and the commits of PR #89` (PR #93) |
 
 ## 6. Pendências e próximos passos
 
@@ -217,6 +219,7 @@ O portal lê o Umami com uma conta de serviço que enxerga tudo, então o isolam
    **Concluída:** a [#13 (1.4)](https://github.com/romulospl/notify/issues/13), com CI no GitHub Actions (actions fixadas por SHA, Postgres nos testes e o Compose testado a cada PR). Por decisão de 13/11/2026, a `main` fica **sem proteção de branch**: o CI roda, mas não bloqueia merge nem push direto. Se a proteção for ligada, basta exigir o check `ci`.
    **Concluída:** a [#56 (1.8)](https://github.com/romulospl/notify/issues/56), com `SECURITY.md`, `CONTRIBUTING.md` e modelos de issue (bug, dúvida de tenant, pedido de recurso). **Pendência:** o relato privado de vulnerabilidades do GitHub só existe em repositório público; ao abrir o repositório, ligar em *Settings → Code security → Private vulnerability reporting*.
    **Concluída:** a [#55 (1.7)](https://github.com/romulospl/notify/issues/55), com Renovate (14 dias de espera) e o workflow de release com SBOM, imagens no GHCR assinadas com cosign e o comando de verificação no README. **Pendência:** instalar o app do Renovate no repositório (github.com/apps/renovate), que é uma ação da conta; sem ele o `renovate.json` não tem efeito.
+   **#14 (1.5), IaC da produção (14/11/2026):** Hetzner Cloud em Nuremberg, OpenTofu (no lugar do Terraform, por licença), Ansible, Caddy e backup contínuo com WAL-G cifrado no Object Storage ([ADR 0004](adr/0004-hospedagem-e-backup.md), passo a passo em [`deploy.md`](deploy.md)). Escrita e validada localmente: `tofu validate` e `plan`, `ansible-lint`, playbook rodado numa VM Debian 12 simulada (idempotente) e a pilha de produção testada no CI a cada PR, com restauração do backup. **Falta, fora do código:** criar a conta e aplicar (token da Hetzner), registrar o domínio e o DNS, escolher o SMTP e publicar a primeira release (o deploy só aceita imagens assinadas).
 3. **Concluída:** a [#57 (2.7)](https://github.com/romulospl/notify/issues/57), esqueleto do portal com login (Better Auth + Drizzle), rotas privadas, imagem Docker e portal no Compose.
    **E2 completo até onde dá sem o coletor:** concluídas a #16, #58, #18, #59, #60, #17 e #19 em 13/11/2026. Em 14/11/2026 entraram a parte do portal da [#20](https://github.com/romulospl/notify/issues/20) (remover e reativar projeto, com histórico no `audit_log`; o gateway web já descarta os eventos do projeto removido) e a [#21](https://github.com/romulospl/notify/issues/21) (suíte de isolamento em `apps/portal/test/isolation.test.ts`). As duas ficam abertas só pelo que depende do coletor ([#30](https://github.com/romulospl/notify/issues/30), E5): recusar a métrica de API de projeto removido e trocar os três `it.todo` da suíte por testes contra o coletor. Detalhes em [`e2-implementacao.md`](e2-implementacao.md).
    **E3:** concluídas a [#22](https://github.com/romulospl/notify/issues/22) (script de rastreamento) e a [#61](https://github.com/romulospl/notify/issues/61) (gateway de ingestão web), pelos PRs #74 e #75.
