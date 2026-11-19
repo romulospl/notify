@@ -83,7 +83,6 @@ Record the time from "started reading" to the first dashboard data, hands-on tim
 
 Not confirmed, from reading the guide:
 
-- D8: whether `pnpm --filter … umami:service-account` works in a fresh clone without `pnpm install`.
 - D7 and D9: the tunnel logs in as `root`; the guide has no fallback when root SSH login is disabled.
 - D24: the guide has no teardown steps.
 
