@@ -17,6 +17,7 @@ SECRET_NAMES = {
     "UMAMI_APP_SECRET",
     "PORTAL_AUTH_SECRET",
     "INGEST_PROOF_SECRET",
+    "WALG_LIBSODIUM_KEY",
 }
 
 
@@ -68,6 +69,8 @@ def validate(path):
         "UMAMI_APP_SECRET", "PORTAL_AUTH_SECRET", "INGEST_PROOF_SECRET",
         "PORTAL_HOST", "PORTAL_ALIAS_HOST", "INGEST_HOST", "API_HOST",
         "ACME_EMAIL", "SMTP_URL", "MAIL_FROM",
+        "WALG_S3_PREFIX", "WALG_S3_ENDPOINT", "WALG_S3_REGION",
+        "WALG_S3_ACCESS_KEY", "WALG_S3_SECRET_KEY", "WALG_LIBSODIUM_KEY",
     )
     missing = [key for key in required if not values.get(key)]
     if missing:

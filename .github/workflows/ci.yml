@@ -220,33 +220,15 @@ jobs:
       - if: always()
         run: docker compose down -v
 
-  # Produção (#14, ADR 0004): valida a IaC e sobe a pilha de produção com um
-  # S3 local, conferindo rotas do Caddy, portas, backup cifrado e restauração.
+  # Produção (ADR 0015): valida o Caddyfile e os scripts de instalação e sobe a
+  # pilha de produção com um S3 local, conferindo rotas do Caddy, portas,
+  # backup cifrado e restauração.
   infra:
     name: infra
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: OpenTofu (formato e validação)
-        run: |
-          otf() {
-            docker run --rm -v "$PWD/infra/opentofu:/w" -w /w \
-              ghcr.io/opentofu/opentofu:1.13.2@sha256:25bdfbe87000b8a88d44c7ef0cca53381da95f6203f7aed1e8cf5b81ecbe18eb "$@"
-          }
-          otf fmt -check -recursive
-          otf init -backend=false -input=false
-          otf validate
-      - name: Ansible (sintaxe e lint)
-        run: |
-          docker run --rm -v "$PWD:/repo" -w /repo/infra/ansible \
-            python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 sh -c '
-              pip install -q --root-user-action=ignore ansible-core==2.21.5 ansible-lint==26.10.1 &&
-              ansible-playbook --syntax-check -i inventory/production.example.yml site.yml &&
-              ansible-playbook --syntax-check -i inventory/production.example.yml monitoring.yml &&
-              ansible-playbook --syntax-check -i inventory/production.example.yml ingest.yml &&
-              ansible-playbook --syntax-check -i inventory/production.example.yml standby.yml &&
-              ansible-lint --offline site.yml monitoring.yml ingest.yml standby.yml roles'
       - name: Caddyfile
         run: |
           docker run --rm -v "$PWD/infra/caddy:/etc/caddy:ro" \
@@ -254,19 +236,17 @@ jobs:
             -e INGEST_HOST=e.example.org -e API_HOST=otlp.example.org -e ACME_EMAIL=ops@example.org \
             caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5 \
             caddy validate --config /etc/caddy/Caddyfile
-          docker run --rm -v "$PWD/infra/caddy:/etc/caddy:ro" \
-            -e INGEST_HOST=e.example.org -e ACME_EMAIL=ops@example.org \
-            caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5 \
-            caddy validate --config /etc/caddy/Caddyfile.ingest --adapter caddyfile
+      - name: Scripts de instalação
+        run: |
+          bash -n init.sh deploy.sh infra/monitoring/configure.sh
+          python3 -m py_compile infra/scripts/production-env.py infra/scripts/configure-docker.py
       - name: Pilha de produção (rotas, portas, backup e restauração)
         run: |
           docker compose build portal ingest-web collector rollup
           infra/compose/test/prod-stack-test.sh
-      - name: Replicação do Postgres e ingestão replicada (#52)
-        run: infra/compose/test/ha-replication-test.sh
 
   # Monitoramento externo (#15, ADR 0005): sobe Prometheus, blackbox e
-  # Alertmanager com a configuração do Ansible e confere o sinal de vida, o
+  # Alertmanager com a configuração do configure.sh e confere o sinal de vida, o
   # e-mail de alerta quando um alvo cai e o de resolvido quando ele volta.
   monitoring:
     name: monitoring

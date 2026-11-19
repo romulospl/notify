@@ -25,7 +25,7 @@ Monorepo structure from ADR 0002. Two languages: **TypeScript** for the UI and b
 | `packages/tracker` | Versioned, immutable tracking script | [docs/dev/tracker.md](docs/dev/tracker.md) |
 | `services/ingest-web` | Web gateway: JS proof, fingerprints, truncated IP, relay to Umami | [docs/dev/ingest-web.md](docs/dev/ingest-web.md) |
 | `services/collector`, `services/rollup` | OTel collector (OCB) and metric rollup/retention | [docs/dev/api-pipeline.md](docs/dev/api-pipeline.md) |
-| `infra/` | OpenTofu, Ansible, Compose, Caddy, monitoring | [docs/dev/production.md](docs/dev/production.md) |
+| `infra/`, `init.sh`, `deploy.sh` | Production on one VPS (Compose, Caddy, WAL-G backup) and monitoring | [docs/dev/production.md](docs/dev/production.md) |
 | `examples/` | Integration examples and e2e | [docs/dev/planning.md](docs/dev/planning.md#examples-examples) |
 
 Flows:
@@ -49,7 +49,7 @@ Environment, CI, release and dependency rules: [docs/dev/environment.md](docs/de
 ## Non-obvious constraints
 
 - **Dependency age:** only releases at least 14 days old (pnpm `minimumReleaseAge`, Renovate, GitHub Actions pinned by SHA). Pin exact versions.
-- **Licenses:** production dependencies must have an [OSI](https://opensource.org/licenses)-approved license, with specific, temporary exceptions for build dependencies in `scripts/licenses/allowed.json` (see `CONTRIBUTING.md`). That is why TimescaleDB (TSL) is not used and IaC uses OpenTofu, not Terraform (BUSL).
+- **Licenses:** production dependencies must have an [OSI](https://opensource.org/licenses)-approved license, with specific, temporary exceptions for build dependencies in `scripts/licenses/allowed.json` (see `CONTRIBUTING.md`). That is why TimescaleDB (TSL) is not used.
 - **Umami pinned to v3.4.1**, used without a heavy fork; changes are minimal, documented patches (`docs/umami.md`). Upgrade only by PR, with a release at least two weeks old. Umami is never published (no port, no Caddy route).
 - **Tenant isolation:** the tenant always comes from the session (portal) or the ingest key (collector), never from a client value. Portal data access only through `src/lib/data/` and `src/lib/umami/` with a context from `src/lib/access.ts`; ESLint enforces it. Another tenant's resource answers 404. Isolation must be covered by automated tests on web and API (#21).
 - **The full IP is never persisted.** The gateway truncates it (last IPv4 octet, /48 for IPv6) before geolocation. No cookies or browser storage; Umami session recording and heatmaps are off. No log carries IP, `X-Forwarded-For` or `User-Agent`.

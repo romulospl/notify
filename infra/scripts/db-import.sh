@@ -7,7 +7,7 @@
 # nelas), restaura os dumps, reaplica o 02-ingest-roles.sh e confere a
 # impressão digital contra a da origem. Só depois disso suba a aplicação.
 #
-#   docker compose -f prod.yaml stop caddy portal ingest-web collector rollup umami   # antes
+#   docker compose --env-file .env.production -f infra/compose/prod.yaml stop caddy portal ingest-web collector rollup umami   # antes
 #   infra/scripts/db-import.sh --yes [--force-nonempty] /root/migracao
 #
 # Proteções, todas ANTES de apagar qualquer coisa: o sha256sums tem de listar
@@ -19,7 +19,7 @@
 # quando os dois restauram é que os bancos antigos são trocados por eles. Uma
 # falha no restore deixa o destino como estava.
 
-# Rode na VM de destino como root, em /opt/stellytics/infra/compose. Destrutivo:
+# Rode na VM de destino como root, na raiz do clone. Destrutivo:
 # exige --yes.
 set -euo pipefail
 
@@ -36,7 +36,7 @@ if [ "$yes" != 1 ] || [ -z "$dir" ]; then
   echo "uso: db-import.sh --yes [--force-nonempty] <pasta-com-os-dumps>  (APAGA os bancos stellytics e umami do destino)" >&2
   exit 2
 fi
-COMPOSE="${COMPOSE:-docker compose -f prod.yaml}"
+COMPOSE="${COMPOSE:-docker compose --env-file .env.production -f infra/compose/prod.yaml}"
 here="$(cd "$(dirname "$0")" && pwd)"
 pg() { $COMPOSE exec -T -u postgres postgres "$@"; }
 abort() { echo "db-import: $*" >&2; exit 1; }
@@ -56,10 +56,10 @@ done
 
 # 3. Nada rodando além do Postgres (e do S3 do teste).
 # O `ps` falhar (diretório ou COMPOSE errados) tem de abortar, não passar como "nada rodando".
-services=$($COMPOSE ps --status running --services) || abort "não consegui listar os serviços (COMPOSE=$COMPOSE; está em /opt/stellytics/infra/compose?)"
+services=$($COMPOSE ps --status running --services) || abort "não consegui listar os serviços (COMPOSE=$COMPOSE; está na raiz do clone?)"
 running=$(printf '%s\n' "$services" | grep -v -E '^(postgres|s3)$' || true)
 if [ -n "$running" ]; then
-  abort "pare antes: $(echo "$running" | tr '\n' ' ')(docker compose -f prod.yaml stop ...)"
+  abort "pare antes: $(echo "$running" | tr '\n' ' ')(docker compose --env-file .env.production -f infra/compose/prod.yaml stop ...)"
 fi
 
 # 4. O destino está vazio? (sem a tabela, ou com 0 tenants)

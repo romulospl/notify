@@ -28,16 +28,6 @@ services/bin/
 # Next.js
 next-env.d.ts
 
-# Produção (#14): estado e cache do OpenTofu, inventário e segredos do Ansible.
-# O .terraform.lock.hcl entra no git (fixa os hashes dos providers).
-infra/opentofu/.terraform/
-infra/opentofu/*.tfstate
-infra/opentofu/*.tfstate.*
-infra/opentofu/crash.log
-infra/opentofu/*.secret.tfvars
-infra/ansible/inventory/production.yml
-infra/ansible/secrets.yml
-infra/ansible/.ansible/
 
 # Estado do gerador de carga (guarda chaves ntf_ completas)
 state.json

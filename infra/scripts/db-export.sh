@@ -3,11 +3,11 @@
 #
 # Gera stellytics.dump e umami.dump (formato custom do pg_dump, compactado), a
 # impressão digital da origem (fingerprint.txt) e sha256sums. Rode na VM de
-# origem como root, em /opt/stellytics/infra/compose, na janela de manutenção e
+# origem como root, na raiz do clone, na janela de manutenção e
 # com o portal, o gateway e o Umami parados (senão os dois bancos podem ficar
 # em instantes diferentes):
 #
-#   docker compose -f prod.yaml stop caddy portal ingest-web collector rollup umami
+#   docker compose --env-file .env.production -f infra/compose/prod.yaml stop caddy portal ingest-web collector rollup umami
 #   infra/scripts/db-export.sh /root/migracao
 #
 # Os dumps têm hashes de senha e sessões do portal: ficam com permissão 600 e
@@ -15,7 +15,7 @@
 set -euo pipefail
 
 dir="${1:?uso: db-export.sh <pasta-de-saída>}"
-COMPOSE="${COMPOSE:-docker compose -f prod.yaml}"
+COMPOSE="${COMPOSE:-docker compose --env-file .env.production -f infra/compose/prod.yaml}"
 here="$(cd "$(dirname "$0")" && pwd)"
 
 umask 077

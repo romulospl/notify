@@ -14,7 +14,7 @@ Um relato privado chegou; um scanner ou o Renovate apontou dependência vulnerá
 4. Verifique se houve exploração: `audit_log` (ações `ingest_key.created`, `ingest_key.revoked`, `tenant.removed`, `operator.*`) pelo túnel (`infra/scripts/admin-tunnel.sh`):
 
    ```bash
-   psql 'postgresql://stellytics:<stellytics_db_password>@127.0.0.1:15432/stellytics' \
+   psql 'postgresql://stellytics:<STELLYTICS_DB_PASSWORD>@127.0.0.1:15432/stellytics' \
      -c "select at, action, actor_user_id, tenant_id from audit_log order by at desc limit 50"
    ```
 
@@ -47,18 +47,18 @@ Entre como operador em `/operator`, abra `/operator/tenants/<tenantId>` e use a 
 
 ### Operador comprometido
 
-Roda na **máquina do administrador**, num checkout do repositório com `pnpm install` e Node 24 (não na VM, que não tem o repositório nem o pnpm), com o túnel `infra/scripts/admin-tunnel.sh` aberto:
+Roda na **máquina do administrador**, num checkout do repositório com `pnpm install` e Node 24 (não na VPS, que tem o checkout mas não o Node nem o pnpm), com o túnel `infra/scripts/admin-tunnel.sh` aberto:
 
 ```bash
-DATABASE_URL='postgresql://stellytics:<stellytics_db_password>@127.0.0.1:15432/stellytics' \
+DATABASE_URL='postgresql://stellytics:<STELLYTICS_DB_PASSWORD>@127.0.0.1:15432/stellytics' \
   pnpm --filter @stellytics/portal operator:demote --email <e-mail>
 ```
 
-Isso rebaixa a conta a usuário comum, apaga as sessões dela e grava `operator.demoted` no `audit_log`. **Limites:** não cobre conta de tenant comprometida (para isso, remova ou revise o projeto e use a recuperação de senha); e não impede uma nova promoção por quem tenha acesso ao banco (`operator:promote` com o mesmo `DATABASE_URL`): se o atacante tem o banco ou a VM, o problema é de infraestrutura. Troque a senha da conta pelo fluxo de recuperação do portal se ela ainda for legítima e revise o `audit_log` pelas ações do operador. Se o vazamento foi do acesso ao servidor, siga [rotação de segredos](rotacao-de-segredos.md) por inteiro.
+Isso rebaixa a conta a usuário comum, apaga as sessões dela e grava `operator.demoted` no `audit_log`. **Limites:** não cobre conta de tenant comprometida (para isso, remova ou revise o projeto e use a recuperação de senha); e não impede uma nova promoção por quem tenha acesso ao banco (`operator:promote` com o mesmo `DATABASE_URL`): se o atacante tem o banco ou a VPS, o problema é de infraestrutura. Troque a senha da conta pelo fluxo de recuperação do portal se ela ainda for legítima e revise o `audit_log` pelas ações do operador. Se o vazamento foi do acesso ao servidor, siga [rotação de segredos](rotacao-de-segredos.md) por inteiro.
 
 ### Segredo ou acesso à infraestrutura vazado
 
-[Rotação de segredos](rotacao-de-segredos.md). Para a VM, troque a chave SSH e, se houver dúvida, recrie a VM (`docs/deploy.md`) com segredos novos; os dados ficam no volume.
+[Rotação de segredos](rotacao-de-segredos.md). Para a VPS, troque a chave SSH e, se houver dúvida, recrie a VPS (`init.sh` e `deploy.sh`, `docs/deploy.md`) com segredos novos, levando os dados de `STELLYTICS_DATA_DIR` ou restaurando o backup ([backup e restauração](backup-e-restauracao.md)).
 
 ### Script de rastreamento adulterado ou com falha
 
@@ -71,7 +71,7 @@ Versões publicadas são imutáveis (`packages/tracker/published/vX.Y.Z/n.js`, h
 1. Corrija em branch privada ou num fork de segurança do GitHub (aba **Security**, advisory privado), com teste que falhava antes.
 2. PR com commit em inglês, Conventional Commits (`fix(...)`). O CI (`ci`) precisa passar.
 3. Publique uma **release** (`vX.Y.Z`): o `release.yml` gera o SBOM e publica no GHCR as imagens assinadas com cosign (keyless) com atestado do SBOM.
-4. Deploy: troque os digests em `infra/ansible/group_vars/all.yml` e rode `ansible-playbook site.yml -e @secrets.yml`; o playbook roda `cosign verify` com `cosign_identity_regexp` e `cosign_oidc_issuer` do `all.yml` e recusa imagem sem digest ou sem assinatura. Antes, `systemctl start stellytics-backup` se a versão tiver migração. Pormenores: `docs/deploy.md`, "Atualizar a aplicação".
+4. Deploy: atualize o checkout na VPS e rode `sudo ./deploy.sh`, que por padrão constrói as imagens a partir do código do checkout. As imagens assinadas da release podem ser usadas por digest (`PORTAL_IMAGE` etc. no `.env.production`), mas **nada confere a assinatura automaticamente** no deploy; é um controle mais fraco do que verificar a assinatura antes de subir. Antes, `systemctl start stellytics-backup` se a versão tiver migração. Pormenores: `docs/deploy.md`, "Atualizar a aplicação".
 5. Dependência vulnerável: confira a correção upstream e siga a exceção abaixo quando a versão tiver menos de 14 dias. O Renovate ainda não está instalado e os alertas do GitHub precisam estar ativos; não dependa dele para detectar a vulnerabilidade. Para o Umami, ver [atualização do Umami](atualizacao-do-umami.md).
 
 ### Exceção à espera de 14 dias
@@ -85,7 +85,7 @@ O [Renovate](https://docs.renovatebot.com/configuration-options/#vulnerabilityal
 ## 4. Verificar
 
 - O teste que reproduzia o problema passa; a suíte de isolamento passa (`pnpm --filter @stellytics/portal test` e o job `compose` do CI).
-- Passo 6 de `docs/deploy.md` na produção; a assinatura conferida no deploy (`cosign verify` no playbook).
+- Passo 3 ("Check production") de `docs/deploy.md` na produção; a versão no ar é a do commit corrigido.
 - A medida de contenção foi desfeita só quando a correção está no ar (reativar projeto, se for o caso).
 
 ## 5. Divulgar
@@ -99,4 +99,4 @@ Depois da correção publicada, publique o advisory do GitHub e dê crédito a q
 
 ## Não testado
 
-Nada disto foi exercitado: nem uma revogação ou remoção em produção, nem o `operator:demote` contra o banco da VM, nem a release e o `cosign verify` contra imagens reais (ainda não há release publicada), nem a retirada de uma versão do script.
+Nada disto foi exercitado: nem uma revogação ou remoção em produção, nem o `operator:demote` contra o banco da VPS, nem a release com imagens assinadas (ainda não há release publicada), nem a retirada de uma versão do script.

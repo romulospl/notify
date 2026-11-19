@@ -1,6 +1,6 @@
 # 0004. Hospedagem na Hetzner, OpenTofu e backup com WAL-G
 
-- **Status:** Aceito; proxy principal substituído por 0013
+- **Status:** Substituído por 0015 (backup WAL-G mantido)
 - **Data:** 14/11/2026
 - **Issue:** [#14](https://github.com/romulospl/stellytics/issues/14)
 - **Depende de:** [ADR 0002](0002-arquitetura-e-stack.md)

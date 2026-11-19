@@ -1,9 +1,0 @@
-#cloud-config
-# Primeira subida da VM (#14). Só o mínimo para o Ansible entrar com a chave
-# de administração; atualizações, Docker, volume e a aplicação são do Ansible.
-package_update: true
-package_upgrade: true
-packages:
-  - python3
-ssh_pwauth: false
-disable_root: false

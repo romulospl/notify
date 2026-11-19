@@ -20,7 +20,7 @@ flowchart LR
 
   caddy["Caddy em Docker<br/>TLS e porta pública"]
 
-  subgraph vm["Servidor do stellytics (Hetzner, Alemanha)"]
+  subgraph vm["Servidor do stellytics (uma VPS)"]
     portal["Portal<br/>Next.js"]
     gw["Gateway web<br/>Go"]
     umami["Umami<br/>só rede interna"]
@@ -125,7 +125,7 @@ Mais detalhes: [`docs/specs/e5-pipeline-de-api.md`](specs/e5-pipeline-de-api.md)
 | Rollup | Consolida as métricas e aplica a retenção | Go, funções SQL | [`services/rollup`](../services/rollup/) |
 | Banco | Um PostgreSQL com dois bancos: `umami` (do Umami) e `stellytics` (tenants, chaves, métricas de API) | PostgreSQL 17 | [`infra/compose`](../infra/compose/) |
 | Caddy | Único serviço público, TLS automático | Contêiner Docker Compose | [`infra/caddy/Caddyfile`](../infra/caddy/Caddyfile) |
-| Infraestrutura | Cria o servidor e publica o sistema | OpenTofu, Ansible, Docker Compose | [`infra/`](../infra/README.md) |
+| Infraestrutura | Prepara a VPS e publica o sistema | `init.sh`, `deploy.sh`, Docker Compose | [`infra/`](../infra/README.md) |
 | Monitoramento | Avisa por e-mail se o portal ou a ingestão saírem do ar | Prometheus, blackbox, Alertmanager | [`infra/monitoring`](../infra/monitoring/) |
 
 Por que duas linguagens: TypeScript para tudo que tem tela e para o script do navegador; Go para a ingestão, onde o ecossistema do OpenTelemetry já resolve a parte pesada ([ADR 0002](adr/0002-arquitetura-e-stack.md)). O Umami é usado como ele vem, sem fork, para que as atualizações de segurança dele possam ser aplicadas ([ADR 0001](adr/0001-ferramenta-base.md)).
@@ -146,16 +146,16 @@ Por que duas linguagens: TypeScript para tudo que tem tela e para o script do na
 
 ## Infraestrutura
 
-- **Onde roda:** uma VM na Hetzner em Nuremberg (Alemanha), com os dados num volume separado e backup contínuo e cifrado no Object Storage da Hetzner, também na Alemanha ([ADR 0004](adr/0004-hospedagem-e-backup.md), [`deploy.md`](deploy.md)).
-- **Como é criada:** OpenTofu cria VM, firewall e bucket; Ansible instala Docker e sobe toda a pilha, incluindo Caddy, com Docker Compose. Caddy recebe 80 e 443; a administração é por túnel SSH.
-- **Quem vigia:** uma segunda VM, em outro data center (Falkenstein), testa de fora o portal e o gateway a cada 15 segundos e manda e-mail se algo cair ([ADR 0005](adr/0005-monitoramento-externo.md)).
-- **Supply chain:** imagens publicadas por release, com SBOM e assinatura (cosign); dependências novas só depois de 14 dias.
+- **Onde roda:** uma VPS só, sem alta disponibilidade, com os dados em `STELLYTICS_DATA_DIR` (padrão `/srv/stellytics`) e backup contínuo e cifrado (WAL-G) num armazenamento compatível com S3. Provedor e região são escolha do operador ([ADR 0015](adr/0015-producao-em-vps.md), [`deploy.md`](deploy.md)).
+- **Como é criada:** o `init.sh` instala o Docker e gera o `.env.production`; o `deploy.sh` constrói as imagens e sobe toda a pilha, incluindo Caddy, com Docker Compose, e instala o timer do backup diário. Caddy recebe 80 e 443; a administração é por túnel SSH.
+- **Quem vigia:** um segundo host, separado da VPS, testa de fora o portal e o gateway a cada 15 segundos e manda e-mail se algo cair ([ADR 0005](adr/0005-monitoramento-externo.md)).
+- **Supply chain:** imagens publicadas por release, com SBOM e assinatura (cosign), mas o deploy padrão constrói do checkout e não confere assinatura; dependências novas só depois de 14 dias.
 
 ## Estado atual
 
 Este documento descreve o que está na `main`. Diferenças em relação ao desenho acima:
 
 - O **coletor de API e o rollup** estão em `infra/compose/prod.yaml`; o Caddy publica as rotas OTLP conforme o [ADR 0014](adr/0014-infra-em-docker-compose.md). A pilha local do CI testa as rotas do Caddy; nenhuma produção real foi aplicada ainda ([`andamento.md`](andamento.md)).
-- O monitoramento da ingestão de API testa o host OTLP com um POST sem chave (`monitor_api_url`, [ADR 0005](adr/0005-monitoramento-externo.md)).
+- O monitoramento da ingestão de API testa o host OTLP com um POST sem chave (`API_URL` do `infra/monitoring/configure.sh`, [ADR 0005](adr/0005-monitoramento-externo.md)).
 - O Grafana, previsto no ADR 0002, não foi adotado por enquanto; o ADR 0005 explica por quê.
 - Alta disponibilidade e metas de SLA ficam para depois do MVP (issue [#52](https://github.com/romulospl/stellytics/issues/52)).

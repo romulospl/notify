@@ -34,10 +34,10 @@ describe("contas de desenvolvimento fora da produção", () => {
     expect(read("infra/compose/dev.yaml")).toMatch(/dockerfile: apps\/portal\/Dockerfile\n\s+#.*\n\s+target: dev/);
   });
 
-  it("nenhum Compose de produção nem o Ansible definem SEED_DEV_DATA", () => {
+  it("nenhum Compose de produção define SEED_DEV_DATA", () => {
     const compose = readdirSync(path.join(repo, "infra/compose")).filter((f) => /^prod.*\.ya?ml$/.test(f));
     expect(compose.length).toBeGreaterThan(0);
     for (const f of compose) expect(read(`infra/compose/${f}`), f).not.toMatch(/SEED_DEV_DATA/);
-    expect(read("infra/ansible/roles/stellytics/templates/env.j2")).not.toMatch(/SEED_DEV_DATA/);
+    expect(read(".env.production.example")).not.toMatch(/SEED_DEV_DATA/);
   });
 });

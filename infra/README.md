@@ -1,32 +1,21 @@
 # infra
 
-Infraestrutura recriável a partir deste repositório, com hospedagem na União Europeia.
+Infrastructure rebuildable from this repository: one VPS with Docker Compose for production and a separate host for monitoring ([ADR 0015](../docs/adr/0015-producao-em-vps.md)). Step by step in [`docs/deploy.md`](../docs/deploy.md); the install scripts are `init.sh` and `deploy.sh` at the repository root.
 
-| Pasta | Ferramenta | Papel |
+| Folder | Tool | Role |
 |---|---|---|
-| [`compose/`](compose/) | Docker Compose | Ambiente local ([#12](https://github.com/romulospl/stellytics/issues/12)), incluído pelo `compose.yaml` da raiz, e a produção (`prod.yaml`, [#14](https://github.com/romulospl/stellytics/issues/14)) |
-| [`compose/postgres/`](compose/postgres/) | Postgres + WAL-G | Scripts de criação dos bancos e, na produção, a imagem com backup contínuo (`Dockerfile`, `stellytics-backup`, `stellytics-restore`) |
-| [`compose/test/`](compose/test/) | Docker Compose | Teste da pilha de produção com S3 local (`prod-stack-test.sh`, job `infra` do CI) e da migração de dados entre operadores (`data-migration-test.sh`, fora do CI) |
-| [`opentofu/`](opentofu/) | OpenTofu | VMs da produção e do monitoramento, firewalls, volume de dados e bucket do backup na Hetzner ([ADR 0004](../docs/adr/0004-hospedagem-e-backup.md)) |
-| [`ansible/`](ansible/) | Ansible | Deploy: `site.yml` na produção (Docker Compose, volume, imagens conferidas com cosign, pilha e backup) e `monitoring.yml` no monitoramento |
-| [`caddy/`](caddy/) | Caddy | Proxy/TLS em contêiner em toda a produção, inclusive nas VMs extras de ingestão |
-| [`scripts/`](scripts/) | SSH, Postgres | Túnel de administração para o Postgres e o Umami da produção; exportação, importação e impressão digital dos bancos na migração entre operadores (`db-export.sh`, `db-import.sh`, `db-fingerprint.sh`, [`docs/transferencia.md`](../docs/transferencia.md)) |
-| [`monitoring/`](monitoring/) | Prometheus, blackbox, Alertmanager | Monitoramento externo numa VM separada: testa portal e ingestão de fora e alerta por e-mail ([#15](https://github.com/romulospl/stellytics/issues/15), [ADR 0005](../docs/adr/0005-monitoramento-externo.md)) |
+| [`compose/`](compose/) | Docker Compose | Local environment ([#12](https://github.com/romulospl/stellytics/issues/12)), included by the root `compose.yaml`, and production (`prod.yaml`) |
+| [`compose/postgres/`](compose/postgres/) | Postgres + WAL-G | Database creation scripts and, in production, the image with continuous backup to S3-compatible storage (`Dockerfile`, `stellytics-backup`, `stellytics-restore`) |
+| [`compose/test/`](compose/test/) | Docker Compose | Production stack test with a local S3 (`prod-stack-test.sh`, CI `infra` job) and data migration between operators (`data-migration-test.sh`, outside CI) |
+| [`caddy/`](caddy/) | Caddy | Container proxy and automatic TLS |
+| [`scripts/`](scripts/) | SSH, Postgres, Python | Admin tunnel to the production Postgres and Umami; export, import and fingerprint of the databases for handover ([`docs/transferencia.md`](../docs/transferencia.md)); helpers used by `init.sh` and `deploy.sh` |
+| [`monitoring/`](monitoring/) | Prometheus, blackbox, Alertmanager | External monitoring on a separate host, configured by `configure.sh`: probes the portal and ingestion from outside and alerts by email ([#15](https://github.com/romulospl/stellytics/issues/15), [ADR 0005](../docs/adr/0005-monitoramento-externo.md)) |
 
-Passo a passo da produção (provisionar, publicar, restaurar o banco): [`docs/deploy.md`](../docs/deploy.md).
+## Umami only on the internal network
 
-## Umami só na rede interna
+Umami must not be reachable from outside ([#62](https://github.com/romulospl/stellytics/issues/62), [docs/umami.md](../docs/umami.md)): anyone reaching its `/api/send` would bypass the gateway's anti-bot and IP truncation.
 
-O Umami não pode ser alcançável de fora ([#62](https://github.com/romulospl/stellytics/issues/62), [docs/umami.md](../docs/umami.md)): quem chegasse ao `/api/send` dele contornaria o anti-bot e o truncamento de IP do gateway.
-
-- O serviço `umami` não publica porta em nenhum arquivo do Compose usado em deploy. O `compose/umami-port.yaml` publica em `127.0.0.1` e é só para desenvolvimento e CI.
-
-Na produção ([#14](https://github.com/romulospl/stellytics/issues/14)), todos os serviços da aplicação inclusive o proxy rodam em Docker Compose. Valem mais duas regras, conferidas a cada PR pelo `compose/test/prod-stack-test.sh`:
-
-- **O Caddy não tem rota para o Umami**, nem para a interface nem para a API. Publica só o gateway `ingest-web` (`/e`, `/c`, `/s/` e `/healthz`), o portal e as rotas OTLP do coletor.
-- Caddy é o único serviço com portas públicas; os upstreams só se comunicam pela rede Docker interna.
-- O firewall da VM (`opentofu/main.tf`) abre só 22 (redes de administração), 80 e 443. Para administrar o Umami, use o túnel SSH (`scripts/admin-tunnel.sh`).
-
-## Alta disponibilidade (opt-in)
-
-As variáveis `ha_*` de [`opentofu/variables.tf`](opentofu/variables.tf) (VMs extras de ingestão, IP flutuante, réplica do Postgres) vêm **desligadas**: com os padrões o plano não muda. Só provisionam; replicação, balanceamento e IP flutuante dentro da VM ainda não têm Ansible. O que isso entrega e o que não entrega: [ADR 0009](../docs/adr/0009-alta-disponibilidade.md) e [`docs/sla.md`](../docs/sla.md).
+- The `umami` service publishes no port in any Compose file used for deployment. `compose/umami-port.yaml` publishes on `127.0.0.1` and is for development and CI only.
+- **Caddy has no route to Umami**, neither UI nor API. It publishes only the `ingest-web` gateway (`/e`, `/c`, `/s/` and `/healthz`), the portal and the collector's OTLP routes. Checked on every PR by `compose/test/prod-stack-test.sh`.
+- Caddy is the only service with public ports; upstreams talk only over the internal Docker network.
+- The VPS firewall (set at the provider) opens only 22, 80 and 443. To administer Umami, use the SSH tunnel (`scripts/admin-tunnel.sh`).

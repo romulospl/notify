@@ -1,19 +1,19 @@
-# Produção (#14, ADR 0004): todos os serviços rodam em Docker Compose. O Caddy
-# é o único serviço com portas públicas; Postgres, Umami e rollup ficam
-# apenas na rede Docker. O Ansible copia este arquivo e o .env para a VM e sobe
-# tudo com `docker compose -f prod.yaml up -d`.
+# Production (ADR 0015): every service runs in Docker Compose on one VPS.
+# Caddy is the only service with public ports; Postgres, Umami and rollup stay
+# on the Docker network. deploy.sh builds the images and starts everything
+# with `docker compose --env-file .env.production -f prod.yaml up -d`.
 #
-# Diferenças do ambiente local (dev.yaml):
-# - imagens do portal, do gateway, do coletor e do rollup vêm do GHCR, por
-#   digest, já conferidas com cosign pelo Ansible (PORTAL_IMAGE,
-#   INGEST_WEB_IMAGE, COLLECTOR_IMAGE e ROLLUP_IMAGE);
-# - o Postgres é a variante Debian com WAL-G (postgres/Dockerfile), com o
-#   arquivamento contínuo de WAL no Object Storage;
-# - Caddy termina TLS e encaminha para portal, gateway e coletor pela rede
-#   Docker; Postgres publica só no loopback para o túnel SSH de administração;
-# - sem Mailpit: o SMTP vem de SMTP_URL;
-# - todas as senhas e chaves são obrigatórias (sem valor padrão);
-# - Caddy encaminha OTLP/HTTP e OTLP/gRPC para o coletor (ADR 0012).
+# Differences from the local environment (dev.yaml):
+# - portal, gateway, collector and rollup are built from this checkout, or
+#   taken from PORTAL_IMAGE, INGEST_WEB_IMAGE, COLLECTOR_IMAGE and ROLLUP_IMAGE
+#   (for example the signed release images, by digest);
+# - Postgres is the Debian variant with WAL-G (postgres/Dockerfile), archiving
+#   WAL continuously to S3-compatible object storage, encrypted on the client;
+# - Caddy terminates TLS and proxies portal, gateway and collector (OTLP/HTTP
+#   and OTLP/gRPC) over the Docker network; Postgres listens only on loopback
+#   for the SSH admin tunnel;
+# - no Mailpit: SMTP comes from SMTP_URL;
+# - every password and key is required (no default).
 
 # Nome fixo do projeto: contêineres stellytics-<serviço>-1 e rede stellytics_internal.
 name: stellytics
@@ -63,18 +63,14 @@ services:
       - -c
       - archive_timeout=60
     volumes:
-      # Dados num volume da Hetzner montado em /srv/stellytics (sobrevive à VM).
+      # Keep STELLYTICS_DATA_DIR on a disk that survives the VPS if possible.
       - ${STELLYTICS_DATA_DIR:-/srv/stellytics}/postgres:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     ports:
-      # Só o loopback da VM, para o túnel SSH de administração. O firewall da
-      # Hetzner não abre esta porta.
+      # Loopback only, for the SSH admin tunnel (infra/scripts/admin-tunnel.sh).
       - "127.0.0.1:${POSTGRES_ADMIN_PORT:-5432}:5432"
     shm_size: 256mb
     healthcheck:
-      # Usa o banco administrativo para a primeira subida de uma instalação
-      # antiga: a tarefa Ansible renomeia `notify` para `stellytics` antes de
-      # iniciar os demais serviços.
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres && pg_isready -U postgres -d umami"]
       interval: 10s
       timeout: 5s
@@ -111,7 +107,10 @@ services:
         ipv4_address: 172.30.0.20
 
   portal:
-    image: ${PORTAL_IMAGE:?}
+    build:
+      context: ../..
+      dockerfile: apps/portal/Dockerfile
+    image: ${PORTAL_IMAGE:-stellytics-portal:prod}
     environment:
       DATABASE_URL: postgresql://stellytics:${STELLYTICS_DB_PASSWORD:?}@postgres:5432/stellytics
       BETTER_AUTH_SECRET: ${PORTAL_AUTH_SECRET:?}
@@ -139,7 +138,10 @@ services:
     networks: [internal]
 
   ingest-web:
-    image: ${INGEST_WEB_IMAGE:?}
+    build:
+      context: ../..
+      dockerfile: services/ingest-web/Dockerfile
+    image: ${INGEST_WEB_IMAGE:-stellytics-ingest-web:prod}
     environment:
       DATABASE_URL: postgresql://stellytics_ingest:${STELLYTICS_INGEST_DB_PASSWORD:?}@postgres:5432/stellytics
       UMAMI_URL: http://umami:3000
@@ -174,7 +176,10 @@ services:
     networks: [internal]
 
   collector:
-    image: ${COLLECTOR_IMAGE:?}
+    build:
+      context: ../..
+      dockerfile: services/collector/Dockerfile
+    image: ${COLLECTOR_IMAGE:-stellytics-collector:prod}
     environment:
       # Usuário que só lê a ingest_key_active e grava em api_metric_1m.
       DATABASE_URL: postgresql://stellytics_collector:${STELLYTICS_COLLECTOR_DB_PASSWORD:?}@postgres:5432/stellytics
@@ -202,7 +207,10 @@ services:
   # Consolidação 1m -> 1h -> 1d e retenção das métricas de API (#34) e dos
   # eventos web no Umami (#154).
   rollup:
-    image: ${ROLLUP_IMAGE:?}
+    build:
+      context: ../..
+      dockerfile: services/rollup/Dockerfile
+    image: ${ROLLUP_IMAGE:-stellytics-rollup:prod}
     environment:
       # Dono das tabelas de métricas: cria e apaga partições.
       DATABASE_URL: postgresql://stellytics:${STELLYTICS_DB_PASSWORD:?}@postgres:5432/stellytics

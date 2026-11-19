@@ -53,38 +53,3 @@ groups:
           severity: none
         annotations:
           summary: "Monitoring is alive"
-
-  - name: stellytics-replication
-    rules:
-      - alert: ReplicationMonitorDown
-        expr: up{job="replication"} == 0 or stellytics_replication_scrape_success{job="replication"} == 0
-        for: 2m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Replication monitoring is unavailable"
-          description: "Cannot query the primary database for replication status."
-      - alert: ReplicationStopped
-        expr: stellytics_replication_slot_exists{job="replication"} == 0 or stellytics_replication_streaming{job="replication"} == 0
-        for: 2m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Postgres replication is stopped"
-          description: "The configured physical slot is missing or is not streaming."
-      - alert: ReplicationLagHigh
-        expr: stellytics_replication_lag_bytes{job="replication"} > 268435456
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Postgres replica is behind"
-          description: "The replica has more than 256 MiB of WAL to replay."
-      - alert: ReplicationSlotWALHigh
-        expr: stellytics_replication_retained_wal_bytes{job="replication"} > 5368709120
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Replication slot is retaining excessive WAL"
-          description: "The configured slot retains more than 5 GiB of WAL."

@@ -1,5 +1,5 @@
 # Prometheus do monitoramento externo (#15). Os alvos vêm de targets/*.yml
-# (gerados pelo Ansible a partir dos hosts públicos), com o rótulo `component`
+# (gerados por infra/monitoring/configure.sh a partir dos hosts públicos), com o rótulo `component`
 # (portal, ingest-web, ingest-api) que aparece nos alertas.
 global:
   scrape_interval: 15s
@@ -40,8 +40,3 @@ scrape_configs:
   - job_name: blackbox
     static_configs:
       - targets: [blackbox:9115]
-
-  # Arquivo separado dos alvos do blackbox; vazio quando HA está desligada.
-  - job_name: replication
-    file_sd_configs:
-      - files: [/etc/prometheus/replication-targets/*.yml]

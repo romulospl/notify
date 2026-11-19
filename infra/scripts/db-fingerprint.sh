@@ -9,13 +9,13 @@
 # tenants: só contagens e hashes. Rode na origem e no destino e compare com
 # `diff`.
 #
-#   COMPOSE='docker compose -f prod.yaml' infra/scripts/db-fingerprint.sh > fp.txt
+#   COMPOSE='docker compose --env-file .env.production -f infra/compose/prod.yaml' infra/scripts/db-fingerprint.sh > fp.txt
 #
-# O padrão de COMPOSE é o da VM de produção (em /opt/stellytics/infra/compose).
+# O padrão de COMPOSE é o da VM de produção (na raiz do clone).
 # Usa o `postgres` do Compose pelo socket do contêiner, como superusuário.
 set -euo pipefail
 
-COMPOSE="${COMPOSE:-docker compose -f prod.yaml}"
+COMPOSE="${COMPOSE:-docker compose --env-file .env.production -f infra/compose/prod.yaml}"
 # `< /dev/null`: o `docker compose exec -T` lê a entrada padrão e, dentro de um
 # `while read`, engoliria a lista de tabelas (só a primeira seria conferida).
 pg() { $COMPOSE exec -T -u postgres postgres "$@" < /dev/null; }

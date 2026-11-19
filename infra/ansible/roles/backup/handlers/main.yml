@@ -1,3 +1,0 @@
-- name: Recarrega o systemd
-  ansible.builtin.systemd_service:
-    daemon_reload: true

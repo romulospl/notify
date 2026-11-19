@@ -1,2 +1,0 @@
-# Arquivos do Compose da produção. Com HA desligada (padrão) é só o prod.yaml.
-stellytics_compose_files: "-f prod.yaml{{ ' -f prod-ha-primary.yaml' if (ha_replication | default(false) | bool) else '' }}"

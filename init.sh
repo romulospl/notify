@@ -20,8 +20,8 @@ Prepara uma VPS Debian/Ubuntu para rodar a instalação mínima:
 - cria .env.production com segredos aleatórios, sem sobrescrever arquivo existente.
 
 Depois, configure domínios e SMTP em .env.production e rode sudo ./deploy.sh.
-Os dados do Postgres e certificados ficam em volumes Docker locais; não há
-backup externo nesta instalação.
+Configure também o armazenamento S3 do backup (WALG_S3_*). Guarde uma cópia de
+WALG_LIBSODIUM_KEY fora da VPS: sem ela, nenhum backup pode ser restaurado.
 USAGE
   exit 0
 fi
@@ -72,5 +72,5 @@ docker compose version >/dev/null || fail "Docker Compose não ficou disponível
 
 python3 "$ROOT_DIR/infra/scripts/production-env.py" init "$ROOT_DIR/.env.production.example" "$ENV_FILE"
 
-printf '\nDocker e Compose estão prontos. Configure domínios e SMTP em:\n%s\n' "$ENV_FILE"
+printf '\nDocker e Compose estão prontos. Configure domínios, SMTP e o S3 do backup em:\n%s\n' "$ENV_FILE"
 printf 'Depois, execute: sudo %s/deploy.sh\n' "$ROOT_DIR"

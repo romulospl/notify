@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Teste do monitoramento externo (#15), localmente e no job `monitoring` do CI.
 #
-# Sobe infra/monitoring com a configuração gerada pelo mesmo template do
-# Ansible e confere:
+# Sobe infra/monitoring com a configuração gerada por configure.sh e confere:
 # 1. Prometheus, regras e Alertmanager com configuração válida;
 # 2. o sinal de vida (Watchdog) chega ao receptor externo;
 # 3. quando um alvo cai, chega o e-mail de alerta (EndpointDown);
@@ -15,52 +14,36 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 project=stellytics-monitortest
 work=$(mktemp -d "${TMPDIR:-/tmp}/stellytics-monitortest.XXXXXX")
 cp -R "$root/monitoring/." "$work/"
-export MONITOR_TEST_WORK="$work"
-cat > "$work/replication-hba.conf" <<'EOT'
-local all all trust
-host all all 0.0.0.0/0 trust
-host replication all 0.0.0.0/0 trust
-EOT
 rm -rf "$work/test"
-mkdir -p "$work/prometheus/targets" "$work/prometheus/replication-targets" "$work/alertmanager/secrets"
-printf '%s\n' '- targets: [replication-monitor:9187]' > "$work/prometheus/replication-targets/replication.yml"
+cat > "$work/monitoring.env" <<'EOT'
+PORTAL_HOST=portal.invalid
+INGEST_HOST=ingest.invalid
+ALERT_EMAIL=ops@example.org
+SMTP_SMARTHOST=mailpit:1025
+SMTP_FROM=monitor@example.org
+SMTP_REQUIRE_TLS=false
+DEADMAN_URL=http://deadman:8080/ping
+EOT
+"$root/monitoring/configure.sh" "$work/monitoring.env" "$work" >/dev/null
 
 cat > "$work/prometheus/targets/endpoints.yml" <<'EOT'
 - targets: ["http://target:8080/"]
   labels:
     component: portal
 EOT
-echo -n "http://deadman:8080/ping" > "$work/alertmanager/secrets/deadman_url"
-: > "$work/alertmanager/secrets/smtp_password"
 chmod -R a+rX "$work"
 
-# alertmanager.yml a partir do template do Ansible (Jinja com trim_blocks, como o Ansible).
-docker run --rm -v "$root/ansible/roles/monitoring/templates:/t:ro" -v "$work/alertmanager:/out" \
-  python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 sh -c '
-    pip install -q --root-user-action=ignore jinja2==3.1.6 pyyaml==6.0.3 >/dev/null 2>&1 &&
-    python3 -c "
-import jinja2
-env = jinja2.Environment(loader=jinja2.FileSystemLoader(\"/t\"), trim_blocks=True, undefined=jinja2.StrictUndefined)
-out = env.get_template(\"alertmanager.yml.j2\").render(
-    monitor_smtp_smarthost=\"mailpit:1025\", monitor_smtp_from=\"monitor@example.org\",
-    monitor_smtp_username=\"\", monitor_smtp_require_tls=False,
-    monitor_alert_email=\"ops@example.org\", monitor_deadman_url=\"http://deadman:8080/ping\")
-open(\"/out/alertmanager.yml\", \"w\").write(out)
 # O sinal de vida precisa sair a cada 5 minutos: o serviço externo avisa
 # quando ele para de chegar.
-import yaml
-routes = yaml.safe_load(out)[\"route\"][\"routes\"]
-watchdog = [r for r in routes if r[\"matchers\"] == [\"alertname=\\\"Watchdog\\\"\"]]
-assert len(watchdog) == 1 and watchdog[0][\"receiver\"] == \"deadman\", routes
-assert watchdog[0][\"repeat_interval\"] == \"5m\", watchdog
-"'
+grep -A4 'alertname="Watchdog"' "$work/alertmanager/alertmanager.yml" | grep -q 'receiver: deadman' || { echo "FALHOU: Watchdog sem deadman" >&2; exit 1; }
+grep -A4 'alertname="Watchdog"' "$work/alertmanager/alertmanager.yml" | grep -q 'repeat_interval: 5m' || { echo "FALHOU: Watchdog sem 5m" >&2; exit 1; }
 
 export PROMETHEUS_PORT=19090 ALERTMANAGER_PORT=19093 MAILPIT_TEST_PORT=18025
 compose() { docker compose -p "$project" -f "$work/compose.yaml" -f "$root/monitoring/test/monitoring-test.yaml" "$@"; }
 
 cleanup() {
   status=$?
-  if [ "$status" -ne 0 ]; then compose logs --tail 60 prometheus alertmanager replication-db replication-standby replication-monitor >&2 || true; fi
+  if [ "$status" -ne 0 ]; then compose logs --tail 60 prometheus alertmanager >&2 || true; fi
   compose down -v --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$work"
   exit "$status"
@@ -74,11 +57,7 @@ wait_for() { # segundos, descrição, comando
   fail "$what (esperou ${limit}s)"
 }
 
-# A imagem é construída a partir do mesmo Dockerfile da release.
-docker build -q -f "$root/../services/replication-monitor/Dockerfile" -t stellytics-replication-monitor:test "$root/.." >/dev/null
 compose up -d --wait
-compose exec -T replication-db psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
-  'CREATE ROLE stellytics_replication_monitor LOGIN; GRANT pg_monitor TO stellytics_replication_monitor' >/dev/null
 
 # 1. Configuração válida e regras testadas (promtool test rules).
 compose exec -T prometheus promtool check config /etc/prometheus/prometheus.yml >/dev/null
@@ -111,18 +90,5 @@ compose start target >/dev/null
 wait_for 60 "o Prometheus não viu o alvo voltar" probe_is 1
 wait_for 180 "o e-mail de resolvido não chegou" mail_with 'subject:"[RESOLVED] EndpointDown"'
 ok "e-mail de resolvido quando o alvo volta"
-
-# 5. Réplica real: o slot transmite, depois a parada deve ser detectada e
-# produzir alerta, enquanto o primário continua respondendo.
-replication_streaming() { [ "$(query 'stellytics_replication_streaming{job="replication"}')" = "$1" ]; }
-wait_for 90 "a sonda não observou a replicação ativa" replication_streaming 1
-compose stop replication-standby >/dev/null
-wait_for 90 "a sonda não observou a réplica parada" replication_streaming 0
-# Força WAL depois da parada; o slot deve reter bytes no primário.
-compose exec -T replication-db psql -U postgres -d postgres -c 'SELECT pg_switch_wal()' >/dev/null
-retained_wal() { query 'stellytics_replication_retained_wal_bytes{job="replication"}' | awk '$1 > 0 {ok=1} END {exit !ok}'; }
-wait_for 90 "a sonda não observou WAL retido" retained_wal
-wait_for 240 "o alerta de replicação parada não chegou" mail_with 'subject:"[FIRING:1] ReplicationStopped"'
-ok "parada real da réplica gera alerta"
 
 echo "monitoramento: tudo certo"

@@ -1,6 +1,0 @@
----
-# Caminhos da instalação anterior, usados somente para migrar uma VM notify
-# durante a troca de marca. Podem ser removidos quando não houver mais desses
-# ambientes.
-data_volume_legacy_notify_root: /opt/notify
-data_volume_legacy_notify_data_dir: /srv/notify

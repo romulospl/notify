@@ -3,9 +3,8 @@
 # produção cair inteira, este monitor continua de pé para avisar.
 #
 # Nenhuma porta pública: Prometheus e Alertmanager escutam só no loopback da
-# VM; acesse pelo túnel SSH (docs/deploy.md, "Monitoramento"). O Ansible
-# (infra/ansible/monitoring.yml) gera prometheus/targets/*.yml e
-# alertmanager/alertmanager.yml.
+# VM; acesse pelo túnel SSH (docs/deploy.md, "Monitoramento"). O configure.sh
+# gera prometheus/targets/*.yml e alertmanager/alertmanager.yml.
 name: stellytics-monitor
 
 x-logging: &logging
@@ -22,8 +21,8 @@ services:
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=30d
     volumes:
-      # Pastas, não arquivos: o Ansible troca os arquivos por renomeação, e um
-      # arquivo montado sozinho continuaria apontando para a versão antiga.
+      # Pastas, não arquivos: um arquivo montado sozinho continuaria apontando
+      # para a versão antiga depois de uma troca por renomeação.
       - ./prometheus:/etc/prometheus:ro
       - prometheus-data:/prometheus
     ports:
@@ -56,7 +55,7 @@ services:
       - --storage.path=/alertmanager
     volumes:
       # alertmanager.yml e secrets/ (senha do SMTP e URL do sinal de vida),
-      # gerados pelo Ansible.
+      # gerados pelo configure.sh.
       - ./alertmanager:/etc/alertmanager:ro
       - alertmanager-data:/alertmanager
     ports:

@@ -1,4 +1,4 @@
-# Caddy de produção (#14, ADR 0004): única porta de entrada, com TLS automático.
+# Caddy de produção (ADR 0014, ADR 0015): única porta de entrada, com TLS automático.
 #
 # Regras conferidas na revisão da #14 (infra/README.md):
 # - nenhuma rota leva ao Umami, nem à interface nem à API (#62);
@@ -28,7 +28,7 @@
 	# Sem trusted_proxies: o Caddy descarta o X-Forwarded-For que chega e manda
 	# o IP real da conexão. O gateway só confia no X-Forwarded-For do Caddy
 	# (TRUSTED_PROXIES em compose/prod.yaml). Para o IP real chegar ao Caddy, o
-	# Docker da VM roda com userland-proxy desligado (Ansible, papel docker).
+	# Docker da VPS roda com userland-proxy desligado (init.sh, configure-docker.py).
 }
 
 (security_headers) {
