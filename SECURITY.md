@@ -1,41 +1,44 @@
-# Política de segurança
+# Security policy
 
-O stellytics recebe dados de uso de vários projetos (tenants). Vulnerabilidades que permitam ler dados de outro tenant, burlar a chave de ingestão, persistir dados pessoais (como o IP completo) ou inflar métricas são tratadas como prioridade.
+stellytics receives usage data from several projects (tenants). Vulnerabilities that let someone read another tenant's data, bypass the ingestion key, persist personal data (such as the full IP address) or inflate metrics are treated as a priority.
 
-## Como relatar uma vulnerabilidade
+## How to report a vulnerability
 
-**Não abra issue pública** para vulnerabilidades.
+**Do not open a public issue** for vulnerabilities.
 
-Use o relato privado do GitHub: na aba **Security** do repositório, clique em **Report a vulnerability**. O relato fica visível só para os mantenedores até a correção ser publicada.
+Use GitHub private vulnerability reporting: in the repository's **Security** tab, click **Report a vulnerability**. The report is visible only to the maintainers until the fix is published.
 
-Inclua, se possível:
+Private reporting was enabled on 19 November 2026. Do not publish vulnerability details in public issues.
 
-- o componente afetado (portal, script de rastreamento, gateway, coletor, infraestrutura);
-- os passos para reproduzir e o impacto esperado;
-- a versão (commit, versão do script `/s/vX.Y.Z/` ou tag de release).
+If possible, include:
 
-## Prazos de resposta
+- the affected component (portal, tracking script, gateway, collector, infrastructure);
+- steps to reproduce and the expected impact;
+- the version (commit, script version `/s/vX.Y.Z/` or release tag).
 
-| Etapa | Prazo |
+## Response times
+
+| Step | Deadline |
 |---|---|
-| Confirmação de recebimento | até 3 dias úteis |
-| Avaliação inicial e severidade | até 7 dias corridos |
-| Correção de severidade crítica | até 14 dias corridos |
-| Correção de severidade alta | até 30 dias corridos |
-| Correção de severidade média ou baixa | até 90 dias corridos |
+| Acknowledgement | within 3 business days |
+| Initial assessment and severity of a potentially critical or high report | within 48 consecutive hours |
+| Initial assessment and severity of other reports | within 7 calendar days |
+| Fix for critical severity | within 7 calendar days |
+| Fix for high severity | within 14 calendar days |
+| Fix for medium or low severity | within 90 calendar days |
 
-Os prazos de correção contam do recebimento do relato ou da identificação pelo projeto, em dias corridos. A severidade segue o CVSS 3.1. O prazo de 24 horas para críticas e altas citado no RFP é uma meta externa que a operação atual, sem plantão contínuo, não assume como compromisso. Se não houver correção de uma dependência disponível ou o prazo estiver em risco, aplicamos contenção, registramos o risco e comunicamos a pessoa que relatou; isso não transforma contenção em correção.
+Deadlines run from receipt of the report or from discovery by the project, and include nights, weekends and holidays; they do not restart after classification. Severity follows CVSS 3.1. These commitments assume the two maintainers, without continuous on-call coverage. The RFP target of 24 hours for critical and high issues remains an external target, not a commitment; we aim to contain critical issues within 72 hours. If no fix is available for a dependency or a deadline is at risk, we apply containment, record the risk and inform the reporter; containment does not count as a fix.
 
-Correções de segurança críticas ou altas podem dispensar a espera de 14 dias da dependência quando o risco de esperar superar o de atualizar. A exceção é específica à dependência e à versão, registrada e revisada no PR, com os testes e a publicação assinada descritos no [runbook](docs/runbooks/vulnerabilidades.md). Depois da correção publicada, divulgamos um advisory no GitHub e damos crédito a quem relatou, se a pessoa quiser.
+Critical or high security fixes may skip the 14-day dependency waiting period when the risk of waiting outweighs the risk of updating. The exception is specific to the dependency and version, recorded and reviewed in the PR, with the tests and signed release described in the [runbook](docs/runbooks/vulnerabilidades.md). After the fix is published, we publish a GitHub advisory and credit the reporter, if they wish.
 
-## Versões suportadas
+## Supported versions
 
-| Componente | Suportado |
+| Component | Supported |
 |---|---|
-| Plataforma hospedada (`main`) | Sim, sempre a versão em produção |
-| Script de rastreamento | A versão mais recente de cada versão maior. Versões publicadas são imutáveis: correções saem em uma versão nova, e os tenants afetados são avisados |
-| Releases antigas do repositório | Não |
+| Hosted platform (`main`) | Yes, always the version in production |
+| Tracking script | The latest version of each major version. Published versions are immutable: fixes ship in a new version, and affected tenants are notified |
+| Older repository releases | No |
 
-## Escopo
+## Scope
 
-Fora do escopo: ataques que exigem acesso físico ou credenciais já comprometidas do tenant, negação de serviço por volume e relatos automáticos de scanners sem prova de impacto.
+Out of scope: attacks that require physical access or already compromised tenant credentials, volumetric denial of service, and automated scanner reports without proof of impact.

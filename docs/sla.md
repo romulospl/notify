@@ -13,6 +13,7 @@ Fonte: RFP `scf-web-api-analytics` ("Web and API Analytics for Stellar Ecosystem
 | Ingestão (web e API) | 99,99% | 4,32 min |
 | Painéis | 99,90% | 43,2 min |
 | Vulnerabilidades críticas e altas | corrigidas em 24 h | n/a |
+| Chamados de suporte | resposta em 5 dias úteis, resolução em 10 | n/a |
 
 ## 2. Meta, compromisso e o que a arquitetura sustenta
 
@@ -21,15 +22,16 @@ Fonte: RFP `scf-web-api-analytics` ("Web and API Analytics for Stellar Ecosystem
 | Ingestão web | 99,99% | **Nenhum número comprometido.** Melhor esforço, medido e relatado (seção 3) | Uma VPS e um banco únicos: não sustenta 99,99%, e a 99,9% só depois de medir | Ingestão replicada para 99,9%; 99,99% exige banco com failover (três nós), deploy sem interrupção, medição e ensaios; nada disso existe nem é prometido |
 | Ingestão de API | 99,99% | Coletor e `rollup` no `prod.yaml`, na mesma VPS, atrás do Caddy (ADR 0012); nunca aplicado numa conta real | Teste externo do host OTLP (`API_URL` do monitoramento) | Réplica do coletor e medição numa produção real |
 | Painéis (portal e API de leitura) | 99,90% | **Nenhum número comprometido**, relato de medição | Uma VPS: orçamento de 43 min/mês é consumido por um deploy ruim ou uma queda da VPS | Réplica e failover do banco, portal replicado |
-| Vulnerabilidades críticas e altas | 24 h | **14 dias (crítica) e 30 dias (alta)** desde o recebimento ou identificação interna (`SECURITY.md`). As 24 h são meta do RFP, não compromisso; ver seção 5 | O processo técnico (correção, CI e `deploy.sh`) pode ser rápido; o prazo de 24 h depende de uma pessoa disponível | Segunda pessoa de plantão, ensaios e uma decisão futura de alterar `SECURITY.md` |
+| Vulnerabilidades críticas e altas | 24 h | **Avaliação em 48 h; correção em 7 dias corridos (crítica) e 14 (alta)** desde o recebimento ou identificação interna (`SECURITY.md`). Contenção de críticas em 72 h e as 24 h do RFP são metas, não compromissos; ver seção 5 | O processo técnico (release assinada, deploy por digest) pode ser rápido; prazos menores dependem de plantão | Plantão contínuo e ensaios antes de encurtar o compromisso |
+| Chamados de suporte | 5 e 10 dias úteis | **Os mesmos 5 e 10 dias úteis**, pelas issues públicas ([`suporte.md`](suporte.md)) | Dois responsáveis (Dione e Rômulo) | n/a |
 
-**Decisão:** manter os prazos públicos já assumidos de 14 dias corridos para críticas e 30 para altas, contados do recebimento ou da identificação interna. A meta do RFP de 24 h não é garantida pela operação atual, que não tem plantão contínuo. Mudanças futuras de compromisso exigem rever a capacidade operacional e atualizar a política pública.
+**Decisão:** com dois mantenedores e sem plantão contínuo, assumir avaliação de relatos possivelmente críticos ou altos em até 48 horas e correção em até 7 dias corridos (crítica) e 14 (alta), contados do recebimento ou da identificação interna. Contenção de críticas em 72 h é meta. A meta do RFP de 24 h não é garantida; encurtar o compromisso exige definir e ensaiar um plantão.
 
 ## 3. O que se mede e como
 
 ### 3.1 Indicador (SLI)
 
-Disponibilidade de um endpoint = fração do tempo, na janela, em que a sondagem externa recebeu 2xx.
+Disponibilidade de um endpoint = fração das sondagens, na janela, que passaram no módulo configurado: 2xx para web e painel, 401 para a sondagem OTLP autenticada sem credencial.
 
 | Componente | Sondagem (`infra/monitoring`) | Status |
 |---|---|---|
@@ -77,19 +79,19 @@ O gateway já pode servir a `ingest_site` vencida quando o banco falha (`SITE_ST
 
 Processo existente, a reaproveitar: [`SECURITY.md`](../SECURITY.md) (relato privado pela aba Security do GitHub), [`docs/runbooks/vulnerabilidades.md`](runbooks/vulnerabilidades.md) (contenção, correção, release, verificação), release assinada com cosign e atestado de SBOM (`.github/workflows/release.yml`), e o deploy pelo `deploy.sh` (`docs/deploy.md`), que por padrão constrói as imagens do checkout; imagens de release podem ser usadas por digest, mas nada confere a assinatura automaticamente.
 
-Roteiro aspiracional de 24 h para crítica ou alta, quando houver disponibilidade (**não é compromisso**); os prazos públicos de 14/30 dias contam do recebimento ou da identificação interna, não da classificação:
+Roteiro para crítica, contado do recebimento ou da identificação interna, não da classificação (para alta, o fim é o 14º dia; a contenção deve ocorrer em até 72 h sempre que possível):
 
 | Tempo | Passo |
 |---|---|
-| 0 a 2 h | Confirmar o recebimento, reproduzir e classificar (CVSS 3.1). Aplicar **contenção** do runbook (revogar chave, bloquear projeto, rebaixar operador, parar o serviço) |
-| 2 a 12 h | Corrigir em branch privada ou advisory privado, com teste que falha antes; CI verde |
-| 12 a 18 h | Release (`vX.Y.Z`) e imagens assinadas |
-| 18 a 24 h | Deploy (`deploy.sh`), verificação do passo 3 ("Check production") de `docs/deploy.md` e nova checagem |
+| 0 a 48 h | Confirmar o recebimento, reproduzir e classificar (CVSS 3.1). Aplicar **contenção** do runbook (revogar chave, bloquear projeto, rebaixar operador, parar o serviço) |
+| 48 h a 5 dias | Corrigir em branch privada ou advisory privado, com teste que falha antes; CI verde |
+| até 6 dias | Release (`vX.Y.Z`) e imagens assinadas |
+| até 7 dias | Deploy (`deploy.sh`), verificação do passo 3 ("Check production") de `docs/deploy.md` e nova checagem |
 | depois | Divulgação (advisory) |
 
 **Dependência externa.** Se não houver correção upstream, contenha o impacto e comunique o risco de não cumprir o prazo; contenção não conta como correção. Correções críticas ou altas podem dispensar a espera de 14 dias de forma específica e documentada, conforme o [runbook](runbooks/vulnerabilidades.md). O Renovate pode oferecer atualizações de segurança antes do prazo quando os alertas do GitHub estiverem ativos, mas não está instalado; o pnpm possui sua própria regra e exige exceção específica.
 **Lacunas conhecidas:**
-- Um mantenedor só: 24 h inclui noite e fim de semana, sem plantão definido.
+- Dois mantenedores, sem plantão definido; os prazos incluem noites, fins de semana e feriados.
 - A release assinada nunca rodou de verdade (não há release publicada), e o deploy não confere assinatura; o runbook diz o mesmo.
 - Deploy numa VPS só interrompe o serviço; não há deploy rotativo.
 - Retirar uma versão vulnerável do script de rastreamento não é trivial (ver o runbook).
@@ -100,4 +102,4 @@ Roteiro aspiracional de 24 h para crítica ou alta, quando houver disponibilidad
 
 ## 7. O que este documento ainda não faz
 
-Nenhuma medição existe; nada aqui foi exercitado numa produção real. Não há sondagem sintética de ponta a ponta, relato mensal automatizado nem pager.
+Nenhuma medição existe; nada aqui foi exercitado numa produção real. Não há sondagem sintética de ponta a ponta, relato mensal automatizado nem pager. O canal privado de vulnerabilidades foi ativado em 19/11/2026.
