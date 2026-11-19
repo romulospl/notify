@@ -22,8 +22,8 @@ In the `<head>` of every page (in an SPA, only in `index.html`):
 ```html
 <script
   defer
-  src="https://<gateway>/s/v1.1.0/n.js"
-  integrity="sha384-oJV5jTaVFhvi5Y8R/QGZrzfVps1szxTK74tBPsk7LIsuUoUzzFetJ//8xd0NUqs0"
+  src="https://<gateway>/s/v1.5.0/n.js"
+  integrity="sha384-vooloWJB6q/nJjvyeo1DPMqrJAzjUcODMuLvE+d3FSSayHr9KskukNvOTueDji1I"
   crossorigin="anonymous"
   data-site="<website-id>"
 ></script>
@@ -39,8 +39,8 @@ In `app/layout.tsx`, inside `<head>`:
 <head>
   <script
     defer
-    src="https://<gateway>/s/v1.1.0/n.js"
-    integrity="sha384-oJV5jTaVFhvi5Y8R/QGZrzfVps1szxTK74tBPsk7LIsuUoUzzFetJ//8xd0NUqs0"
+    src="https://<gateway>/s/v1.5.0/n.js"
+    integrity="sha384-vooloWJB6q/nJjvyeo1DPMqrJAzjUcODMuLvE+d3FSSayHr9KskukNvOTueDji1I"
     crossOrigin="anonymous"
     data-site="<website-id>"
   />

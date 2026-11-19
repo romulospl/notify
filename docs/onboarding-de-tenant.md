@@ -2,9 +2,22 @@
 
 For anyone who will measure a Stellar ecosystem project on the platform: from sign-up to reading the dashboards, covering **web** analytics (tracking script) and **API** analytics (OpenTelemetry). Written for issue [#43](https://github.com/romulospl/stellytics/issues/43) (pilot criterion pending).
 
-> **Validation status.** The snippets in this guide were checked against the repository examples and against the code of the screens (see PR #108). Validation with a **real pilot** (acceptance criterion 2 of #43) **has not happened yet**: it depends on the pilots of issues #45 and #46. Until then, treat the guide as not validated by an external project.
+> **Validation status.** The snippets in this guide were checked against the repository examples and against the code of the screens (see [PR #108](https://github.com/romulospl/stellytics/pull/108)). Validation with a **real pilot** (acceptance criterion 2 of #43) **has not happened yet**: it depends on the pilots of issues [#45](https://github.com/romulospl/stellytics/issues/45) and [#46](https://github.com/romulospl/stellytics/issues/46). Until then, treat the guide as not validated by an external project.
 
-Conventions: `<gateway>` is the web ingestion host and `<coletor>` the API collector address given by the instance operator. In local Compose it is at `127.0.0.1:4318` (HTTP) and `4317` (gRPC); in production it is `https://<api_host>`, on port 443, for OTLP/HTTP and gRPC (ADR 0012). No real production has been deployed yet (`docs/andamento.md`); confirm the address with whoever operates the instance before configuring.
+Conventions: `<gateway>` is the web ingestion host and `<collector>` is the API collector host (the instance's `API_HOST`), both as the host name only, without `https://`. Whoever operates the instance gives you both. In production, the URLs are `https://<gateway>` and `https://<collector>`, on port 443; the collector serves OTLP/HTTP and gRPC on the same host ([ADR 0012](adr/0012-ingestao-de-api-pelo-caddy.md)). In local Compose, the gateway is at `http://127.0.0.1:3002` and the collector at `http://127.0.0.1:4318` (HTTP) and `127.0.0.1:4317` (gRPC). No real production has been deployed yet (`docs/andamento.md`); confirm the addresses with whoever operates the instance before configuring.
+
+Terms used in this guide:
+
+- **SCF:** Stellar Community Fund, which funds the projects and is the audience of stellytics. An **SCF operator** is an account with a view of all projects.
+- **ADR:** a record of an architecture decision of the project, in [`docs/adr/`](adr/README.md).
+- **SRI** (Subresource Integrity): the browser checks the hash of the script file before running it and refuses it if it does not match.
+- **SPA** (single-page app, which changes screens without reloading) and **SSR** (server-side rendering: the page is built on the server).
+- **OpenTelemetry (OTel):** an open standard for metrics, traces and logs. **OTLP** is the protocol it uses to send that data.
+- **APM:** the monitoring tool your API already uses. **Dual-export** means sending the same metric to two destinations: your APM and stellytics.
+- **Umami:** the web analytics engine the portal uses under the hood.
+- **p50 and p95:** the median latency and the value below which 95% of requests fall.
+- **Delta and cumulative temporality:** with delta, each send carries only what happened since the previous one; with cumulative, it carries the total since the start.
+- **Sampling:** keeping only a share of the traces.
 
 ## 1. Overview
 
@@ -22,16 +35,25 @@ A **project** (tenant) groups **sites** (web analytics) and **API services** (AP
 
 You can use only the web part, only the API part, or both.
 
+Before you start, have at hand:
+
+- the portal address, the `<gateway>` and the `<collector>`, given by whoever operates the instance;
+- an e-mail address you can open: sign-up confirmation is required;
+- for web analytics: permission to edit the `<head>` of your site, and the site served over HTTPS (section 3.4);
+- for API analytics: an API that already uses the OpenTelemetry SDK or an OTel Collector, where you can add an exporter (section 4).
+
 ## 2. Sign-up
 
 1. Open `/sign-up` and enter name, e-mail and password (at least 12 characters, with confirmation).
 2. The portal sends an e-mail with the confirmation link, valid for 24 hours. **Without confirming, you cannot sign in or create a project.** With a valid link, you are signed in right away and move on to the project. If the link expires or is invalid, go to `/sign-in` with e-mail and password: the portal sends a new one (there is a per-IP limit).
-3. On `/onboarding`, give the project a name (for example, your product's name). This creates the project and your `owner` role.
+3. On `/onboarding`, give the project a name (for example, your product's name). This creates the project and your `owner` role. If the instance requires prior approval (whoever operates the instance decides this), the project starts as pending: the portal only shows `/dashboard`, as a waiting screen, and unlocks `/sites` and `/services` once an SCF operator approves it. The portal does not send an e-mail about the approval; agree on the timing with whoever operates the instance and come back to the portal to check.
 4. `/dashboard` shows the count of sites and services, with links to `/sites` and `/services`.
 
 Forgot your password? `/forgot-password` sends a single-use link, valid for 30 minutes, that ends your other sessions. A portal session lasts 7 days of inactivity (renewed on each day of use).
 
-What **does not exist**: inviting other members to the project and deleting your own account. A project has the account that created it. Anyone who needs to remove a project contacts the SCF operators (they perform the removal, with a recorded reason, and it can be reverted).
+What **does not exist**: inviting other members to the project. A project has the account that created it.
+
+You can delete your own account at `/settings`: the portal asks for your e-mail as confirmation and deletes the account and the project's data (sites, services, keys and metrics; details in [`docs/privacidade.md`](privacidade.md)). Anyone who only needs to remove a project, without deleting the account, contacts the SCF operators (they perform the removal, with a recorded reason, and it can be reverted).
 
 ## 3. Web analytics
 
@@ -43,15 +65,15 @@ The portal **does not generate the installation snippet**: build the tag as belo
 
 ### 3.2 Install the script
 
-The script is served by the gateway, with the version in the path and an SRI hash. The hashes of all versions are in [`packages/tracker/published/sri.json`](../packages/tracker/published/sri.json). The newest version is **v1.1.0**.
+The script is served by the gateway, with the version in the path and an SRI hash. The hashes of all versions are in [`packages/tracker/published/sri.json`](../packages/tracker/published/sri.json). The newest version is **v1.5.0**.
 
 **Static HTML and SPA.** In the `<head>` of every page (in an SPA, only in `index.html`):
 
 ```html
 <script
   defer
-  src="https://<gateway>/s/v1.1.0/n.js"
-  integrity="sha384-oJV5jTaVFhvi5Y8R/QGZrzfVps1szxTK74tBPsk7LIsuUoUzzFetJ//8xd0NUqs0"
+  src="https://<gateway>/s/v1.5.0/n.js"
+  integrity="sha384-vooloWJB6q/nJjvyeo1DPMqrJAzjUcODMuLvE+d3FSSayHr9KskukNvOTueDji1I"
   crossorigin="anonymous"
   data-site="<website-id>"
 ></script>
@@ -65,8 +87,8 @@ An SPA needs nothing else: the script counts route changes made by `history.push
 <head>
   <script
     defer
-    src="https://<gateway>/s/v1.1.0/n.js"
-    integrity="sha384-oJV5jTaVFhvi5Y8R/QGZrzfVps1szxTK74tBPsk7LIsuUoUzzFetJ//8xd0NUqs0"
+    src="https://<gateway>/s/v1.5.0/n.js"
+    integrity="sha384-vooloWJB6q/nJjvyeo1DPMqrJAzjUcODMuLvE+d3FSSayHr9KskukNvOTueDji1I"
     crossOrigin="anonymous"
     data-site="<website-id>"
   />
@@ -81,8 +103,19 @@ The snippets above are the same as in [`examples/README.md`](../examples/README.
 
 - Each published version (`/s/vX.Y.Z/n.js`) **never changes**: the file is served with a one-year immutable cache and the hash comes from `sri.json`. If the content changed, the browser would reject the script because of `integrity`.
 - The script **never updates itself**. To change versions, change the path and the `integrity` in your HTML.
-- Always use **v1.1.0 or newer** (**v1.2.0** adds custom events and **v1.3.0**, `window.notify.wallets`; **v1.4.0 renames the global object to `window.stellytics`**; **v1.5.0 fixes the wallet count**, see 3.4.1). v1.0.0 does not perform the JS execution proof, and the gateway **drops its events**.
 - `crossorigin="anonymous"` is required together with `integrity`; the gateway responds with `Access-Control-Allow-Origin: *` for this.
+- Use **v1.5.0**, the newest. The table below shows what each published version brings.
+
+| Version | What it brings |
+|---|---|
+| v1.0.0 | No JS execution proof, and the gateway **drops its events**. Do not use. |
+| v1.1.0 | Page views, with the JS execution proof. |
+| v1.2.0 | Custom events, on the old global object `window.notify`. |
+| v1.3.0 | Opt-in Wallets Kit adapter (`window.notify.wallets`). |
+| v1.4.0 | The global object becomes `window.stellytics` (`event` and `wallets`). |
+| v1.5.0 | The Wallets Kit adapter counts only wallets the user chooses (section 3.4.1). |
+
+Versions v1.0.0 to v1.3.0 stay as they were published and do not have `window.stellytics`; the examples in this guide use `window.stellytics` and need v1.4.0 or newer, and the wallet count needs v1.5.0.
 
 ### 3.4 Requirements and what the script does
 
@@ -92,9 +125,9 @@ The snippets above are the same as in [`examples/README.md`](../examples/README.
 - **Do not put personal data in paths or titles** (for example `/perfil/maria@exemplo.com`): they would be stored.
 - Archived site or removed project: the gateway responds as if it had accepted and drops the event. If the numbers do not show up, check the site ID before anything else.
 
-### 3.4.1 Custom events (v1.2.0)
+### 3.4.1 Custom events (v1.2.0 or newer)
 
-With v1.2.0, `window.stellytics.event(name, properties)` records an action (click, wallet connection etc.) on the current page:
+Custom events exist since v1.2.0; in v1.2.0 and v1.3.0 the global object is `window.notify`. From v1.4.0, `window.stellytics.event(name, properties)` records an action (click, wallet connection etc.) on the current page:
 
 ```js
 window.stellytics?.event("signup_clicked", { plan: "pro", seats: 3 });
@@ -105,9 +138,9 @@ window.stellytics?.event("signup_clicked", { plan: "pro", seats: 3 });
 - `window.stellytics` only exists after the script loads, and **there is no queue**: a call before that is lost. Always use `window.stellytics?.event(...)`.
 - **Stellar Wallets Kit events (v1.5.0, opt-in, not automatic):** the script does **not** capture anything from the kit on its own. It only reaches the kit if **you** hand it over, with one call, after initializing the kit (see [ADR 0010](adr/0010-adaptador-opt-in-do-wallets-kit.md)):
 
-```js
-window.stellytics?.wallets(StellarWalletsKit, KitEventType);
-```
+  ```js
+  window.stellytics?.wallets(StellarWalletsKit, KitEventType);
+  ```
 
   - Call it **once** (calling it again with the same kit does not duplicate the subscription). It returns a function that cancels the subscription. If the kit or the enum are invalid, nothing happens and the page does not break.
   - It only subscribes to `WALLET_SELECTED` (sends `wallet_selected` with `{ wallet: "freighter" }`, the module ID) and `DISCONNECT` (sends `wallet_disconnected`, with no data). It **never** subscribes to `STATE_UPDATED` and never sends address, public key, `networkPassphrase`, hash or amount. An ID that is not a plain module name (up to 32 characters) is ignored.
@@ -115,12 +148,12 @@ window.stellytics?.wallets(StellarWalletsKit, KitEventType);
   - Since `window.stellytics` has no queue, call it after the script loads (`window.stellytics?.wallets(...)`; if the script may take a while, repeat the call on the window's `load`, it is idempotent).
   - If you prefer to subscribe by hand and use `stellytics.event`, the handler receives `{ eventType, payload }`: the id is in `e.payload.id`, **never** in `e.id`, and `STATE_UPDATED` is still forbidden (it carries the address):
 
-```js
-StellarWalletsKit.on(KitEventType.WALLET_SELECTED, (e) => {
-  const id = e?.payload?.id;
-  if (id) window.stellytics?.event("wallet_selected", { wallet: id });
-});
-```
+    ```js
+    StellarWalletsKit.on(KitEventType.WALLET_SELECTED, (e) => {
+      const id = e?.payload?.id;
+      if (id) window.stellytics?.event("wallet_selected", { wallet: id });
+    });
+    ```
 
   - The kit (2.x) calls this handler once **during** `on`, with the remembered wallet. If you subscribe by hand, skip that first call (set a flag after `on` returns), or every returning visit counts as a selection. `stellytics.wallets` already does this.
 - The site dashboard shows the events in the **Custom events** card and the wallets in the **Wallet connections** card (section 5.1).
@@ -142,7 +175,7 @@ The script and the endpoints use `/s/`, `/e` and `/c`, without the terms the def
 
 ### 4.2 What the collector needs to receive
 
-- **Endpoint:** OTLP/HTTP (`/v1/metrics`, `/v1/traces`) or OTLP/gRPC, at `<coletor>`.
+- **Endpoint:** OTLP/HTTP (`/v1/metrics`, `/v1/traces`) or OTLP/gRPC, at `<collector>`.
 - **Header:** `Authorization: Bearer ntf_...`. Without a valid key (or with a revoked key, or one from a removed project), the response is `401` (HTTP) or `Unauthenticated` (gRPC).
 - **Signal:** the `http.server.request.duration` histogram (in seconds, the current name in the OpenTelemetry semantic conventions; the old `http.server.duration`, in `ms`, also works). Alternative: HTTP server spans. If the service sends both, stellytics uses the metric and ignores the spans, to avoid double counting. Prefer the metric: traces with sampling count fewer requests than the real ones.
 - **Attributes read:** `http.request.method`, `http.response.status_code` and `http.route`. Without `http.route`, the collector uses the path (`url.path`) and normalizes it.
@@ -168,16 +201,18 @@ const reader = (url, headers = {}) =>
 const provider = new MeterProvider({
   readers: [
     reader("https://apm.example.com/v1/metrics"), // your own backend
-    reader("https://<coletor>/v1/metrics", { Authorization: `Bearer ${process.env.STELLYTICS_INGEST_KEY}` }),
+    reader("https://<collector>/v1/metrics", { Authorization: `Bearer ${process.env.STELLYTICS_INGEST_KEY}` }),
   ],
 });
 ```
+
+The first reader sends to your own backend (your APM) and the second to stellytics, at `https://<collector>/v1/metrics` (in local Compose, `http://127.0.0.1:4318/v1/metrics`).
 
 The standard `OTEL_EXPORTER_OTLP_*` variables configure a single destination; the second one has to be built in code (or use the Collector). In other languages the idea is the same: two OTLP exporters, one with the `Authorization` header.
 
 ### 4.4 Dual-export through the OTel Collector
 
-If your API already sends to an OTel Collector, just add an exporter (full file in [`examples/api-backend/otelcol.yaml`](../examples/api-backend/otelcol.yaml)):
+If your API already sends to an OTel Collector, just add an exporter (full file in [`examples/api-backend/otelcol.yaml`](../examples/api-backend/otelcol.yaml)). Here `STELLYTICS_OTLP_ENDPOINT` is `https://<collector>`, with no path (in local Compose, `http://127.0.0.1:4318`): the exporter appends `/v1/metrics` itself.
 
 ```yaml
 exporters:
