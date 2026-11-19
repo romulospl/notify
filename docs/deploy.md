@@ -1,7 +1,5 @@
 # Deploy da produção
 
-Para a produção atual em EC2 com Docker ([ADR 0015](adr/0015-producao-em-ec2.md)), consulte a [configuração proposta de recuperação e backup da instância](../infra/aws/README.md), ainda não aplicada nem validada na conta de produção.
-
 Há dois caminhos: uma instalação mínima numa VPS existente, descrita abaixo, ou a infraestrutura gerenciada na Hetzner com OpenTofu e Ansible ([#14](https://github.com/romulospl/stellytics/issues/14)), detalhada nas seções seguintes.
 
 ## Caminho mínimo: VPS existente

@@ -247,13 +247,6 @@ jobs:
               ansible-playbook --syntax-check -i inventory/production.example.yml ingest.yml &&
               ansible-playbook --syntax-check -i inventory/production.example.yml standby.yml &&
               ansible-lint --offline site.yml monitoring.yml ingest.yml standby.yml roles'
-      - name: CloudFormation (AWS)
-        run: |
-          docker run --rm -v "$PWD/infra/aws:/w" -w /w \
-            python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 sh -c '
-              pip install -q --root-user-action=ignore cfn-lint==1.41.0 &&
-              cfn-lint ec2-recovery.yaml'
-          bash -n infra/aws/pg-dump.sh
       - name: Caddyfile
         run: |
           docker run --rm -v "$PWD/infra/caddy:/etc/caddy:ro" \

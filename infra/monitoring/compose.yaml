@@ -20,7 +20,7 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      - --storage.tsdb.retention.time=45d
+      - --storage.tsdb.retention.time=30d
     volumes:
       # Pastas, não arquivos: o Ansible troca os arquivos por renomeação, e um
       # arquivo montado sozinho continuaria apontando para a versão antiga.

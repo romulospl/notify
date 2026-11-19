@@ -16,7 +16,6 @@ Step by step in `docs/deploy.md`; overview in `docs/arquitetura.md` (update it w
 ## Other paths
 
 - Minimal VPS path: `infra/compose/prod-vps.yaml` (#159), described in `docs/deploy.md`.
-- AWS (ADR 0015, not applied): `infra/aws/` with the CloudFormation stack `ec2-recovery.yaml` (host recovery, daily backup, failure notice) and `pg-dump.sh` (logical dump before the snapshot), linted by `cfn-lint` in the `infra` job. Restore drill in `docs/runbooks/ensaio-recuperacao-aws.md`.
 
 ## Monitoring (#15, ADR 0005)
 
