@@ -97,7 +97,7 @@ O portal envia por SMTP (`apps/portal/src/lib/mail.ts`, variável `SMTP_URL`) s�
 | Conta, sessões, sites, chaves | Apagadas na exclusão da própria conta (`/settings`) ou no apagamento de projeto removido pelo operador (#154) | `src/lib/data/erasure.ts` |
 | `audit_log` | Para sempre, **anonimizado** na exclusão da conta: `actor_user_id` vira `[apagado]`, única mudança que o gatilho aceita (migração `0009_erasure.sql`) | esquema |
 | Backups | Os 7 backups base mais recentes mais WAL contínuo (ADR 0004). Dados apagados continuam nos backups até saírem da janela | ADR 0004 |
-| Backups da EC2 (caminho AWS, ADR 0015, não aplicado) | Pontos diários do AWS Backup por `RetentionDays` (padrão 30, máximo 35) mais dumps locais por `KEEP_DAYS` (padrão 7), cifrados com chave KMS própria. Dados apagados continuam neles até saírem da janela. Região e residência na UE não verificadas | `infra/aws/` |
+| Backups da EC2 (caminho AWS, ADR 0015, não aplicado) | Pontos diários do AWS Backup por `RetentionDays` (padrão 30, máximo 35) mais dumps locais por `KEEP_DAYS` (padrão 7), os pontos cifrados com a chave padrão do AWS Backup. Dados apagados continuam neles até saírem da janela. Região e residência na UE não verificadas | `infra/aws/` |
 
 O serviço de consolidação (`services/rollup`) e o coletor estão no `infra/compose/prod.yaml` desde 16/11/2026 (ADR 0012). A retenção de API descrita acima está implementada e testada, mas nenhuma produção real foi aplicada ainda. O vhost Caddy não configura access log e registra apenas erros críticos; assim, os cabeçalhos, inclusive a chave de ingestão (`Authorization`), não são escritos pelo proxy.
 

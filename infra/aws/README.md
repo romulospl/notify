@@ -5,10 +5,10 @@ Decision: [ADR 0015](../../docs/adr/0015-producao-em-ec2.md). Not yet applied or
 `ec2-recovery.yaml` is a CloudFormation stack that adds, to the EC2 instance already running Docker:
 
 - recovery to healthy hardware after two failed system checks (`StatusCheckFailed_System`) and a reboot after three failed instance checks (`StatusCheckFailed_Instance`), both with email notice;
-- a daily AWS Backup of the instance at 03:00 UTC, kept for `RetentionDays` (default 30, maximum 35) in a vault encrypted with a dedicated KMS key, with recovery point deletion denied to everyone but the account root;
+- a daily AWS Backup of the instance at 03:00 UTC, kept for `RetentionDays` (default 30, maximum 35) in a vault encrypted with the default AWS Backup key;
 - an email when a backup job fails, is aborted or expires.
 
-Before deploying, confirm that the instance type and tenancy support recovery, that Docker starts on boot and that every Compose volume and `/var/backups/stellytics` are on EBS. Alarms, snapshots, KMS and restores are billed. See the [EC2 recovery requirements](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/cloudwatch-recovery.html).
+Before deploying, confirm that the instance type and tenancy support recovery, that Docker starts on boot and that every Compose volume and `/var/backups/stellytics` are on EBS. Alarms, snapshots and restores are billed. See the [EC2 recovery requirements](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/cloudwatch-recovery.html).
 
 ```sh
 aws cloudformation deploy --template-file infra/aws/ec2-recovery.yaml \

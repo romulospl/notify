@@ -63,38 +63,12 @@ Resources:
         - !Ref Operations
       OKActions:
         - !Ref Operations
-  BackupKey:
-    Type: AWS::KMS::Key
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      Description: Stellytics EC2 backup vault key
-      EnableKeyRotation: true
-      KeyPolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
-            Action: kms:*
-            Resource: '*'
   Vault:
     Type: AWS::Backup::BackupVault
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
       BackupVaultName: !Sub '${AWS::StackName}-ec2'
-      EncryptionKeyArn: !GetAtt BackupKey.Arn
-      AccessPolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Deny
-            Principal: '*'
-            Action: backup:DeleteRecoveryPoint
-            Resource: '*'
-            Condition:
-              StringNotLike:
-                aws:PrincipalArn: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
   BackupRole:
     Type: AWS::IAM::Role
     Properties:
