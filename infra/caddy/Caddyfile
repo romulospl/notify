@@ -1,4 +1,4 @@
-# Caddy de produção (ADR 0014, ADR 0015): única porta de entrada, com TLS automático.
+# Caddy de produção (ADR 0014, ADR 0016): única porta de entrada, com TLS automático.
 #
 # Regras conferidas na revisão da #14 (infra/README.md):
 # - nenhuma rota leva ao Umami, nem à interface nem à API (#62);

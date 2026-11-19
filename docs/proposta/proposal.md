@@ -27,7 +27,7 @@ stellytics is an open source, multi-tenant web and API analytics service for Ste
 - **Base tool:** Umami v3.4.1 (MIT), used as a headless engine ([section 2](#2-why-umami-and-not-goatcounter)).
 - **Web path:** version-pinned tracker with SRI, a Go gateway with a JavaScript proof of work, IP truncation, Umami, PostgreSQL.
 - **API path:** OpenTelemetry dual-export to a custom collector (built with the OpenTelemetry Collector Builder) that keeps only standardized metrics in PostgreSQL and drops traces, spans and logs.
-- **Hosting:** a single VPS running Docker Compose, installed with `init.sh` and `deploy.sh`; provider and region are the operator's choice and not decided yet ([ADR 0015](../adr/0015-producao-em-vps.md)).
+- **Hosting:** a single VPS running Docker Compose, installed with `init.sh` and `deploy.sh`; provider and region are the operator's choice and not decided yet ([ADR 0016](../adr/0016-producao-em-vps.md)).
 
 ## 2. Why Umami and not GoatCounter
 
@@ -121,7 +121,7 @@ Delivered on `main` as of 2026-11-15 (source: [`docs/andamento.md`](../andamento
 - Tracker (versions pinned, SRI published) and the web gateway.
 - Tenant and SCF web dashboards, tenant and SCF API dashboards.
 - API collector with key authentication, route normalization, metrics exporter, rollup and retention, plus an example backend with a dual-export guide.
-- Production stack for a single VPS (Docker Compose, `init.sh`, `deploy.sh`, Caddy, WAL-G backup to S3-compatible storage) and an external monitoring host, both validated in CI without real credentials ([ADR 0015](../adr/0015-producao-em-vps.md); this replaced the earlier Hetzner, OpenTofu and Ansible setup).
+- Production stack for a single VPS (Docker Compose, `init.sh`, `deploy.sh`, Caddy, WAL-G backup to S3-compatible storage) and an external monitoring host, both validated in CI without real credentials ([ADR 0016](../adr/0016-producao-em-vps.md); this replaced the earlier Hetzner, OpenTofu and Ansible setup).
 - Architecture, privacy, anti-bot and supply chain, deploy and onboarding documents.
 
 **Not delivered, and this proposal does not claim otherwise:**
@@ -189,7 +189,7 @@ Stellar mainnet deployment does not apply to an analytics service. Go-live is th
 
 | # | Deliverable | Completion criteria (testable) |
 |---|---|---|
-| 3.1 | High availability | HA plan implemented in IaC for ingestion and dashboards; failover exercised and documented (issue #52). **Out of scope since [ADR 0015](../adr/0015-producao-em-vps.md)** (single VPS; the RFP does not require HA): keep, rescope or remove (see budget notes) |
+| 3.1 | High availability | HA plan implemented in IaC for ingestion and dashboards; failover exercised and documented (issue #52). **Out of scope since [ADR 0016](../adr/0016-producao-em-vps.md)** (single VPS; the RFP does not require HA): keep, rescope or remove (see budget notes) |
 | 3.2 | Measured availability | External monitoring report for the period since the production go-live (T0, so about 4 months by T3) against the targets, including incidents. The 12 months of operation are not needed to deliver this report |
 | 3.3 | Runbooks | `docs/runbooks/` (in PR #111, open and pending merge; issue #53): review the merged runbooks against the real production environment, correct them after the restore drill (1.1) |
 | 3.4 | Handover plan and tested data migration | Written plan for repository, data and domain transfer; migration procedure tested on a second environment (issue #54) |
@@ -213,7 +213,7 @@ Notes for the budget review:
 - **Audit costs are not in the budget** (ineligible line; covered by the Audit Bank for eligible projects, per the same skill reference). Whether this project qualifies is **UNVERIFIED**.
 - No marketing, no contingency, no legal or entity fees.
 - The hosting figure is a placeholder; it must be replaced with a priced quote for the VPS, the S3 backup storage and the monitoring host.
-- The T3 "HA and failover" line (24,000) and deliverable 3.1 predate [ADR 0015](../adr/0015-producao-em-vps.md), which drops high availability because the RFP does not require it. Keep, rescope or remove them: decision for Romulo.
+- The T3 "HA and failover" line (24,000) and deliverable 3.1 predate [ADR 0016](../adr/0016-producao-em-vps.md), which drops high availability because the RFP does not require it. Keep, rescope or remove them: decision for Romulo.
 - **Eligibility risk: operating costs.** The handbook says costs should support future development, not operation (as relayed in review; the exact wording was not re-retrieved). The 12 months of hosting (6,000) and support (12,000) in T3 are operation, but the RFP itself requires them ("hosted and supported by the proposer for 12 months"). The justification is that the RFP makes them part of the deliverable. SCF may reject or reduce these lines; ask SCF before submission and be ready to move them out. Roles named in the table are budget categories only, not named people.
 - **How the 12 months are paid:** there is no separate payment in this draft. The 18,000 for operation sits inside T3 and is released when T3 is accepted, so the team carries the cost of months 1 to 12 of operation up front. How SCF treats this is **UNVERIFIED**.
 - T3 is 40% of the total and carries 12 months of support, which is where "any line over 40% needs an explanation" should be answered: support is spread over a year, not delivered at once. Consider whether part of it should be tied to the handover.
@@ -225,12 +225,12 @@ RFP targets (Raven, `getRfps` 2026-11-15): 99.99% ingestion availability, 99.90%
 
 In absolute terms: 99.99% is about 4.3 minutes of downtime in a 30-day month and 99.90% is about 43 minutes.
 
-**Where we are:** a single VPS, with no high availability ([ADR 0015](../adr/0015-producao-em-vps.md)). If it goes down, the service is down until it is recreated and the backup restored. That cannot meet 99.99%. External monitoring (Prometheus and blackbox on a separate host, e-mail alerts, [ADR 0005](../adr/0005-monitoramento-externo.md)) detects outages and is tested in CI, but does not prevent them. API ingestion is covered only by an optional probe that expects the collector's 401.
+**Where we are:** a single VPS, with no high availability ([ADR 0016](../adr/0016-producao-em-vps.md)). If it goes down, the service is down until it is recreated and the backup restored. That cannot meet 99.99%. External monitoring (Prometheus and blackbox on a separate host, e-mail alerts, [ADR 0005](../adr/0005-monitoramento-externo.md)) detects outages and is tested in CI, but does not prevent them. API ingestion is covered only by an optional probe that expects the collector's 401.
 
 **Commitment proposed:**
 
 - Adopt the RFP targets as **targets, measured and reported**, by the external monitoring and published. They are not guaranteed commitments: 99.99% is not reachable on a single VPS.
-- High availability is out of scope ([ADR 0015](../adr/0015-producao-em-vps.md)): the RFP sets 99.99% and 99.90% as targets, not requirements. Tranche 3 delivers a measured availability report. **We do not claim the target is reachable on a single VPS.** If the measured result falls short, we report it and state what would be needed ([`docs/sla.md`](../sla.md)).
+- High availability is out of scope ([ADR 0016](../adr/0016-producao-em-vps.md)): the RFP sets 99.99% and 99.90% as targets, not requirements. Tranche 3 delivers a measured availability report. **We do not claim the target is reachable on a single VPS.** If the measured result falls short, we report it and state what would be needed ([`docs/sla.md`](../sla.md)).
 - Vulnerabilities: the public commitment is to assess potentially critical or high reports within 48 hours and to fix critical issues within 7 calendar days and high issues within 14, from receipt or internal discovery ([`SECURITY.md`](../../SECURITY.md)). Containing critical issues within 72 hours is a target. The RFP target of 24 hours remains unmet: the two maintainers have no continuous on-call coverage. Critical or high security fixes may bypass the dependency waiting period through the scoped, documented exception in the [runbook](../runbooks/vulnerabilidades.md). If no upstream fix exists, contain and communicate the risk; containment is not a fix.
 - Support model: Dione and Rômulo are responsible for support through the public issue tracker, with a first response within 5 business days and resolution within 10, as the RFP sets ([support process](../suporte.md)). Vulnerabilities use the private channel in [`SECURITY.md`](../../SECURITY.md), enabled on 19 November 2026.
 
@@ -280,7 +280,7 @@ All of these are open post-MVP issues ([#9](https://github.com/romulospl/stellyt
 | Area | Issue | What it delivers | Tranche |
 |---|---|---|---|
 | Load | [#51](https://github.com/romulospl/stellytics/issues/51) | Load test at the RFP target (about 700 requests per minute is the 1,000,000 a day average used in the E5 spec) and a committed report | T2 |
-| High availability | [#52](https://github.com/romulospl/stellytics/issues/52) | Written SLA targets and commitments ([`docs/sla.md`](../sla.md)); HA itself is out of scope since [ADR 0015](../adr/0015-producao-em-vps.md) | T3 |
+| High availability | [#52](https://github.com/romulospl/stellytics/issues/52) | Written SLA targets and commitments ([`docs/sla.md`](../sla.md)); HA itself is out of scope since [ADR 0016](../adr/0016-producao-em-vps.md) | T3 |
 | Runbooks | [#53](https://github.com/romulospl/stellytics/issues/53) | `docs/runbooks/`: incidents, backup and restore, secret rotation, Umami upgrade, vulnerability response | T3 |
 | Handover | [#54](https://github.com/romulospl/stellytics/issues/54) | Transfer of repository, data and domain to a community-appointed operator; counts as done only when the new operator runs the system alone | T3 |
 | SCF machine keys | [#48](https://github.com/romulospl/stellytics/issues/48) | Operators create and revoke keys; authenticated read API for metrics | T2 |

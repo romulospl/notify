@@ -1,8 +1,8 @@
 # Metas e compromissos de disponibilidade e de correção de vulnerabilidades
 
-Issue [#52](https://github.com/romulospl/stellytics/issues/52). Decisão de arquitetura em [ADR 0015](adr/0015-producao-em-vps.md) (produção numa VPS só, sem alta disponibilidade).
+Issue [#52](https://github.com/romulospl/stellytics/issues/52). Decisão de arquitetura em [ADR 0016](adr/0016-producao-em-vps.md) (produção numa VPS só, sem alta disponibilidade).
 
-> **Leitura obrigatória.** A arquitetura de produção **de hoje não sustenta 99,99% na ingestão** (e não garante 99,90% nos painéis): é uma VPS só, com Postgres único e sem réplica ([ADR 0015](adr/0015-producao-em-vps.md)). A alta disponibilidade foi retirada do escopo porque o RFP não a exige: 99,99% e 99,90% são metas que a proponente assume, não requisitos de arquitetura. Este documento separa o que é **meta** do RFP do que é **compromisso** do projeto, e não promete o primeiro como se fosse o segundo. A produção também ainda não foi implantada numa conta real (`docs/deploy.md`), então não há nenhuma medição.
+> **Leitura obrigatória.** A arquitetura de produção **de hoje não sustenta 99,99% na ingestão** (e não garante 99,90% nos painéis): é uma VPS só, com Postgres único e sem réplica ([ADR 0016](adr/0016-producao-em-vps.md)). A alta disponibilidade foi retirada do escopo porque o RFP não a exige: 99,99% e 99,90% são metas que a proponente assume, não requisitos de arquitetura. Este documento separa o que é **meta** do RFP do que é **compromisso** do projeto, e não promete o primeiro como se fosse o segundo. A produção também ainda não foi implantada numa conta real (`docs/deploy.md`), então não há nenhuma medição.
 
 ## 1. As metas do RFP
 
@@ -17,7 +17,7 @@ Fonte: RFP `scf-web-api-analytics` ("Web and API Analytics for Stellar Ecosystem
 
 ## 2. Meta, compromisso e o que a arquitetura sustenta
 
-| Item | Meta do RFP | Compromisso do projeto hoje | O que a arquitetura de hoje sustenta | O que exigiria (fora do escopo, ADR 0015) |
+| Item | Meta do RFP | Compromisso do projeto hoje | O que a arquitetura de hoje sustenta | O que exigiria (fora do escopo, ADR 0016) |
 |---|---|---|---|---|
 | Ingestão web | 99,99% | **Nenhum número comprometido.** Melhor esforço, medido e relatado (seção 3) | Uma VPS e um banco únicos: não sustenta 99,99%, e a 99,9% só depois de medir | Ingestão replicada para 99,9%; 99,99% exige banco com failover (três nós), deploy sem interrupção, medição e ensaios; nada disso existe nem é prometido |
 | Ingestão de API | 99,99% | Coletor e `rollup` no `prod.yaml`, na mesma VPS, atrás do Caddy (ADR 0012); nunca aplicado numa conta real | Teste externo do host OTLP (`API_URL` do monitoramento) | Réplica do coletor e medição numa produção real |
@@ -67,7 +67,7 @@ Até o 5º dia útil do mês seguinte, uma nota pública em `docs/` ou issue, co
 
 ## 4. O que é preciso para cada meta
 
-A produção é uma VPS só, com Docker Compose ([ADR 0015](adr/0015-producao-em-vps.md)). Réplica de ingestão, réplica do Postgres, failover e balanceador **não existem** no repositório: foram retirados por estarem fora do que o RFP exige. Para referência, o que cada meta exigiria:
+A produção é uma VPS só, com Docker Compose ([ADR 0016](adr/0016-producao-em-vps.md)). Réplica de ingestão, réplica do Postgres, failover e balanceador **não existem** no repositório: foram retirados por estarem fora do que o RFP exige. Para referência, o que cada meta exigiria:
 
 - **99,9% na ingestão:** duas ou mais instâncias de ingestão atrás de balanceador ou IP flutuante, deploy rotativo, pager além do e-mail.
 - **99,9% nos painéis:** réplica do Postgres com promoção ensaiada, portal replicado com uma só instância migrando.
@@ -98,7 +98,7 @@ Roteiro para crítica, contado do recebimento ou da identificação interna, nã
 
 ## 6. Pendências e decisões em aberto
 
-- Plantão, sondagem de ponta a ponta, relato mensal. Alta disponibilidade está fora do escopo (ADR 0015); voltar a ela exigiria uma decisão nova.
+- Plantão, sondagem de ponta a ponta, relato mensal. Alta disponibilidade está fora do escopo (ADR 0016); voltar a ela exigiria uma decisão nova.
 
 ## 7. O que este documento ainda não faz
 

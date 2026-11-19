@@ -1,6 +1,6 @@
 # 0009. Alta disponibilidade para as metas de SLA
 
-- **Status:** Rejeitado (0015)
+- **Status:** Rejeitado (0016)
 - **Data:** 15/11/2026
 - **Issue:** [#52](https://github.com/romulospl/stellytics/issues/52)
 - **Depende de:** [ADR 0002](0002-arquitetura-e-stack.md), [ADR 0004](0004-hospedagem-e-backup.md), [ADR 0005](0005-monitoramento-externo.md)

@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// Rode pelo run.mjs (pnpm --filter @stellytics/examples-e2e e2e), que cria os
-// sites e preenche SITE_STATIC, SITE_SPA e SITE_NEXT.
+// Run through run.mjs (pnpm --filter @stellytics/examples-e2e e2e), which
+// creates the sites and fills SITE_STATIC, SITE_SPA, SITE_NEXT and SITE_WALLET.
 const gateway = process.env.STELLYTICS_GATEWAY_URL ?? "http://127.0.0.1:3002";
 
 function server(name: string, port: number, command: string, cwd: string, site?: string) {
@@ -34,5 +34,7 @@ export default defineConfig({
       "../nextjs-ssr",
       process.env.SITE_NEXT,
     ),
+    // dApp with the Stellar Wallets Kit (#50): bundles the app and serves the public folder.
+    server("wallet-dapp", 4004, "node build.mjs && node ../serve.mjs public", "../wallet-dapp", process.env.SITE_WALLET),
   ],
 });

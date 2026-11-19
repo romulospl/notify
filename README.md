@@ -70,7 +70,7 @@ flowchart LR
 | API collector | OpenTelemetry Collector + Go components | Key-based authentication, route normalization and metric storage |
 | Rollup | Go | Rolls up 1-minute API metrics into 1 hour and 1 day and applies retention (API metrics and Umami web events) |
 | Database | PostgreSQL 17 | Separate databases: `umami` (web analytics) and `stellytics` (tenants, keys and API metrics, with 24 months of aggregates) |
-| Infra | Docker Compose, Caddy, shell install scripts | One VPS, continuous encrypted backups to S3-compatible storage, rebuildable from this repository ([ADR 0015](docs/adr/0015-producao-em-vps.md)) |
+| Infra | Docker Compose, Caddy, shell install scripts | One VPS, continuous encrypted backups to S3-compatible storage, rebuildable from this repository ([ADR 0016](docs/adr/0016-producao-em-vps.md)) |
 | Monitoring | Prometheus, blackbox exporter, Alertmanager | Separate host: availability of the portal, web ingestion and API ingestion measured from the outside, with email alerts ([ADR 0005](docs/adr/0005-monitoramento-externo.md)) |
 
 In production, every service runs in Docker Compose. Caddy is the only service with public ports: it terminates TLS automatically and forwards the portal, web ingestion and API ingestion (OTLP over HTTP and gRPC) over the Docker network. Umami is never exposed.
@@ -81,7 +81,7 @@ The full picture, with both flows, is in [`docs/arquitetura.md`](docs/arquitetur
 - [0002 — Architecture and stack](docs/adr/0002-arquitetura-e-stack.md)
 - [0003 — Tenant isolation is the portal's responsibility](docs/adr/0003-isolamento-no-portal.md)
 - [0014 — Production infrastructure on Docker Compose](docs/adr/0014-infra-em-docker-compose.md)
-- [0015 — Production on a single VPS, without high availability](docs/adr/0015-producao-em-vps.md)
+- [0016 — Production on a single VPS, without high availability](docs/adr/0016-producao-em-vps.md)
 
 ## Documentation
 

@@ -18,20 +18,22 @@ import {
   pointsDelta,
   referrerName,
   relativeDelta,
+  walletName,
 } from "@/lib/format";
 import { DeltaText } from "@/components/delta-text";
 import { PeriodPicker } from "@/components/period-picker";
 import { parsePeriodKey, resolvePeriod } from "@/lib/period";
-import { getSiteDashboard, type RankedItem, type SiteDashboard, UmamiError } from "@/lib/umami/stats";
+import { type CountedItem, getSiteDashboard, type RankedItem, type SiteDashboard, UmamiError } from "@/lib/umami/stats";
 import { PageviewsChart } from "./pageviews-chart";
 
 export const metadata: Metadata = { title: "Website analytics" };
 
 const card = "rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900";
 
-// Painel web do tenant (#28): as 7 métricas mínimas de um site no período
-// escolhido. Site de outro tenant (ou arquivado) responde 404 antes de qualquer
-// chamada ao Umami; projeto removido vê só o aviso (spec do E2, seção 6).
+// Tenant web dashboard (#28): the 7 minimum metrics of a site in the chosen
+// period, plus custom events and wallets (#50). Another tenant's (or an
+// archived) site answers 404 before any Umami call; a removed project sees only
+// the notice (E2 spec, section 6).
 export default async function SitePage({
   params,
   searchParams,
@@ -85,7 +87,7 @@ export default async function SitePage({
   }
   if (!data) notFound();
 
-  const { totals, previous, series, breakdowns } = data;
+  const { totals, previous, series, breakdowns, events, wallets } = data;
   const vsLabel = `vs previous ${period.label.replace(/^Last /, "")}`;
   const points = series.map((p) => ({
     label: bucketLabel(period.unit, p.at),
@@ -163,10 +165,29 @@ export default async function SitePage({
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <RankedList title="Referrers" items={breakdowns.referrer} name={referrerName} />
-        <RankedList title="Countries" items={breakdowns.country} name={countryName} />
-        <RankedList title="Devices" items={breakdowns.device} name={deviceName} />
-        <RankedList title="Browsers" items={breakdowns.browser} name={browserName} />
+        <RankedList title="Referrers" unit="Visitors" items={byVisitors(breakdowns.referrer)} name={referrerName} />
+        <RankedList title="Countries" unit="Visitors" items={byVisitors(breakdowns.country)} name={countryName} />
+        <RankedList title="Devices" unit="Visitors" items={byVisitors(breakdowns.device)} name={deviceName} />
+        <RankedList title="Browsers" unit="Visitors" items={byVisitors(breakdowns.browser)} name={browserName} />
+      </div>
+
+      {/* Custom events and wallets (#50, ADR 0015). */}
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <RankedList
+          title="Custom events"
+          unit="Events"
+          items={byCount(events)}
+          name={(raw) => raw}
+          empty="No custom events in this period. Send them with stellytics.event()."
+        />
+        <RankedList
+          title="Wallet connections"
+          unit="Selections"
+          items={byCount(wallets.selections)}
+          name={walletName}
+          empty="No wallet selections in this period. Track them with stellytics.wallets()."
+          footer={`Disconnections: ${wallets.disconnects.toLocaleString("en")}`}
+        />
       </div>
     </section>
   );
@@ -202,18 +223,37 @@ function StatTile({
   );
 }
 
-// Lista ordenada: nome, barra e número por linha, barras alinhadas. A barra
-// usa a mesma cor da série do gráfico; o número fica sempre visível.
-function RankedList({ title, items, name }: { title: string; items: RankedItem[]; name: (raw: string) => string }) {
-  const max = Math.max(1, ...items.map((i) => i.visitors));
+type ListItem = { name: string; value: number };
+
+const byVisitors = (items: RankedItem[]): ListItem[] => items.map((i) => ({ name: i.name, value: i.visitors }));
+const byCount = (items: CountedItem[]): ListItem[] => items.map((i) => ({ name: i.name, value: i.count }));
+
+// Ranked list: name, bar and number per row, bars aligned. The bar uses the
+// chart's series color; the number is always visible.
+function RankedList({
+  title,
+  unit,
+  items,
+  name,
+  empty = "No data in this period.",
+  footer,
+}: {
+  title: string;
+  unit: string;
+  items: ListItem[];
+  name: (raw: string) => string;
+  empty?: string;
+  footer?: string;
+}) {
+  const max = Math.max(1, ...items.map((i) => i.value));
   return (
     <div className={`${card} [--series:#2a78d6] dark:[--series:#3987e5]`}>
       <div className="flex items-baseline justify-between">
         <h2 className="font-medium">{title}</h2>
-        <span className="text-xs text-zinc-500">Visitors</span>
+        <span className="text-xs text-zinc-500">{unit}</span>
       </div>
       {items.length === 0 ? (
-        <p className="mt-3 text-sm text-zinc-500">No data in this period.</p>
+        <p className="mt-3 text-sm text-zinc-500">{empty}</p>
       ) : (
         <ol className="mt-3 space-y-2 text-sm">
           {items.map((item) => (
@@ -222,13 +262,14 @@ function RankedList({ title, items, name }: { title: string; items: RankedItem[]
                 <span className="truncate" title={name(item.name)}>
                   {name(item.name)}
                 </span>
-                <span className="tabular-nums">{item.visitors.toLocaleString("en")}</span>
+                <span className="tabular-nums">{item.value.toLocaleString("en")}</span>
               </div>
-              <div className="mt-1 h-1.5 rounded-r-[4px] bg-[var(--series)]" style={{ width: `${(item.visitors / max) * 100}%` }} />
+              <div className="mt-1 h-1.5 rounded-r-[4px] bg-[var(--series)]" style={{ width: `${(item.value / max) * 100}%` }} />
             </li>
           ))}
         </ol>
       )}
+      {footer && <p className="mt-3 text-sm text-zinc-500">{footer}</p>}
     </div>
   );
 }

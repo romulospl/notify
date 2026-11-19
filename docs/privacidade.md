@@ -85,7 +85,7 @@ O portal envia por SMTP (`apps/portal/src/lib/mail.ts`, variável `SMTP_URL`) s�
 
 ## 6. Residência dos dados e retenção
 
-**Onde ficam** ([ADR 0015](adr/0015-producao-em-vps.md)): na região da VPS e do bucket S3 de backup que o operador escolher; o repositório não fixa provedor nem região. **Essa escolha ainda não foi feita** e a produção ainda não foi aplicada, então hoje nenhum dado de produção existe. O RFP exige declarar a residência: o operador precisa decidir e declarar a região (por exemplo, UE) antes de receber dados. Os backups do WAL-G saem da VPS **cifrados no cliente** (`WALG_LIBSODIUM_KEY`, guardada fora da VPS). O monitoramento externo (ADR 0005) roda num host separado, também escolhido pelo operador, e, pelo ADR, serve para checar disponibilidade; **não verifiquei** se algum dado de analytics chega a ele. Os provedores da VPS e do armazenamento S3 são suboperadores; contrato e localização do suporte deles **não verificados**.
+**Onde ficam** ([ADR 0016](adr/0016-producao-em-vps.md)): na região da VPS e do bucket S3 de backup que o operador escolher; o repositório não fixa provedor nem região. **Essa escolha ainda não foi feita** e a produção ainda não foi aplicada, então hoje nenhum dado de produção existe. O RFP exige declarar a residência: o operador precisa decidir e declarar a região (por exemplo, UE) antes de receber dados. Os backups do WAL-G saem da VPS **cifrados no cliente** (`WALG_LIBSODIUM_KEY`, guardada fora da VPS). O monitoramento externo (ADR 0005) roda num host separado, também escolhido pelo operador, e, pelo ADR, serve para checar disponibilidade; **não verifiquei** se algum dado de analytics chega a ele. Os provedores da VPS e do armazenamento S3 são suboperadores; contrato e localização do suporte deles **não verificados**.
 
 **Quanto tempo ficam:**
 
@@ -96,7 +96,7 @@ O portal envia por SMTP (`apps/portal/src/lib/mail.ts`, variável `SMTP_URL`) s�
 | Eventos web no Umami | **183 dias, cerca de seis meses** (#154): o job de consolidação (`services/rollup`) apaga eventos e sessões mais antigos, com `UMAMI_DATABASE_URL` e `UMAMI_RETENTION_DAYS` | `services/rollup/main.go`, `docs/umami.md` |
 | Conta, sessões, sites, chaves | Apagadas na exclusão da própria conta (`/settings`) ou no apagamento de projeto removido pelo operador (#154) | `src/lib/data/erasure.ts` |
 | `audit_log` | Para sempre, **anonimizado** na exclusão da conta: `actor_user_id` vira `[apagado]`, única mudança que o gatilho aceita (migração `0009_erasure.sql`) | esquema |
-| Backups | WAL-G: os `WALG_RETAIN_FULL` (padrão 7) backups base mais recentes mais o WAL contínuo entre eles, cifrados no cliente. Dados apagados continuam nos backups até saírem da janela | `infra/compose/postgres/backup.sh`, ADR 0015 |
+| Backups | WAL-G: os `WALG_RETAIN_FULL` (padrão 7) backups base mais recentes mais o WAL contínuo entre eles, cifrados no cliente. Dados apagados continuam nos backups até saírem da janela | `infra/compose/postgres/backup.sh`, ADR 0016 |
 
 O serviço de consolidação (`services/rollup`) e o coletor estão no `infra/compose/prod.yaml` desde 16/11/2026 (ADR 0012). A retenção de API descrita acima está implementada e testada, mas nenhuma produção real foi aplicada ainda. O vhost Caddy não configura access log e registra apenas erros críticos; assim, os cabeçalhos, inclusive a chave de ingestão (`Authorization`), não são escritos pelo proxy.
 

@@ -43,3 +43,18 @@ export function readSeries(umamiWebsiteId: string, period: Period) {
 export function readBreakdown(umamiWebsiteId: string, type: Breakdown, period: Period, limit: number) {
   return umamiRequest<Point[]>(`/api/websites/${umamiWebsiteId}/metrics?${range(period)}&type=${type}&limit=${limit}`);
 }
+
+// Custom events (#50). In Umami 3.4.1, /metrics?type=event returns only custom
+// events and `y` counts events (count(*)), not visitors.
+export function readEvents(umamiWebsiteId: string, period: Period, limit: number) {
+  return umamiRequest<Point[]>(`/api/websites/${umamiWebsiteId}/metrics?${range(period)}&type=event&limit=${limit}`);
+}
+
+// Count per value of one event property (/event-data/values in 3.4.1: `total`
+// counts events, at most 100 values, in descending order).
+export type PropertyValue = { value: string; total: number };
+
+export function readEventValues(umamiWebsiteId: string, period: Period, eventName: string, propertyName: string) {
+  const query = new URLSearchParams({ eventName, propertyName });
+  return umamiRequest<PropertyValue[]>(`/api/websites/${umamiWebsiteId}/event-data/values?${range(period)}&${query}`);
+}

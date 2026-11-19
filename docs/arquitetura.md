@@ -146,7 +146,7 @@ Por que duas linguagens: TypeScript para tudo que tem tela e para o script do na
 
 ## Infraestrutura
 
-- **Onde roda:** uma VPS só, sem alta disponibilidade, com os dados em `STELLYTICS_DATA_DIR` (padrão `/srv/stellytics`) e backup contínuo e cifrado (WAL-G) num armazenamento compatível com S3. Provedor e região são escolha do operador ([ADR 0015](adr/0015-producao-em-vps.md), [`deploy.md`](deploy.md)).
+- **Onde roda:** uma VPS só, sem alta disponibilidade, com os dados em `STELLYTICS_DATA_DIR` (padrão `/srv/stellytics`) e backup contínuo e cifrado (WAL-G) num armazenamento compatível com S3. Provedor e região são escolha do operador ([ADR 0016](adr/0016-producao-em-vps.md), [`deploy.md`](deploy.md)).
 - **Como é criada:** o `init.sh` instala o Docker e gera o `.env.production`; o `deploy.sh` constrói as imagens e sobe toda a pilha, incluindo Caddy, com Docker Compose, e instala o timer do backup diário. Caddy recebe 80 e 443; a administração é por túnel SSH.
 - **Quem vigia:** um segundo host, separado da VPS, testa de fora o portal e o gateway a cada 15 segundos e manda e-mail se algo cair ([ADR 0005](adr/0005-monitoramento-externo.md)).
 - **Supply chain:** imagens publicadas por release, com SBOM e assinatura (cosign), mas o deploy padrão constrói do checkout e não confere assinatura; dependências novas só depois de 14 dias.

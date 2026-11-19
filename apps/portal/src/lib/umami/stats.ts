@@ -7,6 +7,8 @@ import {
   BREAKDOWNS,
   type Point,
   readBreakdown,
+  readEvents,
+  readEventValues,
   readSeries,
   readStats,
   type SiteStats,
@@ -41,7 +43,15 @@ export async function getSiteStats(
 
 export const TOP_LIMIT = 10;
 
+// Custom events and wallets (#50, ADR 0015). The event list is read with room
+// to spare (EVENT_FETCH_LIMIT names) so disconnections are found even outside
+// the top 10; the dashboard shows only TOP_LIMIT.
+export const EVENT_FETCH_LIMIT = 100;
+export const WALLET_SELECTED = "wallet_selected";
+export const WALLET_DISCONNECTED = "wallet_disconnected";
+
 export type RankedItem = { name: string; visitors: number };
+export type CountedItem = { name: string; count: number };
 
 export type SiteDashboard = {
   totals: Totals;
@@ -49,6 +59,11 @@ export type SiteDashboard = {
   // Um ponto por balde do período, inclusive os vazios.
   series: { at: Date; pageviews: number; visitors: number }[];
   breakdowns: Record<Breakdown, RankedItem[]>;
+  // Custom events by name, counted in events.
+  events: CountedItem[];
+  // Wallets Kit adapter events (script v1.3.0+): selections per wallet module
+  // id and the total of disconnections.
+  wallets: { selections: CountedItem[]; disconnects: number };
 };
 
 // Nulo quando o site não é do tenant do contexto (ou está arquivado): nesse
@@ -61,11 +76,14 @@ export async function getSiteDashboard(
   const found = await getSite(ctx, siteId);
   if (!found) return null;
   const id = found.umamiWebsiteId;
-  const [stats, series, ...lists] = await Promise.all([
+  const [stats, series, events, walletValues, ...lists] = await Promise.all([
     readStats(id, period),
     readSeries(id, period),
+    readEvents(id, period, EVENT_FETCH_LIMIT),
+    readEventValues(id, period, WALLET_SELECTED, "wallet"),
     ...BREAKDOWNS.map((type) => readBreakdown(id, type, period, TOP_LIMIT)),
   ]);
+  const eventCounts = events.map((p) => ({ name: p.x ?? "", count: Number(p.y) }));
 
   const byTime = (points: Point[]) => new Map(points.map((p) => [Date.parse(p.x ?? ""), Number(p.y)]));
   const pageviews = byTime(series.pageviews);
@@ -86,5 +104,10 @@ export async function getSiteDashboard(
         lists[i]!.map((p) => ({ name: p.x ?? "", visitors: Number(p.y) })),
       ]),
     ) as Record<Breakdown, RankedItem[]>,
+    events: eventCounts.slice(0, TOP_LIMIT),
+    wallets: {
+      selections: walletValues.slice(0, TOP_LIMIT).map((v) => ({ name: v.value, count: Number(v.total) })),
+      disconnects: eventCounts.find((e) => e.name === WALLET_DISCONNECTED)?.count ?? 0,
+    },
   };
 }

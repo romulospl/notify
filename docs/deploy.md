@@ -1,6 +1,6 @@
 # Production deployment
 
-Production is one Debian or Ubuntu VPS running Docker Compose ([ADR 0015](adr/0015-producao-em-vps.md)): Caddy, portal, web ingestion gateway, API collector, rollup job, Umami and Postgres with continuous encrypted backup, plus external monitoring on a second host. Files are in [`infra/`](../infra/README.md).
+Production is one Debian or Ubuntu VPS running Docker Compose ([ADR 0016](adr/0016-producao-em-vps.md)): Caddy, portal, web ingestion gateway, API collector, rollup job, Umami and Postgres with continuous encrypted backup, plus external monitoring on a second host. Files are in [`infra/`](../infra/README.md).
 
 > **Scope.** [#42](https://github.com/romulospl/stellytics/issues/42) is not done yet: its acceptance criterion (someone outside the team deploys by following only this guide) needs a real account.
 
@@ -161,7 +161,7 @@ Prometheus and Alertmanager listen on loopback only: `ssh -N -L 9090:127.0.0.1:9
 
 ## Not covered yet
 
-- **High availability:** one VPS; if it fails, the service is down until a new VPS is restored (ADR 0015).
+- **High availability:** one VPS; if it fails, the service is down until a new VPS is restored (ADR 0016).
 - **Provisioning:** the VPS, firewall, DNS and bucket are created by hand.
 - **Rate limits:** Caddy does not limit by IP and the collector does not limit by key; the collector's memory cap is `COLLECTOR_MEM_LIMIT` (default `512m`). The SCF read API limit is in the portal's memory ([ADR 0006](adr/0006-api-de-leitura-do-scf.md)).
 - **Restore in production:** tested in CI with a local S3, not against the real bucket. Rehearse on a throwaway VPS before you need it.

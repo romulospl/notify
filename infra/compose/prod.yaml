@@ -1,4 +1,4 @@
-# Production (ADR 0015): every service runs in Docker Compose on one VPS.
+# Production (ADR 0016): every service runs in Docker Compose on one VPS.
 # Caddy is the only service with public ports; Postgres, Umami and rollup stay
 # on the Docker network. deploy.sh builds the images and starts everything
 # with `docker compose --env-file .env.production -f prod.yaml up -d`.

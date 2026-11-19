@@ -1,4 +1,4 @@
-# 0015. Production on a single VPS, without high availability
+# 0016. Production on a single VPS, without high availability
 
 - **Status:** Accepted
 - **Date:** 19/11/2026

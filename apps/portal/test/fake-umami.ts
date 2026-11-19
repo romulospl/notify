@@ -17,6 +17,9 @@ export type FakeUmami = {
   // a série tem um ponto só, no primeiro balde do período.
   metrics: Record<string, { x: string | null; y: number }[]>;
   series: { pageviews: { x: string; y: number }[]; sessions: { x: string; y: number }[] } | null;
+  // /event-data/values answers per "event:property" (#50); no entry means an
+  // empty list.
+  eventValues: Record<string, { value: string; total: number }[]>;
   // Simula o Umami fora do ar nas leituras de estatísticas.
   down: boolean;
   // Sites cujas leituras falham (500), para testar falha parcial (#29).
@@ -46,6 +49,19 @@ export const DEFAULT_METRICS: FakeUmami["metrics"] = {
     { x: "chrome", y: 2 },
     { x: "ios", y: 1 },
   ],
+  // Custom events (#50): y counts events.
+  event: [
+    { x: "swap_submitted", y: 5 },
+    { x: "wallet_selected", y: 3 },
+    { x: "wallet_disconnected", y: 1 },
+  ],
+};
+
+export const DEFAULT_EVENT_VALUES: FakeUmami["eventValues"] = {
+  "wallet_selected:wallet": [
+    { value: "varial", total: 2 },
+    { value: "xbull", total: 1 },
+  ],
 };
 
 export async function startFakeUmami(apiKey: string): Promise<FakeUmami> {
@@ -53,7 +69,7 @@ export async function startFakeUmami(apiKey: string): Promise<FakeUmami> {
   const requests: FakeUmami["requests"] = [];
   const createBodies: unknown[] = [];
   const queries: string[] = [];
-  const state = { metrics: { ...DEFAULT_METRICS }, series: null as FakeUmami["series"], down: false, delayMs: 0, maxInFlight: 0 };
+  const state = { metrics: { ...DEFAULT_METRICS }, eventValues: { ...DEFAULT_EVENT_VALUES }, series: null as FakeUmami["series"], down: false, delayMs: 0, maxInFlight: 0 };
   const failWebsites = new Set<string>();
   const statsBy: FakeUmami["statsBy"] = new Map();
   let inFlight = 0;
@@ -88,7 +104,7 @@ export async function startFakeUmami(apiKey: string): Promise<FakeUmami> {
       const data = all.slice((page - 1) * pageSize, page * pageSize);
       return send(200, { data, count: all.length, page, pageSize });
     }
-    const match = url.pathname.match(/^\/api\/websites\/([^/]+)(\/stats|\/pageviews|\/metrics)?$/);
+    const match = url.pathname.match(/^\/api\/websites\/([^/]+)(\/stats|\/pageviews|\/metrics|\/event-data\/values)?$/);
     if (match && websites.has(match[1]!)) {
       if (method === "DELETE" && !match[2]) {
         websites.delete(match[1]!);
@@ -123,6 +139,12 @@ export async function startFakeUmami(apiKey: string): Promise<FakeUmami> {
         const limit = Number(url.searchParams.get("limit") ?? 500);
         return send(200, state.metrics[type]!.slice(0, limit));
       }
+      if (method === "GET" && match[2] === "/event-data/values") {
+        // Like 3.4.1: propertyName required, eventName optional.
+        const property = url.searchParams.get("propertyName");
+        if (!property) return send(400, { error: { message: "Bad request" } });
+        return send(200, state.eventValues[`${url.searchParams.get("eventName") ?? ""}:${property}`] ?? []);
+      }
     }
     return send(404, { error: "Not found" });
   });
@@ -141,6 +163,12 @@ export async function startFakeUmami(apiKey: string): Promise<FakeUmami> {
     },
     set metrics(value) {
       state.metrics = value;
+    },
+    get eventValues() {
+      return state.eventValues;
+    },
+    set eventValues(value) {
+      state.eventValues = value;
     },
     get series() {
       return state.series;

@@ -1,6 +1,6 @@
 # infra
 
-Infrastructure rebuildable from this repository: one VPS with Docker Compose for production and a separate host for monitoring ([ADR 0015](../docs/adr/0015-producao-em-vps.md)). Step by step in [`docs/deploy.md`](../docs/deploy.md); the install scripts are `init.sh` and `deploy.sh` at the repository root.
+Infrastructure rebuildable from this repository: one VPS with Docker Compose for production and a separate host for monitoring ([ADR 0016](../docs/adr/0016-producao-em-vps.md)). Step by step in [`docs/deploy.md`](../docs/deploy.md); the install scripts are `init.sh` and `deploy.sh` at the repository root.
 
 | Folder | Tool | Role |
 |---|---|---|

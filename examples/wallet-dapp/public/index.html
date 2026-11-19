@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wallet dApp demo</title>
+    <!-- stellytics:script -->
+    <script type="module" src="/app.js"></script>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+      section { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; margin-top: 1rem; }
+      button { margin: 0.25rem 0.25rem 0.25rem 0; padding: 0.4rem 0.8rem; }
+      #log { font-family: ui-monospace, monospace; font-size: 0.85rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Wallet dApp demo</h1>
+    <p>
+      A sample Stellar dApp (testnet) instrumented with stellytics: page views, custom events and wallet
+      connections through the Stellar Wallets Kit adapter. No wallet address is ever sent.
+    </p>
+
+    <section>
+      <h2>Wallet</h2>
+      <p id="status">No wallet connected</p>
+      <button id="connect" type="button">Connect wallet</button>
+      <button id="disconnect" type="button" disabled>Disconnect</button>
+    </section>
+
+    <section>
+      <h2>Custom events</h2>
+      <button type="button" data-event="swap_submitted" data-props='{"pair":"XLM/USDC"}'>Submit swap</button>
+      <button type="button" data-event="pool_deposit" data-props='{"pool":"XLM-USDC","tier":"basic"}'>Deposit in pool</button>
+      <button type="button" data-event="newsletter_signup">Subscribe to newsletter</button>
+    </section>
+
+    <section>
+      <h2>Sent to stellytics</h2>
+      <ol id="log"></ol>
+    </section>
+  </body>
+</html>

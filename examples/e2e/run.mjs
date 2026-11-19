@@ -1,13 +1,13 @@
-// Ponta a ponta dos exemplos (#27) contra o ambiente do Docker Compose.
+// End-to-end test of the examples (#27, #50) against the Docker Compose stack.
 //
-// Cria um website no Umami para cada exemplo e um tenant ativo com os três
-// sites no banco stellytics (o que os põe na ingest_site), roda o Playwright com
-// os IDs no ambiente e apaga tudo no fim. Os exemplos sobem pelo webServer do
-// playwright.config.ts.
+// Creates a website in Umami for each example and an active tenant with the four
+// sites in the stellytics database (which puts them in ingest_site), runs
+// Playwright with the IDs in the environment and deletes everything at the end.
+// The examples start through the webServer entries in playwright.config.ts.
 //
-// Variáveis: UMAMI_URL (http://127.0.0.1:3001), UMAMI_USER/UMAMI_PASSWORD
-// (admin/umami), STELLYTICS_DATABASE_URL e UMAMI_DATABASE_URL (Postgres em
-// 127.0.0.1:5432) e STELLYTICS_GATEWAY_URL (http://127.0.0.1:3002).
+// Variables: UMAMI_URL (http://127.0.0.1:3001), UMAMI_USER/UMAMI_PASSWORD
+// (admin/umami), STELLYTICS_DATABASE_URL and UMAMI_DATABASE_URL (Postgres at
+// 127.0.0.1:5432) and STELLYTICS_GATEWAY_URL (http://127.0.0.1:3002).
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
@@ -30,7 +30,7 @@ const { token } = await umami("POST", "/api/auth/login", null, {
   password: process.env.UMAMI_PASSWORD ?? "umami",
 });
 
-const examples = ["static", "spa", "next"];
+const examples = ["static", "spa", "next", "wallet"];
 const sites = {};
 let tenantId;
 let status = 1;
@@ -49,7 +49,7 @@ try {
 
   const result = spawnSync("playwright", ["test", ...process.argv.slice(2)], {
     stdio: "inherit",
-    env: { ...process.env, SITE_STATIC: sites.static, SITE_SPA: sites.spa, SITE_NEXT: sites.next },
+    env: { ...process.env, SITE_STATIC: sites.static, SITE_SPA: sites.spa, SITE_NEXT: sites.next, SITE_WALLET: sites.wallet },
     shell: process.platform === "win32",
   });
   status = result.status ?? 1;

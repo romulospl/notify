@@ -220,7 +220,7 @@ jobs:
       - if: always()
         run: docker compose down -v
 
-  # Produção (ADR 0015): valida o Caddyfile e os scripts de instalação e sobe a
+  # Produção (ADR 0016): valida o Caddyfile e os scripts de instalação e sobe a
   # pilha de produção com um S3 local, conferindo rotas do Caddy, portas,
   # backup cifrado e restauração.
   infra:
