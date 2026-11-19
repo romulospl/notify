@@ -40,9 +40,10 @@ docker compose --env-file .env.production -f infra/compose/prod.yaml
 ## 2. First start
 
 1. Open a tunnel to Umami and change its initial password (`admin`/`umami`): `infra/scripts/admin-tunnel.sh <vps-ip>`.
-2. Create the Umami service account key so the portal can create sites. In a clone with Node 24, with the tunnel open:
+2. Create the Umami service account key so the portal can create sites. In a clone with Node 24 on your machine (not the VPS), with the tunnel open:
 
    ```bash
+   corepack enable && pnpm install --frozen-lockfile   # once per clone; this step and the next need it
    read -rs UMAMI_ADMIN_PASSWORD && export UMAMI_ADMIN_PASSWORD
    UMAMI_URL=http://127.0.0.1:13001 pnpm --filter @stellytics/portal umami:service-account
    ```
@@ -174,4 +175,8 @@ Prometheus and Alertmanager listen on loopback only: `ssh -N -L 9090:127.0.0.1:9
 
 ## How this guide was checked
 
-Without a real VPS, DNS or SMTP: `prod.yaml` with a generated `.env`, routes, ports, an API metric, the gateway `/healthz` with Umami down, the stack check before and after the first backup and with a stopped service, the encrypted backup and the restore are checked by `infra/compose/test/prod-stack-test.sh` (CI `infra` job), and the monitoring configuration and alerts by `infra/monitoring/test/monitoring-test.sh`. Not checked: `init.sh` and `deploy.sh` on a real VPS (including the `stellytics-check` and `stellytics-backup` systemd units), certificate issuance, email delivery and backup to a real bucket.
+Without a real VPS, DNS or SMTP: `prod.yaml` with a generated `.env`, routes, ports, an API metric, the gateway `/healthz` with Umami down, the stack check before and after the first backup and with a stopped service, the encrypted backup and the restore are checked by `infra/compose/test/prod-stack-test.sh` (CI `infra` job), and the monitoring configuration and alerts by `infra/monitoring/test/monitoring-test.sh`.
+
+On 2026-11-19 the team rehearsed sections 1 to 3 at commit `ca28e07` in a clean Ubuntu 24.04 container with systemd standing in for the VPS, a local S3 (SeaweedFS), a local SMTP (Mailpit), `*.localhost` names with Caddy's internal CA and a second container as the operator's machine. `init.sh`, `deploy.sh`, both systemd timers, the first base backup, the tunnel, the Umami service account, `operator:create`, every `curl` and `nc` check, sign-up with the email link, a site visit with the pinned script, OTLP metrics with an ingest key and the tenant and operator dashboards all worked. The only gap found, the missing `pnpm install`, is fixed above. Details in [#42](https://github.com/romulospl/stellytics/issues/42).
+
+Not checked: a real VPS, DNS and certificate issuance, delivery through a real SMTP service, backup to a real bucket, external monitoring and alerts (Monitoring) and the restore on a deployed VPS.
