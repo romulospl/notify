@@ -57,7 +57,7 @@ docker compose --env-file .env.production -f infra/compose/prod.yaml
    ```
 
    Further operators come from `operator:promote` with the same `DATABASE_URL`.
-4. Run a first base backup: `systemctl start stellytics-backup`.
+4. The first base backup starts by itself: when the bucket has none, `deploy.sh` starts `stellytics-backup` in the background. Check it with `docker compose --env-file .env.production -f infra/compose/prod.yaml exec -T -u postgres postgres wal-g backup-list`.
 
 ## 3. Check production
 
@@ -65,7 +65,8 @@ From any machine, without logging in:
 
 ```bash
 curl -fsS https://<portal_host>/api/auth/ok            # portal: {"ok":true}
-curl -fsS https://<ingest_host>/healthz                # gateway: ok
+curl -fsS https://<ingest_host>/healthz                # gateway: ok (503 when Postgres or Umami is down)
+curl -fsS https://<ingest_host>/healthz/stack          # stack check: ok (503 until the first base backup exists)
 curl -fsS "https://<ingest_host>/c?s=00000000-0000-4000-8000-000000000000"  # challenge {"t":...,"d":12}
 curl -s -o /dev/null -w '%{http_code}\n' https://<ingest_host>/api/send    # 404: Umami has no public route
 curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/json' -d '{}' https://<api_host>/v1/metrics  # 401: the collector requires an ingest key
@@ -139,6 +140,8 @@ compose run --rm --no-deps \
 
 A second host checks the portal and ingestion from outside every 15 seconds and sends email when something is down ([ADR 0005](adr/0005-monitoramento-externo.md)). Set it up after production and DNS, or it starts alerting.
 
+What cannot be seen from outside is checked on the VPS: `deploy.sh` installs `stellytics-check.timer`, which runs [`infra/scripts/stack-check.py`](../infra/scripts/stack-check.py) every minute. It checks that every container is running and healthy (rollup turns unhealthy when the rollup stops), that Postgres is archiving WAL, that the newest base backup is at most 26 hours old and that the data disk is below 90% (`STACK_CHECK_DISK_MAX_PERCENT`). Caddy answers `https://<ingest_host>/healthz/stack` with 200 while the check passes and 503 otherwise (status code only); the monitor probes it. The reasons are in `journalctl -u stellytics-check -n 20`.
+
 1. Install Docker on the monitoring host and clone the repository.
 2. Create `monitoring.env` (mode `0600`, outside git) with the variables listed at the top of [`infra/monitoring/configure.sh`](../infra/monitoring/configure.sh): the hosts, `API_URL=https://<api_host>/v1/metrics`, the alert email and SMTP. **Recommended:** a `DEADMAN_URL` from an external heartbeat service, so you learn when the monitor itself is down.
 3. Run:
@@ -152,7 +155,8 @@ A second host checks the portal and ingestion from outside every 15 seconds and 
 
 | Alert | When |
 |---|---|
-| `EndpointDown` | Portal, web gateway or API ingestion without the expected answer for 1 minute |
+| `EndpointDown` | Portal, web gateway or API ingestion without the expected answer for 1 minute. The gateway answers 2xx only while Postgres and Umami respond |
+| `StackUnhealthy` | The stack check on the VPS has failed for 5 minutes: a container stopped or unhealthy, WAL not archived, base backup older than 26 hours or disk above the limit |
 | `TLSCertificateExpiringSoon` | Certificate expiring in less than 14 days |
 | `ProbeFailing` | Prometheus cannot ask the blackbox to probe a target |
 | `ProberDown` | The blackbox exporter is down |
@@ -170,4 +174,4 @@ Prometheus and Alertmanager listen on loopback only: `ssh -N -L 9090:127.0.0.1:9
 
 ## How this guide was checked
 
-Without a real VPS, DNS or SMTP: `prod.yaml` with a generated `.env`, routes, ports, an API metric, the encrypted backup and the restore are checked by `infra/compose/test/prod-stack-test.sh` (CI `infra` job), and the monitoring configuration and alerts by `infra/monitoring/test/monitoring-test.sh`. Not checked: `init.sh` and `deploy.sh` on a real VPS, certificate issuance, email delivery and backup to a real bucket.
+Without a real VPS, DNS or SMTP: `prod.yaml` with a generated `.env`, routes, ports, an API metric, the gateway `/healthz` with Umami down, the stack check before and after the first backup and with a stopped service, the encrypted backup and the restore are checked by `infra/compose/test/prod-stack-test.sh` (CI `infra` job), and the monitoring configuration and alerts by `infra/monitoring/test/monitoring-test.sh`. Not checked: `init.sh` and `deploy.sh` on a real VPS (including the `stellytics-check` and `stellytics-backup` systemd units), certificate issuance, email delivery and backup to a real bucket.

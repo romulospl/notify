@@ -187,18 +187,38 @@ func IsUUID(s string) bool {
 
 // Client repassa eventos ao Umami.
 type Client struct {
-	sendURL  string
-	ipHeader string
-	http     *http.Client
+	sendURL      string
+	heartbeatURL string
+	ipHeader     string
+	http         *http.Client
 }
 
 // NewClient aponta para base/api/send e envia o IP truncado em ipHeader.
 func NewClient(base *url.URL, ipHeader string, hc *http.Client) *Client {
 	return &Client{
-		sendURL:  base.JoinPath("api", "send").String(),
-		ipHeader: ipHeader,
-		http:     hc,
+		sendURL:      base.JoinPath("api", "send").String(),
+		heartbeatURL: base.JoinPath("api", "heartbeat").String(),
+		ipHeader:     ipHeader,
+		http:         hc,
 	}
+}
+
+// Heartbeat confere que o Umami responde em /api/heartbeat.
+func (c *Client) Heartbeat(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.heartbeatURL, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return &UpstreamError{Status: resp.StatusCode}
+	}
+	return nil
 }
 
 // UpstreamError é uma resposta fora de 2xx do Umami.

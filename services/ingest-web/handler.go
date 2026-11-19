@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,7 +43,9 @@ type gateway struct {
 	proofs  *proof.Issuer
 	fps     fingerprints
 	scripts *os.Root // nil desliga /s/
-	log     *slog.Logger
+	// health confere as dependências no /healthz; nil responde sempre 200.
+	health func(context.Context) error
+	log    *slog.Logger
 }
 
 func (g *gateway) routes() http.Handler {
@@ -50,7 +53,7 @@ func (g *gateway) routes() http.Handler {
 	mux.HandleFunc("POST /e", g.event)
 	mux.HandleFunc("OPTIONS /e", g.preflight)
 	mux.HandleFunc("GET /c", g.challenge)
-	mux.HandleFunc("GET /healthz", healthz)
+	mux.HandleFunc("GET /healthz", g.healthz)
 	if g.scripts != nil {
 		mux.HandleFunc("GET /s/", g.script)
 	}
@@ -72,12 +75,6 @@ func (g *gateway) recoverPanic(next http.Handler) http.Handler {
 		}()
 		next.ServeHTTP(w, r)
 	})
-}
-
-func healthz(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write([]byte("ok\n"))
 }
 
 // cors libera a chamada de qualquer origem. Nenhuma resposta usa cookie, então

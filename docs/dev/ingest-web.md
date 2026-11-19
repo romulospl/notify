@@ -3,7 +3,7 @@
 Routes, responses and variables are documented in the folder's `README.md`. Anti-bot layers and limits in `docs/anti-bot-e-cadeia-de-suprimentos.md`. There is no E3 spec; the contract is here and in the gateway and tracker READMEs.
 
 - `main.go` only builds the configuration and the server; routes in `handler.go`; packages in `internal/` (`config`, `clientip`, `limit`, `site`, `relay`, `proof`, `fingerprint`).
-- Routes: `POST /e` (JSON with `Content-Type` `text/plain` or `application/json`, open CORS, no cookies), `GET /c` (JS proof challenge), `GET /s/` (files from `SCRIPT_DIR`, one-year immutable cache) and `GET /healthz`.
+- Routes: `POST /e` (JSON with `Content-Type` `text/plain` or `application/json`, open CORS, no cookies), `GET /c` (JS proof challenge), `GET /s/` (files from `SCRIPT_DIR`, one-year immutable cache) and `GET /healthz` (503 when Postgres or Umami does not respond; cached 5 s).
 - Order in `POST /e`: JS proof, `ingest_site`, fingerprints, relay.
 
 ## Layers

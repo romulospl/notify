@@ -2,7 +2,7 @@
 //
 // Recebe os eventos em POST /e, confere o websiteId na visão ingest_site,
 // trunca o IP e repassa ao /api/send do Umami pela rede interna. Também serve
-// o script em /s/vX.Y.Z/ e expõe /healthz. A configuração vem do ambiente
+// o script em /s/vX.Y.Z/ e expõe /healthz (Postgres e Umami no ar). A configuração vem do ambiente
 // (ver internal/config e o README).
 package main
 
@@ -85,7 +85,8 @@ func run(log *slog.Logger) error {
 		go logStale(ctx, log, sites, time.Minute)
 	}
 
-	var sender relay.Sender = relay.NewClient(cfg.UmamiURL, cfg.ClientIPHeader, &http.Client{Timeout: 10 * time.Second})
+	umami := relay.NewClient(cfg.UmamiURL, cfg.ClientIPHeader, &http.Client{Timeout: 10 * time.Second})
+	var sender relay.Sender = umami
 	if cfg.RelayMaxInflight > 0 {
 		limited := relay.NewLimited(sender, cfg.RelayMaxInflight, cfg.RelayQueueWait)
 		sender = limited
@@ -100,7 +101,16 @@ func run(log *slog.Logger) error {
 		proofs:  proof.New(secret, cfg.ProofTTL, cfg.ProofBits),
 		fps:     fps,
 		scripts: scripts,
-		log:     log,
+		health: newCachedHealth(5*time.Second, func(ctx context.Context) error {
+			if err := pool.Ping(ctx); err != nil {
+				return fmt.Errorf("postgres: %w", err)
+			}
+			if err := umami.Heartbeat(ctx); err != nil {
+				return fmt.Errorf("umami: %w", err)
+			}
+			return nil
+		}).Check,
+		log: log,
 	}
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,

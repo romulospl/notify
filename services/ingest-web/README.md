@@ -20,7 +20,7 @@ Ainda vem: prova de execução de JS (#25), limite de fingerprints por IP (#26),
 | `GET /c?s=<website>` | Desafio da prova de execução de JS (#25): `{"t":"<token>","d":<bits>}`, com `Cache-Control: no-store`. Não consulta a `ingest_site`, então não revela se o site existe. `400` sem UUID em `s`. |
 | `OPTIONS /e` | Preflight de CORS, para clientes que mandem `application/json`. |
 | `GET /s/<caminho>` | Arquivos de `SCRIPT_DIR`, com `Cache-Control: public, max-age=31536000, immutable` e `Access-Control-Allow-Origin: *` (o SRI exige `crossorigin`). Pastas e caminhos fora de `SCRIPT_DIR` dão `404`. |
-| `GET /healthz` | `200 ok`. Não consulta o banco. |
+| `GET /healthz` | `200 ok` quando o Postgres e o Umami respondem; senão `503`. O resultado fica 5 s em cache, para o endpoint público não virar consulta ao banco a cada pedido. É o que o monitoramento externo mede como disponibilidade da ingestão web. |
 
 Nenhuma resposta grava cookie.
 

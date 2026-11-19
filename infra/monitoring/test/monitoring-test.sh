@@ -25,6 +25,7 @@ SMTP_REQUIRE_TLS=false
 DEADMAN_URL=http://deadman:8080/ping
 EOT
 "$root/monitoring/configure.sh" "$work/monitoring.env" "$work" >/dev/null
+grep -q 'https://ingest.invalid/healthz/stack' "$work/prometheus/targets/endpoints.yml" || { echo "FALHOU: sem o alvo da checagem da pilha" >&2; exit 1; }
 
 cat > "$work/prometheus/targets/endpoints.yml" <<'EOT'
 - targets: ["http://target:8080/"]

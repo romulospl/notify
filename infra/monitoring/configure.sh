@@ -22,6 +22,8 @@ mkdir -p "$out/prometheus/targets" "$out/alertmanager/secrets"
 {
   printf -- '- targets: ["https://%s/api/auth/ok"]\n  labels:\n    component: portal\n' "$PORTAL_HOST"
   printf -- '- targets: ["https://%s/healthz"]\n  labels:\n    component: ingest-web\n' "$INGEST_HOST"
+  # Checagem interna da VPS (stellytics-check): backup, WAL, contêineres, disco.
+  printf -- '- targets: ["https://%s/healthz/stack"]\n  labels:\n    component: stack\n' "$INGEST_HOST"
   if [ -n "${API_URL:-}" ]; then
     printf -- '- targets: ["%s"]\n  labels:\n    component: ingest-api\n    module: otlp_401\n' "$API_URL"
   fi
@@ -65,6 +67,9 @@ inhibit_rules:
   # Without the blackbox, EndpointDown and ProbeFailing say nothing new.
   - source_matchers: ['alertname="ProberDown"']
     target_matchers: ['alertname=~"EndpointDown|ProbeFailing"']
+  # With a public endpoint down, the stack check says nothing new either.
+  - source_matchers: ['alertname="EndpointDown"']
+    target_matchers: ['alertname="StackUnhealthy"']
 YAML
 } > "$out/alertmanager/alertmanager.yml"
 

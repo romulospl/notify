@@ -3,14 +3,28 @@ groups:
   - name: stellytics-endpoints
     rules:
       # Portal, ingestão web ou ingestão de API sem resposta 2xx por 1 minuto.
+      # O ingest-web só responde 2xx com o Postgres e o Umami no ar.
       - alert: EndpointDown
-        expr: probe_success{job="endpoints"} == 0
+        expr: probe_success{job="endpoints", component!="stack"} == 0
         for: 1m
         labels:
           severity: critical
         annotations:
           summary: "{{ $labels.component }} is down"
           description: "{{ $labels.instance }} has not answered with 2xx for over a minute."
+
+      # A checagem interna da VPS (infra/scripts/stack-check.py, a cada minuto)
+      # falhou: contêiner parado ou unhealthy (o rollup fica unhealthy quando a
+      # consolidação para), WAL sem arquivar, backup base com mais de 26 h ou
+      # disco acima do limite. Os 5 minutos absorvem as recriações de um deploy.
+      - alert: StackUnhealthy
+        expr: probe_success{job="endpoints", component="stack"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The production stack check is failing"
+          description: "Run `journalctl -u stellytics-check -n 20` on the VPS to see which check failed (containers, WAL archiving, base backup or disk)."
 
       # O certificado do Caddy renova sozinho ~30 dias antes; 14 dias quer dizer
       # que a renovação está falhando (DNS, porta 80 ou Let's Encrypt).

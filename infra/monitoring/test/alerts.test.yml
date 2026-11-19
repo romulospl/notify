@@ -28,6 +28,31 @@ tests:
               summary: "portal is down"
               description: "https://app.example.org/api/auth/ok has not answered with 2xx for over a minute."
 
+  # A checagem da pilha não dispara o EndpointDown, e sim o StackUnhealthy,
+  # depois de 5 minutos.
+  - interval: 15s
+    input_series:
+      - series: 'probe_success{job="endpoints", instance="https://e.example.org/healthz/stack", component="stack"}'
+        values: "0x30"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: EndpointDown
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: StackUnhealthy
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: StackUnhealthy
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: endpoints
+              instance: https://e.example.org/healthz/stack
+              component: stack
+            exp_annotations:
+              summary: "The production stack check is failing"
+              description: "Run `journalctl -u stellytics-check -n 20` on the VPS to see which check failed (containers, WAL archiving, base backup or disk)."
+
   # O pedido ao blackbox falha: sem probe_success, mas com up=0.
   - interval: 15s
     input_series:

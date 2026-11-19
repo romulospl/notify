@@ -46,14 +46,14 @@ Section references below point to the sections of the guide: What you need, 1. I
 | D3 ● | Clone the repository on the VPS and run `sudo ./init.sh` (1. Install) | Docker and Compose installed; `.env.production` created with random secrets and mode `0600` | | |
 | D4 ● | Fill in `.env.production`: the four hosts, `ACME_EMAIL`, `SMTP_URL`, `MAIL_FROM` and the `WALG_S3_*` bucket values (1. Install) | The operator knows the `SMTP_URL` format and URL-encodes special characters in the password | | |
 | D5 ● | Copy `WALG_LIBSODIUM_KEY` to a vault outside the VPS (1. Install) | The operator understands that no backup can be restored without it | | |
-| D6 ● | `sudo ./deploy.sh`. Note the build time (1. Install) | Images built, stack up, backup timer installed | | |
+| D6 ● | `sudo ./deploy.sh`. Note the build time (1. Install) | Images built, stack up, backup and check timers installed; the first base backup starts in the background | | |
 | D7 ● | Open the tunnel with `infra/scripts/admin-tunnel.sh <vps-ip>` and change the Umami password (2. First start, item 1) | The operator understands where each command runs (own machine vs VPS) and that the tunnel logs in as `root` | | |
 | D8 ● | Create the Umami service account key with Node 24, put it in `UMAMI_API_KEY`, run `sudo ./deploy.sh` again (2. First start, item 2) | The script prints the key once; the portal can create sites. Note whether `pnpm install` was needed first | | |
 | D9 ● | Create the first SCF operator with `operator:create` through the tunnel (2. First start, item 3) | Operator account exists with a confirmed e-mail | | |
-| D10 ● | First base backup: `systemctl start stellytics-backup`, then list it (2. First start, item 4; Backup) | `wal-g backup-list` shows one backup | | |
-| D11 ● | Run the `curl` block from any machine (3. Check production) | portal `{"ok":true}`; gateway `/healthz` ok; `/c` returns a challenge; `/api/send` 404; `POST /v1/metrics` without a key 401 | | |
+| D10 ● | First base backup: list it (2. First start, item 4; Backup) | `wal-g backup-list` shows one backup, started by `deploy.sh` | | |
+| D11 ● | Run the `curl` block from any machine (3. Check production) | portal `{"ok":true}`; gateway `/healthz` ok; `/healthz/stack` ok; `/c` returns a challenge; `/api/send` 404; `POST /v1/metrics` without a key 401 | | |
 | D12 ● | Run the `nc` block from outside the VPS (3. Check production) | 443 open; 5432 closed | | |
-| D13 ● | On the VPS: `compose ps`, `compose port postgres 5432`, `systemctl list-timers stellytics-backup.timer` (3. Check production) | All services running; Postgres on `127.0.0.1` only; timer listed | | |
+| D13 ● | On the VPS: `compose ps`, `compose port postgres 5432`, `systemctl list-timers stellytics-backup.timer stellytics-check.timer`, `journalctl -u stellytics-check -n 5` (3. Check production; Monitoring) | All services running; Postgres on `127.0.0.1` only; both timers listed; the check prints `stack ok` | | |
 | D14 ● | TLS: open the four hostnames in a browser | Valid certificates for all four; the alias leads to the portal | | |
 | D15 ● | Browser test: sign up, confirm the e-mail, create the project, register a site (3. Check production, item 1) | Confirmation e-mail arrives; project and site created. If the e-mail does not arrive, the guide points to `SMTP_URL`/`MAIL_FROM` and the portal logs | | |
 | D16 ● | Install the script on a test page and visit it; look at the site dashboard (3. Check production, item 2) | Visit shows in the dashboard "within minutes"; note the time | | |

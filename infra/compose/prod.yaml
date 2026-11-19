@@ -253,6 +253,8 @@ services:
     volumes:
       - ../caddy:/etc/caddy:ro
       - ${STELLYTICS_DATA_DIR:-/srv/stellytics}/caddy:/data
+      # Resultado da checagem da pilha (stellytics-check), servido em /healthz/stack.
+      - ${STELLYTICS_DATA_DIR:-/srv/stellytics}/status:/srv/status:ro
     depends_on:
       portal:
         condition: service_healthy

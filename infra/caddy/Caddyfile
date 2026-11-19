@@ -2,7 +2,8 @@
 #
 # Regras conferidas na revisão da #14 (infra/README.md):
 # - nenhuma rota leva ao Umami, nem à interface nem à API (#62);
-# - o gateway publica só /e, /c, /s/ e /healthz; o resto responde 404;
+# - o gateway publica só /e, /c, /s/ e /healthz; o resto responde 404, menos o
+#   /healthz/stack, que o próprio Caddy responde (checagem da pilha);
 # - o coletor publica só o OTLP (HTTP em /v1/traces, /v1/metrics e /v1/logs, e
 #   gRPC), sempre com chave de ingestão; o resto responde 404 (ADR 0012).
 #
@@ -55,6 +56,22 @@
 
 {$INGEST_HOST} {
 	import security_headers
+	# Estado da pilha na VPS para o monitoramento externo: 200 enquanto o
+	# stellytics-check (infra/scripts/stack-check.py) mantiver o arquivo
+	# stack-ok, 503 sem ele. Só o código; os motivos ficam no journal da VPS.
+	handle /healthz/stack {
+		header Cache-Control "no-store"
+		@stackok file {
+			root /srv/status
+			try_files /stack-ok
+		}
+		handle @stackok {
+			respond "ok" 200
+		}
+		handle {
+			respond "unavailable" 503
+		}
+	}
 	@gateway path /e /c /s/* /healthz
 	handle @gateway {
 		encode zstd gzip

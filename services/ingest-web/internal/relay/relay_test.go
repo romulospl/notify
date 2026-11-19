@@ -65,3 +65,22 @@ func TestSendUpstreamError(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+func TestHeartbeat(t *testing.T) {
+	status := http.StatusOK
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.WriteHeader(status)
+	}))
+	defer srv.Close()
+	base, _ := url.Parse(srv.URL + "/umami/")
+	c := NewClient(base, "x-stellytics-client-ip", srv.Client())
+	if err := c.Heartbeat(context.Background()); err != nil || gotPath != "/umami/api/heartbeat" {
+		t.Errorf("Heartbeat = %v, path %q", err, gotPath)
+	}
+	status = http.StatusServiceUnavailable
+	if ue, ok := errors.AsType[*UpstreamError](c.Heartbeat(context.Background())); !ok || ue.Status != 503 {
+		t.Errorf("Heartbeat com 503 não devolveu UpstreamError")
+	}
+}

@@ -6,6 +6,7 @@ Os scripts ficam em [`infra/compose/postgres/`](../../infra/compose/postgres/): 
 
 ## Sintomas
 
+- Alerta `StackUnhealthy` com `backup:` ou `postgres: WAL archiving` em `journalctl -u stellytics-check -n 20` ([incidentes](incidentes.md#stackunhealthy)).
 - Não há backup recente em `backup-list`, ou o `stellytics-backup.service` falhou.
 - O arquivamento de WAL parou (o `archive_command` falha e o disco do Postgres enche com WAL pendente).
 - Perda ou corrupção de dados, ou da VPS e do disco (restauração necessária).

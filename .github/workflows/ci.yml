@@ -239,7 +239,7 @@ jobs:
       - name: Scripts de instalação
         run: |
           bash -n init.sh deploy.sh infra/monitoring/configure.sh
-          python3 -m py_compile infra/scripts/production-env.py infra/scripts/configure-docker.py
+          python3 -m py_compile infra/scripts/production-env.py infra/scripts/configure-docker.py infra/scripts/stack-check.py
       - name: Pilha de produção (rotas, portas, backup e restauração)
         run: |
           docker compose build portal ingest-web collector rollup

@@ -1,6 +1,6 @@
 # Runbook: incidentes
 
-Serve para os quatro alertas reais do monitoramento externo ([`alerts.yml`](../../infra/monitoring/prometheus/rules/alerts.yml), [ADR 0005](../adr/0005-monitoramento-externo.md)) e para queda do portal ou da ingestão web. O alerta `Watchdog` é um sinal de vida sempre ativo, não é incidente; se ele **parar de chegar** ao serviço externo configurado em `DEADMAN_URL`, o problema é o host de monitoramento (ver `ProberDown`).
+Serve para os cinco alertas reais do monitoramento externo ([`alerts.yml`](../../infra/monitoring/prometheus/rules/alerts.yml), [ADR 0005](../adr/0005-monitoramento-externo.md)) e para queda do portal ou da ingestão web. O alerta `Watchdog` é um sinal de vida sempre ativo, não é incidente; se ele **parar de chegar** ao serviço externo configurado em `DEADMAN_URL`, o problema é o host de monitoramento (ver `ProberDown`).
 
 ## Triagem inicial (vale para todos)
 
@@ -8,7 +8,8 @@ Serve para os quatro alertas reais do monitoramento externo ([`alerts.yml`](../.
 
    ```bash
    curl -fsS https://<portal_host>/api/auth/ok           # portal: {"ok":true}
-   curl -fsS https://<ingest_host>/healthz               # gateway
+   curl -fsS https://<ingest_host>/healthz               # gateway (503: Postgres ou Umami fora)
+   curl -fsS https://<ingest_host>/healthz/stack         # checagem da pilha na VPS
    curl -fsS "https://<ingest_host>/c?s=00000000-0000-4000-8000-000000000000"
    ```
 
@@ -45,6 +46,22 @@ Serve para os quatro alertas reais do monitoramento externo ([`alerts.yml`](../.
 **Perda de dados.** Enquanto o `ingest-web` ou o Umami ficam fora, os eventos web chegados são descartados; não há fila. Registre a janela do incidente.
 
 **Escalar** se: o disco ou a VPS têm defeito do provedor (suporte do provedor); o Postgres não sobe e o log indica corrupção (ver [backup e restauração](backup-e-restauracao.md)); ou o incidente passa de 1 hora sem causa.
+
+## StackUnhealthy
+
+**Sintomas.** E-mail `The production stack check is failing`: há 5 minutos o `/healthz/stack` responde 503, porque a checagem que roda a cada minuto na VPS ([`stack-check.py`](../../infra/scripts/stack-check.py), `stellytics-check.timer`) falhou. Os endpoints públicos podem estar no ar; o problema é algo que só se vê de dentro.
+
+**Diagnóstico.** Na VPS, `journalctl -u stellytics-check -n 20 --no-pager` mostra o motivo, uma linha por falha:
+
+- `<serviço>: exited`, `unhealthy` ou `not created`: siga o diagnóstico do `EndpointDown`. `rollup: unhealthy` quer dizer que a consolidação 1m → 1h → 1d parou (`docker compose -f prod.yaml logs --tail 100 rollup`); sem ela, os painéis de API perdem os agregados de 24 meses.
+- `postgres: WAL archiving is failing` ou `backup: ...`: [backup e restauração](backup-e-restauracao.md). WAL sem arquivar também enche o disco.
+- `disk: ... full`: a ação de disco cheio do `EndpointDown`.
+- `check failed: ...`: a própria checagem não rodou (Docker parado, Postgres sem responder, timeout do S3). Veja `systemctl status stellytics-check.service`.
+- Nenhuma linha nova no journal: o timer parou (`systemctl list-timers stellytics-check.timer`). O `/healthz/stack` continua com o último resultado verde enquanto o arquivo `status/stack-ok` existir; rode `sudo ./deploy.sh` para reinstalar o timer.
+
+**Ação.** Corrija a causa e rode a checagem na hora: `systemctl start stellytics-check.service`.
+
+**Verificação.** `curl -fsS https://<ingest_host>/healthz/stack` responde `ok` e o alerta se resolve.
 
 ## TLSCertificateExpiringSoon
 

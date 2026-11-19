@@ -4,9 +4,11 @@
 # Sobe compose/prod.yaml com um S3 local (test/prod-test.yaml) e confere:
 # 1. Caddy publica o portal, só as rotas do gateway e só o OTLP; Umami não vaza;
 # 2. Caddy é o único serviço público; Postgres fica no loopback;
+# 1b. o /healthz do gateway dá 503 com o Umami fora do ar;
 # 2b. uma métrica OTLP com chave de ingestão cai em
 #    api_metric_1m no tenant da chave, e o rollup roda;
-# 3. o backup base e o WAL vão para o S3, cifrados;
+# 3. o backup base e o WAL vão para o S3, cifrados, e a checagem da pilha
+#    (stack-check.py, /healthz/stack) só fica verde com o backup feito;
 # 4. a restauração, seguindo docs/deploy.md, traz o banco de volta, inclusive
 #    o que foi gravado DEPOIS do backup base (recuperação pelo WAL arquivado).
 #
@@ -71,7 +73,8 @@ trap cleanup EXIT
 fail() { echo "FALHOU: $*" >&2; exit 1; }
 ok() { echo "ok: $*"; }
 
-mkdir -p "$work/data"
+# A pasta status é do stack-check; criada antes, para não ficar com o root do Docker.
+mkdir -p "$work/data/status"
 compose up -d s3 --wait
 compose exec -T s3 sh -c 'echo "s3.bucket.create -name stellytics-backup" | weed shell -master=localhost:9333' >/dev/null
 compose up -d --build --wait
@@ -136,6 +139,34 @@ if grep -qE "$marker|remote_ip|client_ip" <<<"$caddy_logs"; then fail "o log do 
 compose up -d --wait ingest-web >/dev/null
 ok "logs do Caddy sem IP, cabeçalhos nem URL"
 
+# 1b. O /healthz do gateway mede a ingestão: com o Umami fora, 503.
+compose stop umami >/dev/null
+for _ in $(seq 1 20); do
+  code=$(get ingest.localhost /healthz)
+  [ "$code" = 503 ] && break
+  sleep 1
+done
+[ "$code" = 503 ] || fail "com o Umami parado, /healthz deveria dar 503 e deu $code"
+compose up -d --wait umami >/dev/null
+for _ in $(seq 1 20); do
+  code=$(get ingest.localhost /healthz)
+  [ "$code" = 200 ] && break
+  sleep 1
+done
+[ "$code" = 200 ] || fail "com o Umami de volta, /healthz deveria dar 200 e deu $code"
+ok "/healthz do gateway dá 503 sem o Umami e volta a 200"
+
+# Checagem da pilha (stellytics-check em produção), com o Compose deste teste.
+stack_check() {
+  COMPOSE="docker compose -p $project --env-file $env_file -f prod.yaml -f test/prod-test.yaml" \
+    STACK_CHECK_DISK_MAX_PERCENT=100 python3 ../scripts/stack-check.py "$work/data"
+}
+# Sem backup base ainda: a checagem acusa e o Caddy responde 503.
+if out=$(stack_check); then fail "a checagem da pilha passou sem backup base: $out"; fi
+grep -q "no base backup" <<<"$out" || fail "a checagem não acusou a falta de backup base: $out"
+[ "$(get ingest.localhost /healthz/stack)" = 503 ] || fail "/healthz/stack sem a checagem verde deveria dar 503"
+ok "checagem da pilha falha sem backup base e /healthz/stack dá 503"
+
 # 2. Só Caddy publica portas públicas; Postgres fica no loopback.
 bindings() { docker inspect -f '{{json .HostConfig.PortBindings}}' "$(compose ps -q "$1")"; }
 for svc in umami portal ingest-web collector rollup s3; do
@@ -190,6 +221,15 @@ for _ in $(seq 1 60); do
 done
 [[ "$archived" > "$wal" || "$archived" == "$wal" ]] || fail "WAL $wal não foi arquivado (último: $archived)"
 ok "backup base e WAL $wal no S3"
+
+out=$(stack_check) || fail "a checagem da pilha falhou com tudo no ar: $out"
+[ "$(get ingest.localhost /healthz/stack)" = 200 ] || fail "/healthz/stack com a checagem verde deveria dar 200"
+compose stop rollup >/dev/null
+if out=$(stack_check); then fail "a checagem da pilha passou com o rollup parado: $out"; fi
+grep -q "rollup: exited" <<<"$out" || fail "a checagem não acusou o rollup parado: $out"
+[ "$(get ingest.localhost /healthz/stack)" = 503 ] || fail "/healthz/stack com o rollup parado deveria dar 503"
+compose up -d --wait rollup >/dev/null
+ok "checagem da pilha verde com backup e WAL em dia; acusa um serviço parado"
 
 # Cifrado no cliente: sem a chave, o backup não serve para nada. O WAL-G
 # tenta baixar de novo para sempre (com WALG_DOWNLOAD_FILE_RETRIES baixo, o

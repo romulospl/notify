@@ -36,12 +36,13 @@ Disponibilidade de um endpoint = fração das sondagens, na janela, que passaram
 | Componente | Sondagem (`infra/monitoring`) | Status |
 |---|---|---|
 | Portal / painéis | `GET /api/auth/ok` no host do portal, módulo `http_2xx` do blackbox, a cada 15 s | Existe |
-| Ingestão web | `GET /healthz` no host da ingestão | Existe |
+| Ingestão web | `GET /healthz` no host da ingestão: 2xx só com o Postgres e o Umami respondendo | Existe |
 | Ingestão de API | `POST` sem chave em `API_URL` (opcional em `infra/monitoring/configure.sh`), espera o 401 do coletor | Existe se `API_URL` for definido; não prova que uma métrica é gravada |
 
 Limites honestos do indicador atual:
 
-- `/healthz` prova que o gateway responde, **não** que um evento é aceito de ponta a ponta (prova de JS, `ingest_site`, Umami, banco). Um gateway no ar com o Umami fora aparece como disponível. Uma sondagem sintética de `POST /e` com site de teste é melhoria necessária e **não existe**.
+- `/healthz` prova que o gateway responde e que o Postgres e o Umami respondem a ele (resultado em cache por 5 s), **não** que um evento é aceito de ponta a ponta (prova de JS, `ingest_site`, gravação no Umami). Uma sondagem sintética de `POST /e` com site de teste **não existe**.
+- A sondagem `component="stack"` (`/healthz/stack`, checagem interna da VPS: contêineres, WAL, backup, disco) gera o alerta `StackUnhealthy` e **não** entra no cálculo de disponibilidade.
 - A sondagem parte de **um** ponto de vista (um host de monitoramento, separado da VPS). Uma falha de rede do monitor pareceria queda da produção, e o contrário também.
 - A resolução é de 15 s; quedas menores podem passar.
 
