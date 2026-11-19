@@ -1,4 +1,4 @@
-// Formatação dos números e nomes do painel web (#28). Interface em inglês, datas em UTC.
+// Number and name formatting for the web dashboard (#28, #50). English UI, UTC dates.
 import type { PeriodUnit } from "./period";
 
 const full = new Intl.NumberFormat("en");
@@ -83,6 +83,35 @@ export function deviceName(id: string): string {
 
 export function referrerName(domain: string): string {
   return domain || "Direct";
+}
+
+// Stellar Wallets Kit module IDs (checked in 2.8.0) -> display name. Freighter
+// became Varial in kit 2.x; the old ID stays here.
+const WALLETS: Record<string, string> = {
+  albedo: "Albedo",
+  BitgetWallet: "Bitget Wallet",
+  cactuslink: "Cactus Link",
+  dcent: "D'CENT",
+  fordefi: "Fordefi",
+  freighter: "Freighter",
+  ghostsig: "GhostSig",
+  hana: "Hana",
+  "hot-wallet": "HOT Wallet",
+  klever: "Klever",
+  LEDGER: "Ledger",
+  lobstr: "LOBSTR",
+  onekey: "OneKey",
+  rabet: "Rabet",
+  scopuly: "Scopuly",
+  TREZOR: "Trezor",
+  varial: "Varial (Freighter)",
+  wallet_connect: "WalletConnect",
+  xbull: "xBull",
+};
+
+export function walletName(id: string): string {
+  if (!id) return "Unknown";
+  return WALLETS[id] ?? id;
 }
 
 const BUCKET_FORMATS: Record<PeriodUnit, Intl.DateTimeFormat> = {

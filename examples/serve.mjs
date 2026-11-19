@@ -8,6 +8,7 @@
 //   STELLYTICS_GATEWAY_URL  origem do gateway (padrão http://127.0.0.1:3002)
 //   STELLYTICS_SCRIPT_VERSION  versão do script (padrão: a mais nova publicada)
 //   PORT                porta (padrão 4001)
+//   HOST                listen address (default 127.0.0.1; 0.0.0.0 in a container)
 // No modo spa, caminhos sem arquivo devolvem o index.html (roteamento no navegador).
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -16,6 +17,7 @@ import { extname, join, normalize, resolve } from "node:path";
 const [dir = ".", mode] = process.argv.slice(2);
 const root = resolve(dir);
 const port = Number(process.env.PORT ?? 4001);
+const host = process.env.HOST ?? "127.0.0.1";
 
 const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css" };
 
@@ -65,4 +67,4 @@ createServer(async (req, res) => {
   const type = types[extname(file)] ?? "application/octet-stream";
   if (extname(file) === ".html") body = body.toString().replace("<!-- stellytics:script -->", tag);
   res.writeHead(200, { "content-type": type, "cache-control": "no-store" }).end(body);
-}).listen(port, "127.0.0.1", () => console.log(`http://127.0.0.1:${port}/ (${dir}${mode ? `, ${mode}` : ""})`));
+}).listen(port, host, () => console.log(`http://${host}:${port}/ (${dir}${mode ? `, ${mode}` : ""})`));

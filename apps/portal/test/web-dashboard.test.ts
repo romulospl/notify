@@ -16,11 +16,12 @@ import {
   countryName,
   formatCount,
   formatDuration,
+  walletName,
 } from "@/lib/format";
 import { parsePeriodKey, resolvePeriod } from "@/lib/period";
-import { getSiteDashboard, TOP_LIMIT } from "@/lib/umami/stats";
+import { EVENT_FETCH_LIMIT, getSiteDashboard, TOP_LIMIT } from "@/lib/umami/stats";
 import SitePage from "@/app/(private)/sites/[siteId]/page";
-import { DEFAULT_METRICS, startFakeUmami, type FakeUmami } from "./fake-umami";
+import { DEFAULT_EVENT_VALUES, DEFAULT_METRICS, startFakeUmami, type FakeUmami } from "./fake-umami";
 
 const DOMAIN = "@web-dashboard-test.stellytics.invalid";
 const SLUG = "web-dashboard-test-";
@@ -97,6 +98,7 @@ beforeEach(() => {
   umami.requests.length = 0;
   umami.queries.length = 0;
   umami.metrics = { ...DEFAULT_METRICS };
+  umami.eventValues = { ...DEFAULT_EVENT_VALUES };
   umami.series = null;
   umami.down = false;
 });
@@ -151,6 +153,10 @@ describe("formatação", () => {
     expect(browserName("ios")).toBe("Safari (iOS)");
     expect(browserName("edge-chromium")).toBe("Edge");
     expect(browserName("some-new-browser")).toBe("Some new browser");
+    expect(walletName("xbull")).toBe("xBull");
+    expect(walletName("freighter")).toBe("Freighter");
+    expect(walletName("new-wallet")).toBe("new-wallet");
+    expect(walletName("")).toBe("Unknown");
   });
 });
 
@@ -167,6 +173,8 @@ describe("leitura do painel", () => {
         `${base}/stats?${range}`,
         `${base}/pageviews?${range}&unit=day&timezone=UTC`,
         ...["referrer", "country", "device", "browser"].map((t) => `${base}/metrics?${range}&type=${t}&limit=${TOP_LIMIT}`),
+        `${base}/metrics?${range}&type=event&limit=${EVENT_FETCH_LIMIT}`,
+        `${base}/event-data/values?${range}&eventName=wallet_selected&propertyName=wallet`,
       ].sort(),
     );
   });
@@ -204,6 +212,33 @@ describe("leitura do painel", () => {
         { name: "ios", visitors: 1 },
       ],
     });
+    expect(data!.events).toEqual([
+      { name: "swap_submitted", count: 5 },
+      { name: "wallet_selected", count: 3 },
+      { name: "wallet_disconnected", count: 1 },
+    ]);
+    expect(data!.wallets).toEqual({
+      selections: [
+        { name: "varial", count: 2 },
+        { name: "xbull", count: 1 },
+      ],
+      disconnects: 1,
+    });
+  });
+
+  it("events: shows only the top 10 but finds disconnections outside them (#50)", async () => {
+    const m = await createMember();
+    umami.metrics = {
+      ...DEFAULT_METRICS,
+      event: [
+        ...Array.from({ length: 12 }, (_, i) => ({ x: `event_${i}`, y: 100 - i })),
+        { x: "wallet_disconnected", y: 2 },
+      ],
+    };
+    const data = await getSiteDashboard(m.ctx, m.siteId, resolvePeriod("7d", NOW));
+    expect(data!.events).toHaveLength(TOP_LIMIT);
+    expect(data!.events[0]).toEqual({ name: "event_0", count: 100 });
+    expect(data!.wallets.disconnects).toBe(2);
   });
 
   it("país desconhecido (nulo no Umami) vira nome vazio", async () => {
@@ -240,6 +275,9 @@ describe("página do site", () => {
     expect(t).toMatch(/Countries Visitors Germany 2 United States 1/);
     expect(t).toMatch(/Devices Visitors Laptop 3/);
     expect(t).toMatch(/Browsers Visitors Chrome 2 Safari \(iOS\) 1/);
+    // Custom events and wallets (#50).
+    expect(t).toContain("Custom events Events swap_submitted 5 wallet_selected 3 wallet_disconnected 1");
+    expect(t).toContain("Wallet connections Selections Varial (Freighter) 2 xBull 1 Disconnections: 1");
     // Período ativo marcado, e os outros como links.
     const active = html.match(/<a [^>]*aria-current="page"[^>]*>([^<]+)<\/a>/g) ?? [];
     expect(active).toHaveLength(1);
@@ -270,9 +308,13 @@ describe("página do site", () => {
     const m = await createMember();
     sessionUser = { id: m.userId, role: "tenant" };
     umami.series = { pageviews: [], sessions: [] };
-    umami.metrics = { referrer: [], country: [], device: [], browser: [] };
+    umami.metrics = { referrer: [], country: [], device: [], browser: [], event: [] };
+    umami.eventValues = {};
     const t = text(await render(page(m.siteId)));
     expect(t).toContain("No data in this period.");
+    expect(t).toContain("No custom events in this period. Send them with stellytics.event().");
+    expect(t).toContain("No wallet selections in this period. Track them with stellytics.wallets().");
+    expect(t).toContain("Disconnections: 0");
     expect(t).not.toContain("NaN");
   });
 

@@ -1,0 +1,13 @@
+{
+  "name": "@stellytics/example-wallet-dapp",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node ../serve.mjs public"
+  },
+  "devDependencies": {
+    "@creit.tech/stellar-wallets-kit": "2.8.0",
+    "esbuild": "0.28.2"
+  }
+}

@@ -196,6 +196,29 @@ describe("start", () => {
       expect(all).not.toContain("Public Global");
     });
 
+    it("does not count the remembered wallet the kit reports on subscribe (v1.5.0)", async () => {
+      stop = start(script({ src: SRC, "data-site": SITE }));
+      await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
+      // Like kit 2.8.0: `on` calls the handler right away, with the current value.
+      const f = fakeKit();
+      const on = f.kit.on;
+      const kit = {
+        on: (type: string, handler: (e: unknown) => void) => {
+          const off = on(type, handler);
+          if (type === Types.WALLET_SELECTED) handler({ eventType: type, payload: { id: "freighter" } });
+          return off;
+        },
+      };
+      wallets()(kit, Types);
+      await vi.advanceTimersByTimeAsync(50);
+      expect(posts(fetchMock)).toHaveLength(1);
+
+      // A choice after subscribing counts as usual.
+      f.emit(Types.WALLET_SELECTED, { id: "albedo" });
+      await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(2));
+      expect(sent(fetchMock)[1]!.payload).toMatchObject({ name: "wallet_selected", data: { wallet: "albedo" } });
+    });
+
     it("ignora id ausente, inválido ou parecido com endereço", async () => {
       stop = start(script({ src: SRC, "data-site": SITE }));
       await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));

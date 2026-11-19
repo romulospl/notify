@@ -1,22 +1,23 @@
 # examples
 
-Integrações de referência, usadas também nos testes de ponta a ponta. Cada exemplo é um pacote próprio do workspace (`examples/<nome>`).
+Reference integrations, also used in the end-to-end tests. Each example is its own workspace package (`examples/<name>`).
 
-| Pasta | O que mostra |
+| Folder | What it shows |
 |---|---|
-| [`static-html/`](static-html/) | Site estático: cada página carregada é um page view |
-| [`spa/`](spa/) | SPA sem framework, com `history.pushState`: cada mudança de rota é um page view, sem recarregar |
-| [`nextjs-ssr/`](nextjs-ssr/) | Next.js 16 (App Router) com SSR: a tag sai no HTML do servidor, e a navegação pelo `<Link>` conta como page view |
-| [`api-backend/`](api-backend/) | Backend HTTP com OpenTelemetry e guia de dual-export (SDK e OTel Collector) para o coletor do stellytics (#35) |
-| [`e2e/`](e2e/) | Playwright: abre os três num Chromium e confere os page views no banco do Umami (#27) |
+| [`static-html/`](static-html/) | Static site: each loaded page is a page view |
+| [`spa/`](spa/) | Framework-less SPA with `history.pushState`: each route change is a page view, without reloading |
+| [`nextjs-ssr/`](nextjs-ssr/) | Next.js 16 (App Router) with SSR: the tag ships in the server HTML, and navigation through `<Link>` counts as a page view |
+| [`wallet-dapp/`](wallet-dapp/) | Testnet dApp with the real Stellar Wallets Kit: custom events (`stellytics.event`) and the wallet adapter line (`stellytics.wallets`), without sending an address (#50, ADR 0015) |
+| [`api-backend/`](api-backend/) | HTTP backend with OpenTelemetry and a dual-export guide (SDK and OTel Collector) for the stellytics collector (#35) |
+| [`e2e/`](e2e/) | Playwright: opens the web examples in Chromium and checks page views, custom events and wallets in the Umami database (#27, #50) |
 
-## Instalação do script (trechos para o guia de onboarding)
+## Installing the script (snippets for the onboarding guide)
 
-O script fica no gateway, com versão fixa no caminho e hash SRI. Troque `<gateway>` pelo endereço do gateway e `<website-id>` pelo ID do site mostrado no portal. Os hashes de cada versão estão em [`packages/tracker/published/sri.json`](../packages/tracker/published/sri.json).
+The script is served by the gateway, with a fixed version in the path and an SRI hash. Replace `<gateway>` with the gateway address and `<website-id>` with the site ID shown in the portal. The hashes of each version are in [`packages/tracker/published/sri.json`](../packages/tracker/published/sri.json).
 
-### HTML estático e SPA
+### Static HTML and SPA
 
-No `<head>` de cada página (numa SPA, só no `index.html`):
+In the `<head>` of every page (in an SPA, only in `index.html`):
 
 ```html
 <script
@@ -28,11 +29,11 @@ No `<head>` de cada página (numa SPA, só no `index.html`):
 ></script>
 ```
 
-Numa SPA não precisa de mais nada: o script conta as mudanças de rota feitas por `history.pushState`, `history.replaceState` e pelo voltar do navegador. Roteadores como React Router, Vue Router e o do SvelteKit usam essas APIs.
+An SPA needs nothing else: the script counts route changes made by `history.pushState`, `history.replaceState` and the browser's back button. Routers such as React Router, Vue Router and SvelteKit's use these APIs.
 
 ### Next.js (App Router)
 
-No `app/layout.tsx`, dentro do `<head>`:
+In `app/layout.tsx`, inside `<head>`:
 
 ```tsx
 <head>
@@ -46,38 +47,40 @@ No `app/layout.tsx`, dentro do `<head>`:
 </head>
 ```
 
-A tag vai no HTML que o servidor gera, e a navegação pelo `<Link>` conta como page view. Não use o `next/script` com `strategy="lazyOnload"`: ele carrega o script tarde, e o primeiro page view pode se perder.
+The tag goes into the HTML the server generates, and navigation through `<Link>` counts as a page view. Do not use `next/script` with `strategy="lazyOnload"`: it loads the script late, and the first page view may be lost.
 
-### Requisitos
+### Requirements
 
-- **HTTPS:** a prova de execução de JS usa `crypto.subtle`, que o navegador só oferece em HTTPS ou `localhost`. Numa página HTTP comum, o script não envia eventos.
-- **Sem cookie nem consentimento:** o script não grava cookie nem storage, e o IP é truncado no gateway.
-- **Para trocar de versão,** mude o caminho e o `integrity` no próprio HTML. O script nunca se atualiza sozinho.
+- **HTTPS:** the JS execution proof uses `crypto.subtle`, which the browser only provides on HTTPS or `localhost`. On a plain HTTP page, the script does not send events.
+- **No cookie or consent:** the script stores no cookie or storage, and the IP is truncated at the gateway.
+- **To change versions,** change the path and the `integrity` in your own HTML. The script never updates itself.
 
-## Rodar localmente
+## Running locally
 
-Com o Compose no ar (gateway na porta 3002) e um site cadastrado no portal (ou criado à mão no Umami e na `ingest_site`):
+With Compose running (gateway on port 3002) and a site registered in the portal (or created by hand in Umami and in `ingest_site`):
 
 ```bash
 cd examples/static-html && STELLYTICS_WEBSITE_ID=<id> PORT=4001 node ../serve.mjs .
 cd examples/spa && STELLYTICS_WEBSITE_ID=<id> PORT=4002 node ../serve.mjs . spa
 cd examples/nextjs-ssr && pnpm build && STELLYTICS_WEBSITE_ID=<id> pnpm start
+cd examples/wallet-dapp && pnpm build && STELLYTICS_WEBSITE_ID=<id> PORT=4004 pnpm start
 ```
 
-O `serve.mjs` troca o comentário `<!-- stellytics:script -->` das páginas pela tag do script. O site vem de `STELLYTICS_WEBSITE_ID`, o gateway de `STELLYTICS_GATEWAY_URL` (padrão `http://127.0.0.1:3002`) e a versão de `STELLYTICS_SCRIPT_VERSION` (padrão: a mais nova publicada). O exemplo Next.js lê as mesmas variáveis.
+`serve.mjs` replaces the `<!-- stellytics:script -->` comment in the pages with the script tag. The site comes from `STELLYTICS_WEBSITE_ID`, the gateway from `STELLYTICS_GATEWAY_URL` (default `http://127.0.0.1:3002`) and the version from `STELLYTICS_SCRIPT_VERSION` (default: the newest published one). `HOST` changes the listen address (default `127.0.0.1`; use `0.0.0.0` in a container). The Next.js example reads the same variables.
 
-## Ponta a ponta
+## End to end
 
 ```bash
 pnpm --filter @stellytics/examples-e2e exec playwright install chromium
 pnpm --filter @stellytics/examples-e2e e2e
 ```
 
-O `run.mjs` cria um website no Umami para cada exemplo e um tenant com os três sites no banco `stellytics`. Depois roda o Playwright, que sobe os exemplos nas portas 4001 a 4003, e no fim apaga tudo.
+`run.mjs` creates a website in Umami for each example and a tenant with the four sites in the `stellytics` database. Then it runs Playwright, which starts the examples on ports 4001 to 4004, and at the end deletes everything.
 
-Os testes conferem:
-- **HTML estático:** um page view por página;
-- **SPA:** quatro page views, incluindo o voltar do navegador, sem recarregar a página;
-- **Next.js:** a tag com `integrity` no HTML do servidor e a navegação pelo `<Link>`.
+The tests check:
+- **Static HTML:** one page view per page;
+- **SPA:** four page views, including the browser's back button, without reloading the page;
+- **Next.js:** the tag with `integrity` in the server HTML and navigation through `<Link>`;
+- **Wallet dApp:** a custom event with a property and, with a fake kit that behaves like Wallets Kit 2.8.0 (no wallet extension in CI), `wallet_selected` only for the user's choice (not for the remembered wallet), `wallet_disconnected` and no address stored.
 
-As URLs podem ser trocadas por `UMAMI_URL`, `STELLYTICS_DATABASE_URL`, `UMAMI_DATABASE_URL` e `STELLYTICS_GATEWAY_URL`. No CI, o teste roda no job `compose`.
+The URLs can be overridden with `UMAMI_URL`, `STELLYTICS_DATABASE_URL`, `UMAMI_DATABASE_URL` and `STELLYTICS_GATEWAY_URL`. In CI, the test runs in the `compose` job.

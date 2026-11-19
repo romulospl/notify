@@ -1,27 +1,27 @@
 # packages/tracker
 
-Script de rastreamento em TypeScript, empacotado com esbuild. Criado na [#22](https://github.com/romulospl/stellytics/issues/22).
+Tracking script in TypeScript, bundled with esbuild. Created in [#22](https://github.com/romulospl/stellytics/issues/22).
 
-- Publicado em caminho com versão (`/s/vX.Y.Z/n.js`), imutável depois de publicado e com hash SRI.
-- Envia um payload compatível com o `/api/send` do Umami, sempre pelo gateway (`services/ingest-web`), em `POST /e` na mesma origem do script.
-- Sem cookies, `localStorage`, `sessionStorage` ou identificador persistente.
-- Da query string só saem os parâmetros `utm_*`; o referenciador vai sem query string nem fragmento.
-- Em SPA, conta cada mudança de rota (`pushState`, `replaceState` e `popstate`).
-- Antes de enviar, pede um desafio em `GET /c` e resolve a prova de execução de JS com `crypto.subtle` (#25). Por isso só funciona em página HTTPS (ou `localhost`).
-- Nomes de arquivo e de endpoint não podem conter termos bloqueados por ad blockers (`umami`, `analytics`, `track`, `collect`). O check `check:adblock` confere isso contra EasyList, EasyPrivacy e as listas padrão do uBlock Origin; resultado, recomendação de host e roteiro manual em [`docs/ad-blockers.md`](docs/ad-blockers.md).
-- Evento customizado (v1.2.0, #50): `window.stellytics.event(nome, propriedades?)`. Nome de 1 a 50 caracteres `[A-Za-z0-9_.:-]`; até 10 propriedades com valor string (até 100 bytes), número ou booleano. Fora disso o evento é ignorado em silêncio. **Nunca** mande endereço de carteira, hash de transação, valor ou dado pessoal.
+- Published at a versioned path (`/s/vX.Y.Z/n.js`), immutable once published and with an SRI hash.
+- Sends a payload compatible with Umami's `/api/send`, always through the gateway (`services/ingest-web`), at `POST /e` on the same origin as the script.
+- No cookies, `localStorage`, `sessionStorage` or persistent identifier.
+- From the query string only the `utm_*` parameters are sent; the referrer goes without query string or fragment.
+- In an SPA, it counts every route change (`pushState`, `replaceState` and `popstate`).
+- Before sending, it requests a challenge at `GET /c` and solves the JS execution proof with `crypto.subtle` (#25). That is why it only works on HTTPS pages (or `localhost`).
+- File and endpoint names must not contain terms blocked by ad blockers (`umami`, `analytics`, `track`, `collect`). The `check:adblock` check verifies this against EasyList, EasyPrivacy and the default uBlock Origin lists; results, host recommendation and manual checklist in [`docs/ad-blockers.md`](docs/ad-blockers.md).
+- Custom event (v1.2.0, #50): `window.stellytics.event(name, properties?)`. Name of 1 to 50 characters `[A-Za-z0-9_.:-]`; up to 10 properties with a string value (up to 100 bytes), number or boolean. Anything outside that is silently ignored. **Never** send a wallet address, transaction hash, amount or personal data.
 
 ```js
 window.stellytics?.event("wallet_connected", { wallet: "freighter" });
 ```
 
-- Stellar Wallets Kit (v1.4.0, **opt-in**, #50): `window.stellytics.wallets(kit, KitEventType)`. **Não é automático**: o tenant precisa chamar uma vez, passando o kit e o enum, porque o script não alcança o módulo do kit sozinho ([ADR 0010](../../docs/adr/0010-adaptador-opt-in-do-wallets-kit.md)). Assina só `WALLET_SELECTED` (`wallet_selected` com `{ wallet: id }`) e `DISCONNECT` (`wallet_disconnected`); nunca `STATE_UPDATED`, endereço, chave pública, `networkPassphrase`, hash ou valor. Idempotente por kit, devolve a função que cancela e nunca lança.
+- Stellar Wallets Kit (v1.5.0, **opt-in**, #50): `window.stellytics.wallets(kit, KitEventType)`. **It is not automatic**: the tenant must call it once, passing the kit and the enum, because the script cannot reach the kit's module on its own ([ADR 0010](../../docs/adr/0010-adaptador-opt-in-do-wallets-kit.md)). It subscribes only to `WALLET_SELECTED` (`wallet_selected` with `{ wallet: id }`) and `DISCONNECT` (`wallet_disconnected`); never `STATE_UPDATED`, address, public key, `networkPassphrase`, hash or amount. Idempotent per kit, returns the unsubscribe function and never throws. Since v1.5.0 it ignores the notification the kit fires inside its own `on` with the wallet remembered in the browser: only user choices become `wallet_selected` ([ADR 0015](../../docs/adr/0015-optional-rfp-features.md)).
 
 ```js
 window.stellytics?.wallets(StellarWalletsKit, KitEventType);
 ```
 
-## Instalação no site do tenant
+## Installing on the tenant's site
 
 ```html
 <script
@@ -33,21 +33,21 @@ window.stellytics?.wallets(StellarWalletsKit, KitEventType);
 ></script>
 ```
 
-O hash de cada versão está em [`published/sri.json`](published/sri.json). O script nunca se atualiza sozinho: para mudar de versão, o tenant troca o caminho e o `integrity` no próprio HTML.
+The hash of each version is in [`published/sri.json`](published/sri.json). The script never updates itself: to change versions, the tenant changes the path and the `integrity` in their own HTML.
 
-## Desenvolvimento
+## Development
 
 ```bash
 pnpm --filter @stellytics/tracker test       # vitest (happy-dom)
-pnpm --filter @stellytics/tracker build      # gera dist/n.js
-pnpm --filter @stellytics/tracker release    # publica a versão do package.json em published/
-pnpm --filter @stellytics/tracker check:adblock  # testa script e endpoints contra as listas de ad blockers
+pnpm --filter @stellytics/tracker build      # builds dist/n.js
+pnpm --filter @stellytics/tracker release    # publishes the package.json version to published/
+pnpm --filter @stellytics/tracker check:adblock  # tests script and endpoints against the ad blocker lists
 ```
 
-Para publicar uma versão nova:
+To publish a new version:
 
-1. Mude o código.
-2. Suba a `version` no `package.json` (semver).
-3. Rode o `release` e commite `published/vX.Y.Z/n.js` e `published/sri.json`.
+1. Change the code.
+2. Bump the `version` in `package.json` (semver).
+3. Run `release` and commit `published/vX.Y.Z/n.js` and `published/sri.json`.
 
-Versões antigas nunca são apagadas nem alteradas. A v1.0.0 não manda a prova de execução de JS, então o gateway descarta os eventos dela desde a #25: use a v1.1.0 ou mais nova. O teste `test/published.test.ts` confere os hashes e falha se o código atual não for o da versão do `package.json`.
+Old versions are never deleted or changed. v1.0.0 does not send the JS execution proof, so the gateway has dropped its events since #25: use v1.1.0 or newer. The `test/published.test.ts` test checks the hashes and fails if the current code is not that of the `package.json` version.

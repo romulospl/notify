@@ -249,10 +249,18 @@ export function start(script: HTMLScriptElement | null): () => void {
         });
         return typeof off === "function" ? (off as () => void) : noop;
       };
+      // The kit (checked in 2.8.0) fires WALLET_SELECTED inside `on` itself,
+      // with the wallet it remembers in the browser. That is not a user choice:
+      // without this filter, every visit from someone who already connected
+      // would count as a selection (#50, v1.5.0). Only notices after
+      // subscribing are sent.
+      let subscribing = true;
       const offSelected = subscribe(selected, (event) => {
+        if (subscribing) return;
         const id = walletId(event);
         if (id) api.event("wallet_selected", { wallet: id });
       });
+      subscribing = false;
       let offDisconnect = noop;
       try {
         offDisconnect = subscribe(disconnect, () => api.event("wallet_disconnected"));
