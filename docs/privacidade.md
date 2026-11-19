@@ -97,6 +97,7 @@ O portal envia por SMTP (`apps/portal/src/lib/mail.ts`, variável `SMTP_URL`) s�
 | Conta, sessões, sites, chaves | Apagadas na exclusão da própria conta (`/settings`) ou no apagamento de projeto removido pelo operador (#154) | `src/lib/data/erasure.ts` |
 | `audit_log` | Para sempre, **anonimizado** na exclusão da conta: `actor_user_id` vira `[apagado]`, única mudança que o gatilho aceita (migração `0009_erasure.sql`) | esquema |
 | Backups | Os 7 backups base mais recentes mais WAL contínuo (ADR 0004). Dados apagados continuam nos backups até saírem da janela | ADR 0004 |
+| Backups da EC2 (caminho AWS, ADR 0015, não aplicado) | Pontos diários do AWS Backup por `RetentionDays` (padrão 30, máximo 35) mais dumps locais por `KEEP_DAYS` (padrão 7), cifrados com chave KMS própria. Dados apagados continuam neles até saírem da janela. Região e residência na UE não verificadas | `infra/aws/` |
 
 O serviço de consolidação (`services/rollup`) e o coletor estão no `infra/compose/prod.yaml` desde 16/11/2026 (ADR 0012). A retenção de API descrita acima está implementada e testada, mas nenhuma produção real foi aplicada ainda. O vhost Caddy não configura access log e registra apenas erros críticos; assim, os cabeçalhos, inclusive a chave de ingestão (`Authorization`), não são escritos pelo proxy.
 
@@ -124,7 +125,7 @@ A issue pede a justificativa para não haver fluxo de apagamento por "nenhum dad
 
 **Limites conhecidos dos fluxos:**
 
-- **Backups:** dados apagados continuam nos backups até saírem da janela (ADR 0004). A restauração volta o que estava na hora alvo; não há "apagar também nos backups".
+- **Backups:** dados apagados continuam nos backups até saírem da janela (ADR 0004; no caminho AWS, até 30 dias mais 7 de dumps locais, `infra/aws/README.md`). A restauração volta o que estava na hora alvo; não há "apagar também nos backups".
 - **Concorrência:** os sites saem do Umami antes do banco; se a parte do banco falhar, repetir a operação completa (o DELETE no Umami trata 404 como sucesso). Eventos que chegarem entre o DELETE do site e a conclusão são apagados pelo Umami junto com o site.
 - **Projetos com mais de um membro:** hoje não há convites e cada usuário pertence a um projeto único; a exclusão da conta do dono apaga o projeto dele. Se convites forem implementados, a regra precisa de revisão.
 

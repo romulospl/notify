@@ -146,7 +146,7 @@ Por que duas linguagens: TypeScript para tudo que tem tela e para o script do na
 
 ## Infraestrutura
 
-- **Onde roda:** uma VM na Hetzner em Nuremberg (Alemanha), com os dados num volume separado e backup contínuo e cifrado no Object Storage da Hetzner, também na Alemanha ([ADR 0004](adr/0004-hospedagem-e-backup.md), [`deploy.md`](deploy.md)).
+- **Onde roda:** uma VM na Hetzner em Nuremberg (Alemanha), com os dados num volume separado e backup contínuo e cifrado no Object Storage da Hetzner, também na Alemanha ([ADR 0004](adr/0004-hospedagem-e-backup.md), [`deploy.md`](deploy.md)). Alternativa proposta: a produção informada roda numa instância EC2 com Docker, com recuperação de host e backup diário em `infra/aws/` ([ADR 0015](adr/0015-producao-em-ec2.md)), ainda não aplicada.
 - **Como é criada:** OpenTofu cria VM, firewall e bucket; Ansible instala Docker e sobe toda a pilha, incluindo Caddy, com Docker Compose. Caddy recebe 80 e 443; a administração é por túnel SSH.
 - **Quem vigia:** uma segunda VM, em outro data center (Falkenstein), testa de fora o portal e o gateway a cada 15 segundos e manda e-mail se algo cair ([ADR 0005](adr/0005-monitoramento-externo.md)).
 - **Supply chain:** imagens publicadas por release, com SBOM e assinatura (cosign); dependências novas só depois de 14 dias.

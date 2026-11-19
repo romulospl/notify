@@ -1,17 +1,17 @@
-# Processo de suporte
+# Support process
 
-Referência: [issue #52](https://github.com/romulospl/stellytics/issues/52). Dione e Rômulo, criadores do repositório, são responsáveis pelo suporte. O prazo assumido para atendimento e resolução é de até **10 dias úteis**. A primeira resposta em 5 dias úteis é uma meta de acompanhamento; o horário de atendimento ainda precisa ser definido.
+Reference: [issue #52](https://github.com/romulospl/stellytics/issues/52). Dione and Rômulo, the repository's creators, are responsible for support. The commitment is to resolve requests within **10 business days**. A first response within 5 business days is a tracked target; support hours are still to be defined.
 
-## Entrada e triagem
+## Intake and triage
 
-- Para dúvidas e falhas sem informação sensível, usar as [issues do projeto](https://github.com/romulospl/stellytics/issues), com os modelos existentes. Não publicar credenciais, dados pessoais nem detalhes de vulnerabilidades.
-- Vulnerabilidades seguem os prazos próprios e o canal privado descritos em [SECURITY.md](../SECURITY.md), não este fluxo.
-- Na triagem, registrar link, solicitante, data e hora de abertura em UTC, responsável, prioridade, descrição, próximo passo e prazo. Reconhecer o pedido e pedir informações ausentes sem divulgar dados sensíveis.
+- For questions and failures without sensitive information, use the [project issues](https://github.com/romulospl/stellytics/issues) with the existing templates. Do not post credentials, personal data or vulnerability details.
+- Vulnerabilities follow their own deadlines and the private channel in [SECURITY.md](../SECURITY.md), not this flow.
+- At triage, record the link, requester, opening date and time in UTC, owner, priority, description, next step and deadline. Acknowledge the request and ask for missing information without disclosing sensitive data.
 
-## Medição proposta
+## Proposed measurement
 
-Primeira resposta é uma resposta humana que reconhece o pedido e informa o próximo passo; uma mensagem automática não conta. Resolução é a confirmação da correção ou uma resposta fundamentada que conclui o pedido, comunicada ao solicitante. Fechar uma issue sem comunicar o resultado não conta como resolução.
+A first response is a human reply that acknowledges the request and states the next step; an automatic message does not count. Resolution is the confirmation of a fix, or a reasoned answer that concludes the request, communicated to the requester. Closing an issue without communicating the outcome does not count as resolution.
 
-Os relógios começam no recebimento. Para contagem reproduzível, considerar o primeiro dia útil completo após o recebimento como dia 1. Usar o fuso `America/Los_Angeles`, inclusive suas mudanças de horário de verão, e excluir sábados, domingos e feriados federais dos Estados Unidos observados na data correspondente. Registrar o início e fim de qualquer espera por informações do solicitante ou por terceiro. Não descontar essas esperas dos indicadores até que uma regra de pausa seja aprovada e publicada. Reaberturas mantêm o histórico e recebem novo acompanhamento; não apagam o tempo da resolução anterior.
+Clocks start at receipt. Business days use the `America/Los_Angeles` time zone, including daylight saving changes, and exclude Saturdays, Sundays and observed US federal holidays. Day 1 is the first full business day after receipt: a request received at 23:59 on Friday (or at 09:00 on Friday) has Monday as day 1, so the 5-day first-response target ends at the close of the following Friday, and the 10-day deadline at the close of the Friday after that (without holidays). Record the start and end of any wait for information from the requester or a third party. Do not discount those waits until a pause rule is approved and published. Reopened requests keep their history and are tracked again; they do not erase the time of the previous resolution.
 
-Revisar a fila em cada dia de atendimento, identificar prazos em risco e registrar bloqueios e comunicação. No relatório mensal, informar quantidade de chamados recebidos e resolvidos, tempos por chamado ou distribuição, metas cumpridas e pendências. Não publicar informação privada. O modelo de relatório está em [relatorios/modelo-sla.md](relatorios/modelo-sla.md).
+Review the queue on every support day, flag deadlines at risk and record blockers and communication. In the monthly report, give the number of requests received and resolved, times per request or their distribution, targets met and pending requests. Do not publish private information. The report template is in [relatorios/modelo-sla.md](relatorios/modelo-sla.md).

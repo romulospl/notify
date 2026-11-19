@@ -1,47 +1,47 @@
-# Modelo de relatório mensal de operação
+# Monthly operations report template
 
-Copie para um arquivo ou issue por mês. Substitua campos entre colchetes; use **não medido** para dados ausentes, nunca zero. Não publique dados pessoais, segredos ou detalhes de vulnerabilidades ainda privadas.
+Copy to a file or issue each month. Replace the bracketed fields; use **not measured** for missing data, never zero. Do not publish personal data, secrets or details of vulnerabilities that are still private.
 
-- Período: [início inclusivo, fim exclusivo, UTC]
-- Responsável e data: [nome, data]
-- Fonte, ambiente e versão da configuração: [monitor, URLs ou identificadores sem segredos, versão]
-- Cobertura e lacunas de coleta: [por componente; intervalos sem dados são desconhecidos]
+- Period: [inclusive start, exclusive end, UTC]
+- Owner and date: [name, date]
+- Source, environment and configuration version: [monitor, URLs or identifiers without secrets, version]
+- Collection coverage and gaps: [per component; intervals without data are unknown]
 
-| Componente | Sucessos / amostras | Disponibilidade observada | Tempo indisponível estimado | Tempo desconhecido | Exclusões e evidência |
+| Component | Successes / samples | Observed availability | Estimated downtime | Unknown time | Exclusions and evidence |
 |---|---|---|---|---|---|
-| Ingestão web | | | | | |
-| Ingestão API | | | | | |
-| Painéis | | | | | |
+| Web ingestion | | | | | |
+| API ingestion | | | | | |
+| Dashboards | | | | | |
 
-Registre os horários e motivos das exclusões; sem decisão aprovada, apresente também o valor bruto. A fração de amostras não mede precisamente a duração de cada queda: informe intervalo de sondagem, períodos desconhecidos e método de cálculo. Não extrapole lacunas como disponibilidade ou indisponibilidade.
+Record the times and reasons of exclusions; without an approved decision, also report the raw value. The fraction of samples does not measure the length of each outage precisely: state the probe interval, unknown periods and calculation method. Do not extrapolate gaps as availability or unavailability.
 
-### Consulta ao Prometheus
+### Prometheus query
 
-No Prometheus do monitor, avalie no instante UTC de início do mês seguinte, usando a duração do mês em dias (`28d`, `29d`, `30d` ou `31d`) e cada valor de `component`: `ingest-web`, `ingest-api` e `portal`. Consulte tanto a proporção como a contagem:
+In the monitor's Prometheus, evaluate at the UTC instant the following month starts, using the month's length in days (`28d`, `29d`, `30d` or `31d`) and each `component` value: `ingest-web`, `ingest-api` and `portal`. Query both the ratio and the count:
 
 ```promql
 avg_over_time(probe_success{job="endpoints",component="ingest-web"}[31d])
 count_over_time(probe_success{job="endpoints",component="ingest-web"}[31d])
 ```
 
-Substitua `31d` e o componente conforme o período. Os intervalos PromQL são abertos no início e fechados no fim; observe amostras na fronteira do mês e registre a convenção usada. Identifique separadamente cada série se houver troca de alvo; não some médias sem ponderar suas contagens nem conte alvos sobrepostos duas vezes. Com a configuração de 15 segundos, compare a contagem com o número esperado de sondagens e investigue lacunas, mudanças de configuração e duplicações. Uma série ausente não é 100% nem 0%. A retenção de 45 dias precisa estar implantada antes da coleta; salve consultas, horário de avaliação e resultados como evidência. Estas consultas ainda precisam de validação no monitor real.
+Replace `31d` and the component for the period. PromQL ranges are open at the start and closed at the end; watch samples at the month boundary and record the convention used. Identify each series separately if the target changed; do not add averages without weighting by their counts, and do not count overlapping targets twice. With the 15-second interval, compare the count with the expected number of probes and investigate gaps, configuration changes and duplicates. A missing series is neither 100% nor 0%. The 45-day retention must be deployed before collection; save queries, evaluation time and results as evidence. These queries still need validation on the real monitor.
 
-## Incidentes e segurança
+## Incidents and security
 
-| Incidente ou referência pública | Início e fim UTC | Impacto | Causa, correção e acompanhamento |
+| Incident or public reference | Start and end UTC | Impact | Cause, fix and follow-up |
 |---|---|---|---|
 | | | | |
 
-| Vulnerabilidade ou referência segura | Severidade | Recebimento ou descoberta | Correção publicada | Prazo decorrido | Situação |
+| Vulnerability or safe reference | Severity | Received or discovered | Fix published | Elapsed time | Status |
 |---|---|---|---|---|---|
-| | | | | |
+| | | | | | |
 
-## Suporte
+## Support
 
-Chamados recebidos: [ ]; resolvidos: [ ]; pendentes: [ ]. Informe tempos de primeira resposta e resolução, quantos cumpriram as metas de 5 e 10 dias úteis, respectivamente, e os bloqueios relevantes. Identifique chamados sem resposta ou sem resolução como pendentes, não como cumprimento. A metodologia e o calendário usados devem estar explícitos.
+Requests received: [ ]; resolved: [ ]; pending: [ ]. Give first-response and resolution times, how many met the 5 and 10 business-day targets respectively, and relevant blockers. Mark requests without response or resolution as pending, not as met. State the method and calendar used.
 
-## Ações e decisões
+## Actions and decisions
 
-| Ação | Responsável | Prazo | Referência |
+| Action | Owner | Deadline | Reference |
 |---|---|---|---|
 | | | | |

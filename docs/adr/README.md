@@ -20,6 +20,7 @@ Registro das decisões de arquitetura do projeto. Cada ADR descreve o contexto, 
 | [0012](0012-ingestao-de-api-pelo-caddy.md) | Ingestão de API em produção pelo Caddy, na porta 443 | Retomado por 0014 | 16/11/2026 |
 | [0013](0013-nginx-no-host.md) | Nginx no host como proxy da produção | Substituído por 0014 | 18/11/2026 |
 | [0014](0014-infra-em-docker-compose.md) | Infraestrutura de produção em Docker Compose | Aceito | 18/11/2026 |
+| [0015](0015-producao-em-ec2.md) | Production on an existing EC2 instance | Proposed | 19/11/2026 |
 
 ## Como escrever um novo ADR
 
