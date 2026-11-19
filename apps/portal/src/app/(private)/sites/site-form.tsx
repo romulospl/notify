@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
-import { inputClass } from "@/components/auth-card";
+import { inputClass } from "@/components/ui/field";
 import { createSiteAction, type SiteActionState } from "./actions";
 
 const initial: SiteActionState = { status: "idle" };
@@ -30,12 +30,12 @@ export function SiteForm() {
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+        className="rounded-control bg-accent px-3 py-2 text-sm font-medium text-accent-fg hover:brightness-110 disabled:opacity-60"
       >
         {pending ? "Adding…" : "Add website"}
       </button>
       {state.status === "error" && (
-        <p role="alert" className="w-full text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="w-full text-sm text-bad">
           {state.message}
         </p>
       )}

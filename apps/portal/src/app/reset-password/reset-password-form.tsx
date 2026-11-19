@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { buttonClass, inputClass, linkClass } from "@/components/auth-card";
+import { buttonClass, linkClass } from "@/components/ui/button";
+import { errorClass, hintClass, inputClass } from "@/components/ui/field";
 import { authClient } from "@/lib/auth-client";
 
 export function ResetPasswordForm({ token }: { token: string }) {
@@ -59,7 +60,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
           autoComplete="new-password"
           className={inputClass}
         />
-        <span className="mt-1 block text-xs text-zinc-500">At least 12 characters.</span>
+        <span className={hintClass}>At least 12 characters.</span>
       </label>
       <label className="block">
         <span className="text-sm font-medium">Confirm new password</span>
@@ -73,7 +74,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
         />
       </label>
       {error && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className={errorClass}>
           {error}
         </p>
       )}

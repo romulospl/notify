@@ -20,8 +20,14 @@ import {
   relativeDelta,
   walletName,
 } from "@/lib/format";
-import { DeltaText } from "@/components/delta-text";
-import { PeriodPicker } from "@/components/period-picker";
+import { DeltaBadge } from "@/components/metrics/delta-badge";
+import { MetricCard } from "@/components/metrics/metric-card";
+import { PeriodPicker } from "@/components/metrics/period-picker";
+import { RankedList, type RankedRow } from "@/components/metrics/ranked-list";
+import { cardClass } from "@/components/ui/card";
+import { ChartFrame } from "@/components/charts/chart-frame";
+import { DonutChart } from "@/components/charts/donut-chart";
+import { Sparkline } from "@/components/charts/sparkline";
 import { parsePeriodKey, resolvePeriod } from "@/lib/period";
 import { type CountedItem, getSiteDashboard, type RankedItem, type SiteDashboard, UmamiError } from "@/lib/umami/stats";
 import { trackerSnippets } from "@/lib/tracker-snippet";
@@ -30,7 +36,7 @@ import { PageviewsChart } from "./pageviews-chart";
 
 export const metadata: Metadata = { title: "Website analytics" };
 
-const card = "rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900";
+const card = cardClass;
 
 // Tenant web dashboard (#28): the 7 minimum metrics of a site in the chosen
 // period, plus custom events and wallets (#50). Another tenant's (or an
@@ -50,11 +56,11 @@ export default async function SitePage({
 
   const header = (
     <>
-      <Link href="/sites" className="text-sm text-zinc-500 hover:underline">
+      <Link href="/sites" className="text-sm text-muted hover:underline">
         ← Websites
       </Link>
-      <h1 className="mt-2 text-2xl font-semibold">{site.name}</h1>
-      <p className="mt-1 text-sm text-zinc-500">{site.domain}</p>
+      <h1 className="mt-2 text-2xl font-semibold tracking-tight">{site.name}</h1>
+      <p className="mt-1 text-sm text-muted">{site.domain}</p>
     </>
   );
 
@@ -63,8 +69,8 @@ export default async function SitePage({
     return (
       <section>
         {header}
-        <p className="mt-6 text-zinc-500">This project was removed by the SCF operators.</p>
-        {project.statusReason && <p className="mt-2 text-sm text-zinc-500">Reason: {project.statusReason}</p>}
+        <p className="mt-6 text-muted">This project was removed by the SCF operators.</p>
+        {project.statusReason && <p className="mt-2 text-sm text-muted">Reason: {project.statusReason}</p>}
       </section>
     );
   }
@@ -73,7 +79,7 @@ export default async function SitePage({
   // page views, collapsed once data arrives.
   const install = (open: boolean) => (
     <details id="install" open={open} className={`mt-6 ${card}`}>
-      <summary className="cursor-pointer font-medium">Install the tracking script</summary>
+      <summary className="cursor-pointer font-semibold">Install the tracking script</summary>
       <InstallScript snippets={trackerSnippets(site.umamiWebsiteId)} domain={site.domain} />
     </details>
   );
@@ -90,7 +96,7 @@ export default async function SitePage({
       <section>
         {header}
         <PeriodPicker current={period.key} href={(key) => `/sites/${site.id}?period=${key}`} />
-        <p role="alert" className="mt-6 text-zinc-500">
+        <p role="alert" className="mt-6 text-muted">
           Web analytics is unavailable right now. Try again in a few minutes.
         </p>
         {install(true)}
@@ -122,12 +128,14 @@ export default async function SitePage({
           value={formatCount(totals.pageviews)}
           delta={relativeDelta(totals.pageviews, previous.pageviews)}
           vs={vsLabel}
+          trend={points.map((p) => p.pageviews)}
         />
         <StatTile
           label="Unique visitors"
           value={formatCount(totals.visitors)}
           delta={relativeDelta(totals.visitors, previous.visitors)}
           vs={vsLabel}
+          trend={points.map((p) => p.visitors)}
         />
         <StatTile
           label="Average visit duration"
@@ -144,27 +152,20 @@ export default async function SitePage({
         />
       </div>
 
-      <div className={`mt-4 ${card}`}>
-        <h2 className="font-medium">Page views</h2>
-        <p className="text-sm text-zinc-500">
-          {period.label}, per {period.unit} (UTC), including the current {period.unit}
-        </p>
-        {empty && <p className="mt-2 text-sm text-zinc-500">No page views in this period yet.</p>}
-        <div className="mt-4">
-          <PageviewsChart points={points} />
-        </div>
-        <details className="mt-4 text-sm">
-          <summary className="cursor-pointer text-zinc-500">Show as table</summary>
-          <div className="mt-2 max-h-72 overflow-y-auto">
+      <ChartFrame
+        className="mt-4"
+        title="Page views"
+        subtitle={`${period.label}, per ${period.unit} (UTC), including the current ${period.unit}`}
+        table={
             <table className="w-full text-left tabular-nums">
-              <thead className="text-zinc-500">
+              <thead className="text-muted">
                 <tr>
                   <th className="py-1 font-medium">{period.unit === "hour" ? "Hour" : period.unit === "day" ? "Day" : "Month"}</th>
                   <th className="py-1 text-right font-medium">Page views</th>
                   <th className="py-1 text-right font-medium">Visitors</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              <tbody className="divide-y divide-border">
                 {points.map((p) => (
                   <tr key={p.longLabel}>
                     <td className="py-1">{p.longLabel}</td>
@@ -174,15 +175,17 @@ export default async function SitePage({
                 ))}
               </tbody>
             </table>
-          </div>
-        </details>
-      </div>
+        }
+      >
+        {empty && <p className="mb-2 text-sm text-muted">No page views in this period yet.</p>}
+        <PageviewsChart points={points} />
+      </ChartFrame>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <RankedList title="Referrers" unit="Visitors" items={byVisitors(breakdowns.referrer)} name={referrerName} />
-        <RankedList title="Countries" unit="Visitors" items={byVisitors(breakdowns.country)} name={countryName} />
-        <RankedList title="Devices" unit="Visitors" items={byVisitors(breakdowns.device)} name={deviceName} />
-        <RankedList title="Browsers" unit="Visitors" items={byVisitors(breakdowns.browser)} name={browserName} />
+        <RankedList title="Referrers" unit="Visitors" rows={ranked(byVisitors(breakdowns.referrer), referrerName)} />
+        <RankedList title="Countries" unit="Visitors" rows={ranked(byVisitors(breakdowns.country), countryName)} />
+        <ShareCard title="Devices" unit="Visitors" rows={ranked(byVisitors(breakdowns.device), deviceName)} />
+        <ShareCard title="Browsers" unit="Visitors" rows={ranked(byVisitors(breakdowns.browser), browserName)} />
       </div>
 
       {/* Custom events and wallets (#50, ADR 0015). */}
@@ -190,15 +193,13 @@ export default async function SitePage({
         <RankedList
           title="Custom events"
           unit="Events"
-          items={byCount(events)}
-          name={(raw) => raw}
+          rows={ranked(byCount(events), (raw) => raw)}
           empty="No custom events in this period. Send them with stellytics.event()."
         />
         <RankedList
           title="Wallet connections"
           unit="Selections"
-          items={byCount(wallets.selections)}
-          name={walletName}
+          rows={ranked(byCount(wallets.selections), walletName)}
           empty="No wallet selections in this period. Track them with stellytics.wallets()."
           footer={`Disconnections: ${wallets.disconnects.toLocaleString("en")}`}
         />
@@ -213,27 +214,25 @@ function StatTile({
   delta,
   vs,
   upIsGood = true,
+  trend,
 }: {
   label: string;
   value: string;
   delta: Delta;
   vs: string;
   upIsGood?: boolean;
+  trend?: number[];
 }) {
   return (
-    <div className={card}>
-      <p className="text-sm text-zinc-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold">{value}</p>
-      <p className="mt-1 text-xs">
-        {delta ? (
-          <>
-            <DeltaText delta={delta} upIsGood={upIsGood} /> <span className="text-zinc-500">{vs}</span>
-          </>
-        ) : (
-          <span className="text-zinc-500">No data for the previous period</span>
-        )}
-      </p>
-    </div>
+    <MetricCard label={label} value={value} chart={trend && <Sparkline values={trend} />}>
+      {delta ? (
+        <>
+          <DeltaBadge delta={delta} upIsGood={upIsGood} /> <span className="text-muted">{vs}</span>
+        </>
+      ) : (
+        <span className="text-muted">No data for the previous period</span>
+      )}
+    </MetricCard>
   );
 }
 
@@ -242,48 +241,25 @@ type ListItem = { name: string; value: number };
 const byVisitors = (items: RankedItem[]): ListItem[] => items.map((i) => ({ name: i.name, value: i.visitors }));
 const byCount = (items: CountedItem[]): ListItem[] => items.map((i) => ({ name: i.name, value: i.count }));
 
-// Ranked list: name, bar and number per row, bars aligned. The bar uses the
-// chart's series color; the number is always visible.
-function RankedList({
-  title,
-  unit,
-  items,
-  name,
-  empty = "No data in this period.",
-  footer,
-}: {
-  title: string;
-  unit: string;
-  items: ListItem[];
-  name: (raw: string) => string;
-  empty?: string;
-  footer?: string;
-}) {
-  const max = Math.max(1, ...items.map((i) => i.value));
+function ranked(items: ListItem[], name: (raw: string) => string): RankedRow[] {
+  return items.map((item) => ({ key: item.name, name: name(item.name), value: item.value, display: item.value.toLocaleString("en") }));
+}
+
+function ShareCard({ title, unit, rows }: { title: string; unit: string; rows: RankedRow[] }) {
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
   return (
-    <div className={`${card} [--series:#2a78d6] dark:[--series:#3987e5]`}>
+    <div className={card}>
       <div className="flex items-baseline justify-between">
-        <h2 className="font-medium">{title}</h2>
-        <span className="text-xs text-zinc-500">{unit}</span>
+        <h2 className="font-semibold">{title}</h2>
+        <span className="text-xs text-muted">{unit}</span>
       </div>
-      {items.length === 0 ? (
-        <p className="mt-3 text-sm text-zinc-500">{empty}</p>
-      ) : (
-        <ol className="mt-3 space-y-2 text-sm">
-          {items.map((item) => (
-            <li key={item.name}>
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="truncate" title={name(item.name)}>
-                  {name(item.name)}
-                </span>
-                <span className="tabular-nums">{item.value.toLocaleString("en")}</span>
-              </div>
-              <div className="mt-1 h-1.5 rounded-r-[4px] bg-[var(--series)]" style={{ width: `${(item.value / max) * 100}%` }} />
-            </li>
-          ))}
-        </ol>
-      )}
-      {footer && <p className="mt-3 text-sm text-zinc-500">{footer}</p>}
+      <div className="mt-3">
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted">No data in this period.</p>
+        ) : (
+          <DonutChart items={rows.map((row) => ({ key: row.key, name: row.name, value: row.value, display: row.display }))} total={total} />
+        )}
+      </div>
     </div>
   );
 }

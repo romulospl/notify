@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AuthCard, linkClass } from "@/components/auth-card";
+import { AuthLayout } from "@/components/auth/auth-layout";
+import { linkClass } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Email confirmation" };
@@ -21,8 +22,8 @@ export default async function EmailVerifiedPage({
 
   const expired = error === "TOKEN_EXPIRED";
   return (
-    <AuthCard title={error ? "This link doesn't work" : "Email confirmed"}>
-      <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+    <AuthLayout title={error ? "This link doesn't work" : "Email confirmed"}>
+      <p className="mt-4 text-sm text-muted">
         {error
           ? expired
             ? "The confirmation link expired. Sign in with your email and password and we'll send a new one."
@@ -34,6 +35,6 @@ export default async function EmailVerifiedPage({
           Go to sign in
         </Link>
       </p>
-    </AuthCard>
+    </AuthLayout>
   );
 }

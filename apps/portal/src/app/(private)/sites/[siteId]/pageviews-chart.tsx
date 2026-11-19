@@ -1,4 +1,4 @@
-import { ColumnChart } from "@/components/column-chart";
+import { ColumnChart } from "@/components/charts/column-chart";
 
 // Visualizações por balde do período (#28), com os visitantes no tooltip.
 
@@ -11,6 +11,7 @@ export function PageviewsChart({ points }: { points: ChartPoint[] }) {
   return (
     <ColumnChart
       label="Page views per period"
+      currentIncomplete
       points={points.map((p) => ({
         label: p.label,
         longLabel: p.longLabel,

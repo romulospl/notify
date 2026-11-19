@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PeriodPicker } from "@/components/period-picker";
+import { PeriodPicker } from "@/components/metrics/period-picker";
 import { requireOperatorContext } from "@/lib/access";
 import { getApiOverview, type ProjectApiStats } from "@/lib/data/operator/api";
 import { formatCount, formatLatency, formatShare } from "@/lib/format";
 import { parsePeriodKey, type PeriodKey, resolvePeriod } from "@/lib/period";
+import { cardClass } from "@/components/ui/card";
+import { Icon } from "@/components/ui/icons";
 
 export const metadata: Metadata = { title: "API analytics across projects" };
 
@@ -75,18 +77,18 @@ export default async function OperatorApiPage({ searchParams }: { searchParams: 
 
   return (
     <section>
-      <Link href="/operator" className="text-sm text-zinc-500 hover:underline">
+      <Link href="/operator" className="text-sm text-muted hover:underline">
         ← SCF overview
       </Link>
-      <h1 className="mt-2 text-2xl font-semibold">API analytics across projects</h1>
-      <p className="mt-2 text-zinc-500">
+      <h1 className="mt-2 text-2xl font-semibold tracking-tight">API analytics across projects</h1>
+      <p className="mt-2 text-muted">
         Active projects only. Each project adds up its API services. Errors are the share of requests; latency is
         across all requests of the project. All times in UTC.
       </p>
 
       <PeriodPicker current={period.key} href={(key: PeriodKey) => href({ period: key })} />
 
-      <p className="mt-4 text-sm text-zinc-500">
+      <p className="mt-4 text-sm text-muted">
         {formatCount(total)} requests in total. {withTraffic} of {projects.length} active project
         {projects.length === 1 ? "" : "s"} sent API data in this period; {withServices} have at least one API service.
       </p>
@@ -102,22 +104,22 @@ export default async function OperatorApiPage({ searchParams }: { searchParams: 
             defaultValue={filter}
             maxLength={100}
             placeholder="Name or slug"
-            className="mt-1 block w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 outline-none focus:border-zinc-900 dark:border-zinc-700 dark:focus:border-zinc-100"
+            className="mt-1 block w-full rounded-control border border-border-strong bg-transparent px-3 py-2 outline-none focus:border-accent"
           />
         </label>
-        <button type="submit" className="rounded-md border border-zinc-300 px-3 py-2 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800">
+        <button type="submit" className="rounded-control border border-border-strong px-3 py-2 hover:bg-surface-2">
           Apply
         </button>
         {filter && (
-          <Link href={href({ q: "" })} className="py-2 text-zinc-500 hover:underline">
+          <Link href={href({ q: "" })} className="py-2 text-muted hover:underline">
             Clear
           </Link>
         )}
       </form>
 
-      <div className="mt-6 overflow-x-auto">
+      <div className={`${cardClass} mt-6 overflow-x-auto px-4 py-1`}>
         <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-border text-muted">
             <tr>
               {(Object.keys(SORTS) as SortKey[]).map((key) => {
                 const active = key === sort;
@@ -128,7 +130,7 @@ export default async function OperatorApiPage({ searchParams }: { searchParams: 
                     aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : undefined}
                     className={`py-2 font-medium ${key === "name" ? "" : "pl-3 text-right"}`}
                   >
-                    <Link href={href({ sort: key, dir: nextDir })} className={`hover:underline ${active ? "text-zinc-900 dark:text-zinc-100" : ""}`}>
+                    <Link href={href({ sort: key, dir: nextDir })} className={`hover:underline ${active ? "text-fg" : ""}`}>
                       {SORTS[key].label}
                       {active && <span aria-hidden>{dir === "asc" ? " ↑" : " ↓"}</span>}
                     </Link>
@@ -137,25 +139,25 @@ export default async function OperatorApiPage({ searchParams }: { searchParams: 
               })}
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <tbody className="divide-y divide-border">
             {visible.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-3 text-zinc-500">
+                <td colSpan={7} className="py-3 text-muted">
                   {filter ? "No active project matches this filter." : "No active projects yet."}
                 </td>
               </tr>
             )}
             {visible.map((p) => (
-              <tr key={p.tenantId} className="[--series:#2a78d6] dark:[--series:#3987e5]">
+              <tr key={p.tenantId}>
                 <td className="py-2 align-top">
                   <Link href={`/operator/tenants/${p.tenantId}`} className="font-medium hover:underline">
                     {p.name}
                   </Link>
-                  <span className="ml-2 font-mono text-xs text-zinc-500">{p.slug}</span>
+                  <span className="ml-2 font-mono text-xs text-muted">{p.slug}</span>
                 </td>
                 <td className="py-2 pl-3 text-right align-top tabular-nums">{p.services}</td>
                 {p.totals.requests === 0 ? (
-                  <td colSpan={5} className="py-2 pl-3 text-right align-top text-zinc-500">
+                  <td colSpan={5} className="py-2 pl-3 text-right align-top text-muted">
                     {p.services === 0 ? "No API services" : "No requests in this period"}
                   </td>
                 ) : (
@@ -164,12 +166,19 @@ export default async function OperatorApiPage({ searchParams }: { searchParams: 
                       {formatCount(p.totals.requests)}
                       <div className="mt-1 flex justify-end" aria-hidden>
                         <div
-                          className="h-1 rounded-l-[4px] bg-[var(--series)]"
+                          className="h-1 rounded-l-[4px] bg-series"
                           style={{ width: `${(p.totals.requests / maxRequests) * 6}rem` }}
                         />
                       </div>
                     </td>
-                    <td className="py-2 pl-3 text-right align-top tabular-nums">
+                    <td
+                      className={`py-2 pl-3 text-right align-top tabular-nums ${
+                        p.totals.requests > 0 && p.totals.serverErrors / p.totals.requests > 0.01 ? "font-semibold text-bad" : ""
+                      }`}
+                    >
+                      {p.totals.requests > 0 && p.totals.serverErrors / p.totals.requests > 0.01 && (
+                        <Icon name="alert" className="mr-1 inline size-3.5 align-[-2px]" />
+                      )}
                       {formatShare(p.totals.serverErrors, p.totals.requests)}
                     </td>
                     <td className="py-2 pl-3 text-right align-top tabular-nums">
@@ -184,7 +193,7 @@ export default async function OperatorApiPage({ searchParams }: { searchParams: 
           </tbody>
         </table>
       </div>
-      <p className="mt-3 text-xs text-zinc-500">
+      <p className="mt-3 text-xs text-muted">
         Sort by requests, ascending, to find projects that barely use their API services.
       </p>
     </section>

@@ -6,6 +6,8 @@ import { listApiServices } from "@/lib/data/api-services";
 import { listSites } from "@/lib/data/sites";
 import { getProject } from "@/lib/data/tenants";
 import { requireSession } from "@/lib/session";
+import { cardClass } from "@/components/ui/card";
+import { Icon } from "@/components/ui/icons";
 
 export const metadata: Metadata = { title: "Project" };
 
@@ -24,8 +26,8 @@ export default async function DashboardPage() {
   if (project.status === "pending") {
     return (
       <section>
-        <h1 className="text-2xl font-semibold">{project.name}</h1>
-        <p className="mt-2 text-zinc-500">
+        <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
+        <p className="mt-2 text-muted">
           Your project is awaiting approval by the SCF operators. Websites, API services and ingest keys become
           available once it is approved; sign in again later to check.
         </p>
@@ -36,9 +38,9 @@ export default async function DashboardPage() {
   if (project.status === "removed") {
     return (
       <section>
-        <h1 className="text-2xl font-semibold">{project.name}</h1>
-        <p className="mt-2 text-zinc-500">This project was removed by the SCF operators.</p>
-        {project.statusReason && <p className="mt-2 text-sm text-zinc-500">Reason: {project.statusReason}</p>}
+        <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
+        <p className="mt-2 text-muted">This project was removed by the SCF operators.</p>
+        {project.statusReason && <p className="mt-2 text-sm text-muted">Reason: {project.statusReason}</p>}
       </section>
     );
   }
@@ -47,40 +49,50 @@ export default async function DashboardPage() {
 
   return (
     <section>
-      <h1 className="text-2xl font-semibold">{project.name}</h1>
-      <p className="mt-2 text-zinc-500">Open a website or an API service to see its analytics.</p>
+      <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
+      <p className="mt-2 text-muted">Open a website or an API service to see its analytics.</p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">
         <Link
           href="/sites"
-          className="rounded-lg border border-zinc-200 p-4 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+          className={`${cardClass} flex items-start gap-3 hover:border-accent`}
         >
-          <p className="font-medium">Websites</p>
-          <p className="mt-1 text-sm text-zinc-500">
-            {sites.length === 0 ? "Add your first website." : `${sites.length} registered`}
-          </p>
+          <span className="grid size-9 shrink-0 place-items-center rounded-control bg-accent-soft text-accent-text">
+            <Icon name="globe" />
+          </span>
+          <div>
+            <p className="font-semibold">Websites</p>
+            <p className="mt-1 text-sm text-muted">
+              {sites.length === 0 ? "Add your first website." : `${sites.length} registered`}
+            </p>
+          </div>
         </Link>
         <Link
           href="/services"
-          className="rounded-lg border border-zinc-200 p-4 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+          className={`${cardClass} flex items-start gap-3 hover:border-accent`}
         >
-          <p className="font-medium">API services</p>
-          <p className="mt-1 text-sm text-zinc-500">
-            {services.length === 0 ? "Add a service to get an ingest key." : `${services.length} registered`}
-          </p>
+          <span className="grid size-9 shrink-0 place-items-center rounded-control bg-accent-soft text-accent-text">
+            <Icon name="server" />
+          </span>
+          <div>
+            <p className="font-semibold">API services</p>
+            <p className="mt-1 text-sm text-muted">
+              {services.length === 0 ? "Add a service to get an ingest key." : `${services.length} registered`}
+            </p>
+          </div>
         </Link>
       </div>
 
       {sites.length > 0 && (
         <>
           <h2 className="mt-8 text-lg font-semibold">Web analytics</h2>
-          <ul className="mt-2 divide-y divide-zinc-200 border-y border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+          <ul className={`${cardClass} mt-2 divide-y divide-border py-1`}>
             {sites.map((s) => (
               <li key={s.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-sm">
                 <Link href={`/sites/${s.id}`} className="font-medium hover:underline">
                   {s.name}
                 </Link>
-                <span className="text-zinc-500">{s.domain}</span>
+                <span className="text-muted">{s.domain}</span>
               </li>
             ))}
           </ul>
@@ -90,7 +102,7 @@ export default async function DashboardPage() {
       {services.length > 0 && (
         <>
           <h2 className="mt-8 text-lg font-semibold">API analytics</h2>
-          <ul className="mt-2 divide-y divide-zinc-200 border-y border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+          <ul className={`${cardClass} mt-2 divide-y divide-border py-1`}>
             {services.map((s) => (
               <li key={s.id} className="py-2 text-sm">
                 <Link href={`/services/${s.id}`} className="font-medium hover:underline">

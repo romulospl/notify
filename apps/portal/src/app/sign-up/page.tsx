@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AuthCard, linkClass } from "@/components/auth-card";
+import { AuthLayout } from "@/components/auth/auth-layout";
+import { linkClass } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
 import { SignUpForm } from "./sign-up-form";
 
@@ -13,14 +14,14 @@ export default async function SignUpPage() {
   if (session) redirect("/dashboard");
 
   return (
-    <AuthCard title="Create your stellytics account" subtitle="Web and API analytics for Stellar projects.">
+    <AuthLayout title="Create your stellytics account" subtitle="Web and API analytics for Stellar projects.">
       <SignUpForm />
-      <p className="mt-6 text-sm text-zinc-500">
+      <p className="mt-6 text-sm text-muted">
         Already have an account?{" "}
         <Link href="/sign-in" className={linkClass}>
           Sign in
         </Link>
       </p>
-    </AuthCard>
+    </AuthLayout>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { inputClass } from "@/components/auth-card";
+import { inputClass } from "@/components/ui/field";
 import { approveTenantAction, rejectTenantAction, type StatusActionState } from "./actions";
 
 const idle: StatusActionState = { status: "idle" };
@@ -17,7 +17,7 @@ export function ApprovalForm({ tenantId, reasonMax }: { tenantId: string; reason
   return (
     <div className="mt-3 grid max-w-3xl gap-6 text-sm sm:grid-cols-2">
       <form action={approve} className="space-y-3">
-        <p className="text-zinc-500">Approving lets the project add websites and services, and accepts ingestion.</p>
+        <p className="text-muted">Approving lets the project add websites and services, and accepts ingestion.</p>
         <label className="block">
           <span className="font-medium">Note (optional)</span>
           <textarea name="reason" maxLength={reasonMax} rows={2} className={inputClass} />
@@ -25,18 +25,18 @@ export function ApprovalForm({ tenantId, reasonMax }: { tenantId: string; reason
         <button
           type="submit"
           disabled={busy}
-          className="rounded-md bg-zinc-900 px-3 py-2 font-medium text-white hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+          className="rounded-control bg-accent px-3 py-2 font-medium text-accent-fg hover:brightness-110 disabled:opacity-60"
         >
           {approving ? "Saving…" : "Approve"}
         </button>
         {approveState.status === "error" && (
-          <p role="alert" className="text-red-600 dark:text-red-400">
+          <p role="alert" className="text-bad">
             {approveState.message}
           </p>
         )}
       </form>
       <form action={reject} className="space-y-3">
-        <p className="text-zinc-500">Rejecting shows the reason to the project. It can be reactivated later.</p>
+        <p className="text-muted">Rejecting shows the reason to the project. It can be reactivated later.</p>
         <label className="block">
           <span className="font-medium">Reason (shown to the project)</span>
           <textarea name="reason" required minLength={3} maxLength={reasonMax} rows={2} className={inputClass} />
@@ -44,12 +44,12 @@ export function ApprovalForm({ tenantId, reasonMax }: { tenantId: string; reason
         <button
           type="submit"
           disabled={busy}
-          className="rounded-md bg-red-700 px-3 py-2 font-medium text-white hover:bg-red-600 disabled:opacity-60"
+          className="rounded-control bg-bad px-3 py-2 font-medium text-white hover:brightness-110 disabled:opacity-60"
         >
           {rejecting ? "Saving…" : "Reject"}
         </button>
         {rejectState.status === "error" && (
-          <p role="alert" className="text-red-600 dark:text-red-400">
+          <p role="alert" className="text-bad">
             {rejectState.message}
           </p>
         )}

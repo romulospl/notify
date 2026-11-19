@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { inputClass } from "@/components/auth-card";
+import { inputClass } from "@/components/ui/field";
 import { purgeTenantAction, type StatusActionState } from "./actions";
 
 const idle: StatusActionState = { status: "idle" };
@@ -14,7 +14,7 @@ export function PurgeForm({ tenantId, slug }: { tenantId: string; slug: string }
 
   return (
     <form action={purge} className="mt-3 max-w-3xl space-y-3 text-sm">
-      <p className="text-zinc-500">
+      <p className="text-muted">
         Erases everything the project collected: websites leave Umami, API metrics and rows are deleted. The project
         history in the audit trail stays, without its data. This cannot be undone.
       </p>
@@ -27,12 +27,12 @@ export function PurgeForm({ tenantId, slug }: { tenantId: string; slug: string }
       <button
         type="submit"
         disabled={purging}
-        className="rounded-md bg-red-700 px-3 py-2 font-medium text-white hover:bg-red-600 disabled:opacity-60"
+        className="rounded-control bg-bad px-3 py-2 font-medium text-white hover:brightness-110 disabled:opacity-60"
       >
         {purging ? "Erasing…" : "Erase data"}
       </button>
       {state.status === "error" && (
-        <p role="alert" className="text-red-600 dark:text-red-400">
+        <p role="alert" className="text-bad">
           {state.message}
         </p>
       )}

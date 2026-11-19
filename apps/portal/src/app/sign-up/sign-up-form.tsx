@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { buttonClass, inputClass } from "@/components/auth-card";
+import { buttonClass } from "@/components/ui/button";
+import { errorClass, hintClass, inputClass } from "@/components/ui/field";
 import { authClient } from "@/lib/auth-client";
 
 // Cadastro (#60). A conta só entra depois de confirmar o e-mail. A resposta é
@@ -67,7 +68,7 @@ export function SignUpForm() {
           autoComplete="new-password"
           className={inputClass}
         />
-        <span className="mt-1 block text-xs text-zinc-500">At least 12 characters.</span>
+        <span className={hintClass}>At least 12 characters.</span>
       </label>
       <label className="block">
         <span className="text-sm font-medium">Confirm password</span>
@@ -81,7 +82,7 @@ export function SignUpForm() {
         />
       </label>
       {error && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className={errorClass}>
           {error}
         </p>
       )}

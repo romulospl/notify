@@ -4,6 +4,8 @@ import { requireOperatorContext } from "@/lib/access";
 import { listReadKeys, MAX_ACTIVE_READ_KEYS } from "@/lib/data/operator/api-keys";
 import { READ_API_LIMIT } from "@/lib/rate-limit";
 import { CreateReadKeyForm, RevokeReadKeyButton } from "./read-key-forms";
+import { cardClass } from "@/components/ui/card";
+import { StatusChip } from "@/components/ui/status-chip";
 
 export const metadata: Metadata = { title: "Read API keys" };
 
@@ -18,11 +20,11 @@ export default async function OperatorKeysPage() {
 
   return (
     <section>
-      <Link href="/operator" className="text-sm text-zinc-500 hover:underline">
+      <Link href="/operator" className="text-sm text-muted hover:underline">
         ← SCF overview
       </Link>
-      <h1 className="mt-2 text-2xl font-semibold">Read API keys</h1>
-      <p className="mt-2 text-zinc-500">
+      <h1 className="mt-2 text-2xl font-semibold tracking-tight">Read API keys</h1>
+      <p className="mt-2 text-muted">
         Keys give read-only access to the metrics of all active projects through <code>/api/v1/projects</code>,{" "}
         <code>/api/v1/web</code> and <code>/api/v1/api</code> (query <code>period</code>: 24h, 7d, 30d, 90d or 12m).
         Each key is limited to {READ_API_LIMIT} requests per minute. Every SCF operator sees and can revoke every key.
@@ -34,8 +36,9 @@ export default async function OperatorKeysPage() {
         <CreateReadKeyForm disabled={active >= MAX_ACTIVE_READ_KEYS} />
       </div>
 
-      <table className="mt-8 w-full text-left text-sm">
-        <thead className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800">
+      <div className={`${cardClass} mt-8 overflow-x-auto px-4 py-1`}>
+      <table className="w-full text-left text-sm">
+        <thead className="border-b border-border text-muted">
           <tr>
             <th className="py-2 font-medium">Name</th>
             <th className="py-2 font-medium">Key</th>
@@ -45,10 +48,10 @@ export default async function OperatorKeysPage() {
             <th className="py-2" />
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+        <tbody className="divide-y divide-border">
           {keys.length === 0 && (
             <tr>
-              <td colSpan={6} className="py-3 text-zinc-500">
+              <td colSpan={6} className="py-3 text-muted">
                 No keys yet.
               </td>
             </tr>
@@ -57,12 +60,18 @@ export default async function OperatorKeysPage() {
             <tr key={key.id}>
               <td className="py-2">
                 {key.name}
-                {key.createdByMe && <span className="ml-2 text-xs text-zinc-500">(yours)</span>}
+                {key.createdByMe && <span className="ml-2 text-xs text-muted">(yours)</span>}
               </td>
               <td className="py-2 font-mono">nrk_{key.prefix}_…</td>
               <td className="py-2">{dateFormat.format(key.createdAt)}</td>
               <td className="py-2">{key.lastUsedOn ?? "Never"}</td>
-              <td className="py-2">{key.revokedAt ? `Revoked ${dateFormat.format(key.revokedAt)}` : "Active"}</td>
+              <td className="py-2">
+                {key.revokedAt ? (
+                  <StatusChip tone="neutral">{`Revoked ${dateFormat.format(key.revokedAt)}`}</StatusChip>
+                ) : (
+                  <StatusChip tone="good">Active</StatusChip>
+                )}
+              </td>
               <td className="py-2 text-right">
                 {!key.revokedAt && <RevokeReadKeyButton keyId={key.id} name={key.name} />}
               </td>
@@ -70,6 +79,7 @@ export default async function OperatorKeysPage() {
           ))}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }

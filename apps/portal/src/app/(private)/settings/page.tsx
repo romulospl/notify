@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { requireSession } from "@/lib/session";
 import { DeleteAccountForm } from "./delete-account-form";
+import { cardClass } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "Account" };
 
@@ -12,24 +13,26 @@ export default async function AccountPage() {
 
   return (
     <section>
-      <h1 className="text-2xl font-semibold">Account</h1>
-      <dl className="mt-4 max-w-3xl divide-y divide-zinc-200 border-y border-zinc-200 text-sm dark:divide-zinc-800 dark:border-zinc-800">
+      <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
+      <dl className={`${cardClass} mt-4 max-w-3xl divide-y divide-border py-1 text-sm`}>
         <div className="flex justify-between py-2">
-          <dt className="text-zinc-500">Email</dt>
+          <dt className="text-muted">Email</dt>
           <dd>{user.email}</dd>
         </div>
         <div className="flex justify-between py-2">
-          <dt className="text-zinc-500">Name</dt>
+          <dt className="text-muted">Name</dt>
           <dd>{user.name}</dd>
         </div>
         <div className="flex justify-between py-2">
-          <dt className="text-zinc-500">Role</dt>
+          <dt className="text-muted">Role</dt>
           <dd className="capitalize">{user.role}</dd>
         </div>
       </dl>
 
-      <h2 className="mt-8 text-lg font-semibold text-red-700 dark:text-red-400">Delete account</h2>
-      <DeleteAccountForm email={user.email} />
+      <div className="mt-8 max-w-3xl rounded-card border border-bad/40 bg-surface p-4">
+        <h2 className="text-lg font-semibold text-bad">Delete account</h2>
+        <DeleteAccountForm email={user.email} />
+      </div>
     </section>
   );
 }

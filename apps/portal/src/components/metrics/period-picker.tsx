@@ -5,7 +5,7 @@ import { PERIODS, type PeriodKey } from "@/lib/period";
 // ele filtra. São links (GET), então funciona sem JavaScript.
 export function PeriodPicker({ current, href }: { current: PeriodKey; href: (key: PeriodKey) => string }) {
   return (
-    <nav aria-label="Period" className="mt-6 flex flex-wrap gap-2 text-sm">
+    <nav aria-label="Period" className="mt-6 inline-flex flex-wrap gap-0.5 rounded-control border border-border bg-surface p-0.5 text-sm">
       {(Object.keys(PERIODS) as PeriodKey[]).map((key) => (
         <Link
           key={key}
@@ -13,8 +13,8 @@ export function PeriodPicker({ current, href }: { current: PeriodKey; href: (key
           aria-current={key === current ? "page" : undefined}
           className={
             key === current
-              ? "rounded-md bg-zinc-900 px-3 py-1.5 font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-              : "rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              ? "rounded-[0.375rem] bg-accent px-3 py-1.5 font-medium text-accent-fg"
+              : "rounded-[0.375rem] px-3 py-1.5 text-muted hover:bg-surface-2 hover:text-fg"
           }
         >
           {PERIODS[key].label}

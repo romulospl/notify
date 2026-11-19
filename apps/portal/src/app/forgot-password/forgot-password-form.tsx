@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { buttonClass, inputClass } from "@/components/auth-card";
+import { buttonClass } from "@/components/ui/button";
+import { errorClass, inputClass } from "@/components/ui/field";
 import { authClient } from "@/lib/auth-client";
 
 // Pedido de redefinição de senha (#60). A resposta é a mesma com ou sem conta
@@ -43,7 +44,7 @@ export function ForgotPasswordForm() {
         <input name="email" type="email" required autoComplete="email" className={inputClass} />
       </label>
       {error && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className={errorClass}>
           {error}
         </p>
       )}

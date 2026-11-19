@@ -277,7 +277,7 @@ describe("página do site", () => {
     expect(t).toMatch(/Referrers Visitors github\.com 2 google\.com 1/);
     expect(t).toMatch(/Countries Visitors Germany 2 United States 1/);
     expect(t).toMatch(/Devices Visitors Laptop 3/);
-    expect(t).toMatch(/Browsers Visitors Chrome 2 Safari \(iOS\) 1/);
+    expect(t).toMatch(/Browsers Visitors Chrome 2 67% Safari \(iOS\) 1 33%/);
     // Custom events and wallets (#50).
     expect(t).toContain("Custom events Events swap_submitted 5 wallet_selected 3 wallet_disconnected 1");
     expect(t).toContain("Wallet connections Selections Varial (Freighter) 2 xBull 1 Disconnections: 1");

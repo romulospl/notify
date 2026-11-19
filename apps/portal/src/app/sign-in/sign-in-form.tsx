@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { buttonClass, inputClass } from "@/components/auth-card";
+import { buttonClass } from "@/components/ui/button";
+import { errorClass, inputClass } from "@/components/ui/field";
 import { authClient } from "@/lib/auth-client";
 
 export function SignInForm({ next }: { next: string }) {
@@ -55,7 +56,7 @@ export function SignInForm({ next }: { next: string }) {
         />
       </label>
       {error && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className={errorClass}>
           {error}
         </p>
       )}

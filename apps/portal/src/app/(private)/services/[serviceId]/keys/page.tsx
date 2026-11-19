@@ -5,6 +5,8 @@ import { requireTenantContext } from "@/lib/access";
 import { getApiService, listIngestKeys, MAX_ACTIVE_KEYS } from "@/lib/data/api-services";
 import { CreateKeyButton, RevokeKeyButton } from "../../key-forms";
 import { ServiceTabs } from "../service-tabs";
+import { cardClass } from "@/components/ui/card";
+import { StatusChip } from "@/components/ui/status-chip";
 
 export const metadata: Metadata = { title: "Ingest keys" };
 
@@ -23,12 +25,12 @@ export default async function ServicePage({ params }: { params: Promise<{ servic
 
   return (
     <section>
-      <Link href="/services" className="text-sm text-zinc-500 hover:underline">
+      <Link href="/services" className="text-sm text-muted hover:underline">
         ← API services
       </Link>
-      <h1 className="mt-2 text-2xl font-semibold">{service.name}</h1>
+      <h1 className="mt-2 text-2xl font-semibold tracking-tight">{service.name}</h1>
       <ServiceTabs serviceId={service.id} current="keys" />
-      <p className="mt-6 text-zinc-500">
+      <p className="mt-6 text-muted">
         {active} of {MAX_ACTIVE_KEYS} active keys. Create a new key before revoking the old one to rotate without
         losing data.
       </p>
@@ -37,8 +39,9 @@ export default async function ServicePage({ params }: { params: Promise<{ servic
         <CreateKeyButton serviceId={service.id} disabled={!canCreate} />
       </div>
 
-      <table className="mt-8 w-full text-left text-sm">
-        <thead className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800">
+      <div className={`${cardClass} mt-8 overflow-x-auto px-4 py-1`}>
+      <table className="w-full text-left text-sm">
+        <thead className="border-b border-border text-muted">
           <tr>
             <th className="py-2 font-medium">Key</th>
             <th className="py-2 font-medium">Created</th>
@@ -47,14 +50,18 @@ export default async function ServicePage({ params }: { params: Promise<{ servic
             <th className="py-2" />
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+        <tbody className="divide-y divide-border">
           {keys.map((key) => (
             <tr key={key.id}>
               <td className="py-2 font-mono">ntf_{key.prefix}_…</td>
               <td className="py-2">{dateFormat.format(key.createdAt)}</td>
               <td className="py-2">{key.lastUsedOn ?? "Never"}</td>
               <td className="py-2">
-                {key.revokedAt ? `Revoked ${dateFormat.format(key.revokedAt)}` : "Active"}
+                {key.revokedAt ? (
+                  <StatusChip tone="neutral">{`Revoked ${dateFormat.format(key.revokedAt)}`}</StatusChip>
+                ) : (
+                  <StatusChip tone="good">Active</StatusChip>
+                )}
               </td>
               <td className="py-2 text-right">
                 {!key.revokedAt && <RevokeKeyButton keyId={key.id} prefix={key.prefix} />}
@@ -63,6 +70,7 @@ export default async function ServicePage({ params }: { params: Promise<{ servic
           ))}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }

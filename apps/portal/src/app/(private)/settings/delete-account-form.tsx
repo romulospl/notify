@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { inputClass } from "@/components/auth-card";
+import { inputClass } from "@/components/ui/field";
 import { deleteAccountAction, type AccountActionState } from "./actions";
 
 const idle: AccountActionState = { status: "idle" };
@@ -12,7 +12,7 @@ export function DeleteAccountForm({ email }: { email: string }) {
 
   return (
     <form action={submit} className="mt-3 max-w-3xl space-y-3 text-sm">
-      <p className="text-zinc-500">
+      <p className="text-muted">
         This deletes your account, your project and everything it collected: websites leave Umami, API metrics and rows
         are removed. Your actions recorded in the audit trail stay, anonymized. This cannot be undone.
       </p>
@@ -25,12 +25,12 @@ export function DeleteAccountForm({ email }: { email: string }) {
       <button
         type="submit"
         disabled={submitting}
-        className="rounded-md bg-red-700 px-3 py-2 font-medium text-white hover:bg-red-600 disabled:opacity-60"
+        className="rounded-control bg-bad px-3 py-2 font-medium text-white hover:brightness-110 disabled:opacity-60"
       >
         {submitting ? "Deleting…" : "Delete account"}
       </button>
       {state.status === "error" && (
-        <p role="alert" className="text-red-600 dark:text-red-400">
+        <p role="alert" className="text-bad">
           {state.message}
         </p>
       )}

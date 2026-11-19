@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { DeltaText } from "@/components/delta-text";
-import { PeriodPicker } from "@/components/period-picker";
+import { ComparisonBars } from "@/components/charts/comparison-bars";
+import { DeltaBadge } from "@/components/metrics/delta-badge";
+import { PeriodPicker } from "@/components/metrics/period-picker";
 import { requireOperatorContext } from "@/lib/access";
 import {
   averageVisitSeconds,
@@ -27,6 +28,7 @@ import {
   type ProjectWebStats,
 } from "@/lib/umami/overview";
 import type { Breakdown, RankedItem, Totals } from "@/lib/umami/stats";
+import { cardClass } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "Web analytics across projects" };
 
@@ -101,11 +103,11 @@ export default async function OperatorWebPage({ searchParams }: { searchParams: 
 
   return (
     <section>
-      <Link href="/operator" className="text-sm text-zinc-500 hover:underline">
+      <Link href="/operator" className="text-sm text-muted hover:underline">
         ← SCF overview
       </Link>
-      <h1 className="mt-2 text-2xl font-semibold">Web analytics across projects</h1>
-      <p className="mt-2 text-zinc-500">
+      <h1 className="mt-2 text-2xl font-semibold tracking-tight">Web analytics across projects</h1>
+      <p className="mt-2 text-muted">
         Active projects only. Projects with several websites add them up. All times in UTC.
       </p>
 
@@ -125,21 +127,21 @@ export default async function OperatorWebPage({ searchParams }: { searchParams: 
             defaultValue={filter}
             maxLength={100}
             placeholder="Name or slug"
-            className="mt-1 block w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 outline-none focus:border-zinc-900 dark:border-zinc-700 dark:focus:border-zinc-100"
+            className="mt-1 block w-full rounded-control border border-border-strong bg-transparent px-3 py-2 outline-none focus:border-accent"
           />
         </label>
-        <button type="submit" className="rounded-md border border-zinc-300 px-3 py-2 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800">
+        <button type="submit" className="rounded-control border border-border-strong px-3 py-2 hover:bg-surface-2">
           Apply
         </button>
         {filter && (
-          <Link href={href({ q: "" })} className="py-2 text-zinc-500 hover:underline">
+          <Link href={href({ q: "" })} className="py-2 text-muted hover:underline">
             Clear
           </Link>
         )}
       </form>
 
       {unavailable > 0 && (
-        <p role="alert" className="mt-4 text-sm text-zinc-500">
+        <p role="alert" className="mt-4 text-sm text-muted">
           Couldn&apos;t read web analytics for {unavailable} project{unavailable === 1 ? "" : "s"}; they show as
           unavailable. If this persists, check that their websites still exist in web analytics.
         </p>
@@ -147,7 +149,7 @@ export default async function OperatorWebPage({ searchParams }: { searchParams: 
 
       {comparison && <Comparison projects={comparison} vsLabel={vsLabel} clearHref={href({ compare: [] })} />}
       {requested.length > 0 && !comparison && (
-        <p role="alert" className="mt-6 text-sm text-zinc-500">
+        <p role="alert" className="mt-6 text-sm text-muted">
           Select between {COMPARE_MIN} and {COMPARE_MAX} active projects to compare them.
         </p>
       )}
@@ -163,9 +165,9 @@ export default async function OperatorWebPage({ searchParams }: { searchParams: 
           .map((id) => (
             <input key={id} type="hidden" name="compare" value={id} />
           ))}
-        <div className="overflow-x-auto">
+        <div className={`${cardClass} overflow-x-auto px-4 py-1`}>
           <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800">
+            <thead className="border-b border-border text-muted">
               <tr>
                 <th className="w-8 py-2">
                   <span className="sr-only">Compare</span>
@@ -179,7 +181,7 @@ export default async function OperatorWebPage({ searchParams }: { searchParams: 
                       aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : undefined}
                       className={`py-2 font-medium ${key === "name" ? "" : "text-right"}`}
                     >
-                      <Link href={href({ sort: key, dir: nextDir })} className={`hover:underline ${active ? "text-zinc-900 dark:text-zinc-100" : ""}`}>
+                      <Link href={href({ sort: key, dir: nextDir })} className={`hover:underline ${active ? "text-fg" : ""}`}>
                         {SORTS[key].label}
                         {active && <span aria-hidden>{dir === "asc" ? " ↑" : " ↓"}</span>}
                       </Link>
@@ -188,16 +190,16 @@ export default async function OperatorWebPage({ searchParams }: { searchParams: 
                 })}
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            <tbody className="divide-y divide-border">
               {visible.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-3 text-zinc-500">
+                  <td colSpan={7} className="py-3 text-muted">
                     {filter ? "No active project matches this filter." : "No active projects yet."}
                   </td>
                 </tr>
               )}
               {visible.map((p) => (
-                <tr key={p.tenantId} className="[--series:#2a78d6] dark:[--series:#3987e5]">
+                <tr key={p.tenantId}>
                   <td className="py-2 align-top">
                     <input
                       type="checkbox"
@@ -212,11 +214,11 @@ export default async function OperatorWebPage({ searchParams }: { searchParams: 
                     <Link href={`/operator/tenants/${p.tenantId}`} className="font-medium hover:underline">
                       {p.name}
                     </Link>
-                    <span className="ml-2 font-mono text-xs text-zinc-500">{p.slug}</span>
+                    <span className="ml-2 font-mono text-xs text-muted">{p.slug}</span>
                   </td>
                   <td className="py-2 text-right align-top tabular-nums">{p.sites}</td>
                   {p.totals === null ? (
-                    <td colSpan={4} className="py-2 text-right align-top text-zinc-500">
+                    <td colSpan={4} className="py-2 text-right align-top text-muted">
                       Unavailable
                     </td>
                   ) : (
@@ -225,7 +227,7 @@ export default async function OperatorWebPage({ searchParams }: { searchParams: 
                         {formatCount(p.totals.pageviews)}
                         <div className="mt-1 flex justify-end" aria-hidden>
                           <div
-                            className="h-1 rounded-l-[4px] bg-[var(--series)]"
+                            className="h-1 rounded-l-[4px] bg-series"
                             style={{ width: `${(p.totals.pageviews / maxPageviews) * 6}rem` }}
                           />
                         </div>
@@ -255,11 +257,11 @@ export default async function OperatorWebPage({ searchParams }: { searchParams: 
         <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
           <button
             type="submit"
-            className="rounded-md bg-zinc-900 px-3 py-2 font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+            className="rounded-control bg-accent px-3 py-2 font-medium text-accent-fg hover:brightness-110"
           >
             Compare selected
           </button>
-          <span className="text-zinc-500">
+          <span className="text-muted">
             Pick {COMPARE_MIN} to {COMPARE_MAX} projects. Changes are {vsLabel}.
           </span>
         </div>
@@ -272,7 +274,7 @@ function Change({ delta, upIsGood = true }: { delta: ReturnType<typeof relativeD
   if (!delta) return null;
   return (
     <span className="block text-xs">
-      <DeltaText delta={delta} upIsGood={upIsGood} />
+      <DeltaBadge delta={delta} upIsGood={upIsGood} />
     </span>
   );
 }
@@ -288,43 +290,61 @@ const BREAKDOWN_ROWS: { type: Breakdown; label: string; name: (raw: string) => s
 function Comparison({ projects, vsLabel, clearHref }: { projects: ProjectComparison[]; vsLabel: string; clearHref: string }) {
   const metric = (label: string, cell: (totals: Totals, previous: Totals) => ReactNode) => (
     <tr>
-      <th scope="row" className="py-2 pr-4 text-left align-top font-medium text-zinc-500">
+      <th scope="row" className="py-2 pr-4 text-left align-top font-medium text-muted">
         {label}
       </th>
       {projects.map((p) => (
         <td key={p.tenantId} className="py-2 pr-4 align-top tabular-nums">
-          {p.totals && p.previous ? cell(p.totals, p.previous) : <span className="text-zinc-500">Unavailable</span>}
+          {p.totals && p.previous ? cell(p.totals, p.previous) : <span className="text-muted">Unavailable</span>}
         </td>
       ))}
     </tr>
   );
 
   return (
-    <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="mt-6 rounded-card border border-border bg-surface p-4 shadow-card">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-medium">Side-by-side comparison</h2>
-        <Link href={clearHref} className="text-sm text-zinc-500 hover:underline">
+        <h2 className="font-semibold">Side-by-side comparison</h2>
+        <Link href={clearHref} className="text-sm text-muted hover:underline">
           Clear comparison
         </Link>
       </div>
+      <div className="mt-4">
+        <ComparisonBars
+          projects={projects.map((p) => p.name)}
+          groups={[
+            { label: "Page views", pick: (t: Totals) => t.pageviews },
+            { label: "Unique visitors", pick: (t: Totals) => t.visitors },
+          ].map((group) => ({
+            label: group.label,
+            values: projects.map((p) => ({
+              name: p.name,
+              value: p.totals ? group.pick(p.totals) : 0,
+              display: p.totals ? formatCount(group.pick(p.totals)) : "Unavailable",
+            })),
+          }))}
+        />
+      </div>
+      <details open className="mt-4">
+      <summary className="cursor-pointer text-sm text-muted hover:text-fg">Show as table</summary>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[560px] text-sm">
-          <thead className="border-b border-zinc-200 dark:border-zinc-800">
+          <thead className="border-b border-border">
             <tr>
-              <th className="py-2 pr-4 text-left font-medium text-zinc-500">
+              <th className="py-2 pr-4 text-left font-medium text-muted">
                 <span className="sr-only">Metric</span>
               </th>
               {projects.map((p) => (
                 <th key={p.tenantId} scope="col" className="py-2 pr-4 text-left font-medium">
                   {p.name}
-                  <span className="block text-xs font-normal text-zinc-500">
+                  <span className="block text-xs font-normal text-muted">
                     {p.sites} website{p.sites === 1 ? "" : "s"}
                   </span>
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <tbody className="divide-y divide-border">
             {metric("Page views", (t, prev) => (
               <>
                 {formatCount(t.pageviews)}
@@ -346,13 +366,13 @@ function Comparison({ projects, vsLabel, clearHref }: { projects: ProjectCompari
             ))}
             {BREAKDOWN_ROWS.map((row) => (
               <tr key={row.type}>
-                <th scope="row" className="py-2 pr-4 text-left align-top font-medium text-zinc-500">
+                <th scope="row" className="py-2 pr-4 text-left align-top font-medium text-muted">
                   {row.label}
                   <span className="block text-xs font-normal">Visitors</span>
                 </th>
                 {projects.map((p) => (
                   <td key={p.tenantId} className="py-2 pr-4 align-top">
-                    {p.breakdowns ? <TopList items={p.breakdowns[row.type]} name={row.name} /> : <span className="text-zinc-500">Unavailable</span>}
+                    {p.breakdowns ? <TopList items={p.breakdowns[row.type]} name={row.name} /> : <span className="text-muted">Unavailable</span>}
                   </td>
                 ))}
               </tr>
@@ -360,13 +380,14 @@ function Comparison({ projects, vsLabel, clearHref }: { projects: ProjectCompari
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-zinc-500">Changes are {vsLabel}.</p>
+      </details>
+      <p className="mt-2 text-xs text-muted">Changes are {vsLabel}.</p>
     </div>
   );
 }
 
 function TopList({ items, name }: { items: RankedItem[]; name: (raw: string) => string }) {
-  if (items.length === 0) return <span className="text-zinc-500">No data</span>;
+  if (items.length === 0) return <span className="text-muted">No data</span>;
   return (
     <ol className="space-y-0.5">
       {items.map((item) => (

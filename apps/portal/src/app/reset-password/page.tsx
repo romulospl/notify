@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AuthCard, linkClass } from "@/components/auth-card";
+import { AuthLayout } from "@/components/auth/auth-layout";
+import { linkClass } from "@/components/ui/button";
 import { ResetPasswordForm } from "./reset-password-form";
 
 // O token está na URL: nenhuma página seguinte recebe o endereço como Referer.
@@ -17,8 +18,8 @@ export default async function ResetPasswordPage({
 
   if (error || typeof token !== "string" || token.length === 0) {
     return (
-      <AuthCard title="This link doesn't work">
-        <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+      <AuthLayout title="This link doesn't work">
+        <p className="mt-4 text-sm text-muted">
           The reset link is invalid, was already used or expired. Ask for a new one.
         </p>
         <p className="mt-6 text-sm">
@@ -26,13 +27,13 @@ export default async function ResetPasswordPage({
             Request a new link
           </Link>
         </p>
-      </AuthCard>
+      </AuthLayout>
     );
   }
 
   return (
-    <AuthCard title="Choose a new password">
+    <AuthLayout title="Choose a new password">
       <ResetPasswordForm token={token} />
-    </AuthCard>
+    </AuthLayout>
   );
 }

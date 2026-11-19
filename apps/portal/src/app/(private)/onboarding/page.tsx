@@ -11,8 +11,8 @@ export default async function OnboardingPage() {
 
   return (
     <section>
-      <h1 className="text-2xl font-semibold">Create your project</h1>
-      <p className="mt-2 max-w-xl text-zinc-500">
+      <h1 className="text-2xl font-semibold tracking-tight">Create your project</h1>
+      <p className="mt-2 max-w-xl text-muted">
         A project groups your websites and API services. Next you&apos;ll add them and get the tracking script and
         ingest keys.
       </p>

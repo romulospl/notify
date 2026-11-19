@@ -6,15 +6,22 @@ import { getApiService } from "@/lib/data/api-services";
 import { type ApiCounts, ENDPOINT_LIMIT, getServiceDashboard } from "@/lib/data/api-metrics";
 import { getProject } from "@/lib/data/tenants";
 import { bucketLabel, formatCount, formatLatency, formatShare, statusLabel } from "@/lib/format";
-import { ColumnChart } from "@/components/column-chart";
-import { PeriodPicker } from "@/components/period-picker";
+import { ChartFrame } from "@/components/charts/chart-frame";
+import { ColumnChart } from "@/components/charts/column-chart";
+import { PALETTE } from "@/components/charts/palette";
+import { Sparkline } from "@/components/charts/sparkline";
+import { StatusChart } from "./status-chart";
+import { MetricCard } from "@/components/metrics/metric-card";
+import { PeriodPicker } from "@/components/metrics/period-picker";
+import { RankedList } from "@/components/metrics/ranked-list";
+import { cardClass } from "@/components/ui/card";
 import { parsePeriodKey, resolvePeriod } from "@/lib/period";
 import { LatencyChart } from "./latency-chart";
 import { ServiceTabs } from "./service-tabs";
 
 export const metadata: Metadata = { title: "API analytics" };
 
-const card = "rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900";
+const card = cardClass;
 const full = new Intl.NumberFormat("en");
 const plural = (n: number, one: string, many: string) => `${full.format(n)} ${n === 1 ? one : many}`;
 
@@ -36,10 +43,10 @@ export default async function ServicePage({
 
   const header = (
     <>
-      <Link href="/services" className="text-sm text-zinc-500 hover:underline">
+      <Link href="/services" className="text-sm text-muted hover:underline">
         ← API services
       </Link>
-      <h1 className="mt-2 text-2xl font-semibold">{service.name}</h1>
+      <h1 className="mt-2 text-2xl font-semibold tracking-tight">{service.name}</h1>
       <ServiceTabs serviceId={service.id} current="overview" />
     </>
   );
@@ -49,8 +56,8 @@ export default async function ServicePage({
     return (
       <section>
         {header}
-        <p className="mt-6 text-zinc-500">This project was removed by the SCF operators.</p>
-        {project.statusReason && <p className="mt-2 text-sm text-zinc-500">Reason: {project.statusReason}</p>}
+        <p className="mt-6 text-muted">This project was removed by the SCF operators.</p>
+        {project.statusReason && <p className="mt-2 text-sm text-muted">Reason: {project.statusReason}</p>}
       </section>
     );
   }
@@ -62,6 +69,13 @@ export default async function ServicePage({
   const { totals, series, endpoints, endpointCount, statuses } = data;
   const unitName = period.unit === "hour" ? "Hour" : period.unit === "day" ? "Day" : "Month";
   const points = series.map((p) => ({ ...p, label: bucketLabel(period.unit, p.at), longLabel: bucketLabel(period.unit, p.at, true) }));
+  const statusPoints = points.map((p) => ({
+    label: p.label,
+    longLabel: p.longLabel,
+    ok: Math.max(0, p.requests - p.clientErrors - p.serverErrors),
+    clientErrors: p.clientErrors,
+    serverErrors: p.serverErrors,
+  }));
 
   return (
     <section>
@@ -69,7 +83,7 @@ export default async function ServicePage({
       <PeriodPicker current={period.key} href={(key) => `/services/${service.id}?period=${key}`} />
 
       {totals.requests === 0 && (
-        <p className="mt-6 rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700">
+        <p className="mt-6 rounded-card border border-dashed border-border-strong p-4 text-sm text-muted">
           No requests in this period yet. Send OpenTelemetry HTTP server metrics or traces with an{" "}
           <Link href={`/services/${service.id}/keys`} className="underline">
             ingest key
@@ -79,25 +93,27 @@ export default async function ServicePage({
       )}
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatTile label="Requests" value={formatCount(totals.requests)} />
+        <StatTile label="Requests" value={formatCount(totals.requests)} trend={points.map((p) => p.requests)} />
         <StatTile
           label="Server errors (5xx)"
           value={formatShare(totals.serverErrors, totals.requests)}
           note={totals.requests > 0 ? plural(totals.serverErrors, "request", "requests") : undefined}
+          trend={points.map((p) => p.serverErrors)}
         />
-        <StatTile label="Median latency (p50)" value={formatLatency(totals.p50)} />
-        <StatTile label="p95 latency" value={formatLatency(totals.p95)} />
+        <StatTile label="Median latency (p50)" value={formatLatency(totals.p50)} trend={points.map((p) => p.p50)} />
+        <StatTile label="p95 latency" value={formatLatency(totals.p95)} trend={points.map((p) => p.p95)} />
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
         <div className={card}>
           <h2 className="font-medium">Requests</h2>
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-muted">
             {period.label}, per {period.unit} (UTC), including the current {period.unit}
           </p>
           <div className="mt-4">
             <ColumnChart
               label="Requests per period"
+              currentIncomplete
               points={points.map((p) => ({
                 label: p.label,
                 longLabel: p.longLabel,
@@ -114,7 +130,7 @@ export default async function ServicePage({
         </div>
         <div className={card}>
           <h2 className="font-medium">Latency</h2>
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-muted">
             {period.label}, per {period.unit} (UTC). Gaps are periods without requests.
           </p>
           <div className="mt-4">
@@ -122,11 +138,43 @@ export default async function ServicePage({
           </div>
         </div>
       </div>
+      <ChartFrame
+        className="mt-4"
+        title="Responses by status class"
+        subtitle={`${period.label}, per ${period.unit} (UTC). OK is every request without a 4xx or 5xx status.`}
+        table={
+          <table className="w-full text-left tabular-nums">
+            <thead className="text-muted">
+              <tr>
+                <th className="py-1 font-medium">{unitName}</th>
+                <th className="py-1 text-right font-medium">OK</th>
+                <th className="py-1 text-right font-medium">4xx</th>
+                <th className="py-1 text-right font-medium">5xx</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {statusPoints.map((p) => (
+                <tr key={p.longLabel}>
+                  <td className="whitespace-nowrap py-1 pr-3">{p.longLabel}</td>
+                  <td className="py-1 text-right">{full.format(p.ok)}</td>
+                  <td className="py-1 text-right">{full.format(p.clientErrors)}</td>
+                  <td className="py-1 text-right">{full.format(p.serverErrors)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        }
+      >
+        <StatusChart
+          points={statusPoints}
+          colors={{ ok: PALETTE.ok, clientErrors: PALETTE.clientError, serverErrors: PALETTE.serverError }}
+        />
+      </ChartFrame>
       <details className={`mt-4 ${card} text-sm`}>
-        <summary className="cursor-pointer text-zinc-500">Show charts as a table</summary>
+        <summary className="cursor-pointer text-muted">Show charts as a table</summary>
         <div className="mt-2 max-h-72 overflow-auto">
           <table className="w-full text-left tabular-nums">
-            <thead className="text-zinc-500">
+            <thead className="text-muted">
               <tr>
                 <th className="py-1 font-medium">{unitName}</th>
                 <th className="py-1 text-right font-medium">Requests</th>
@@ -136,7 +184,7 @@ export default async function ServicePage({
                 <th className="py-1 text-right font-medium">p95</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            <tbody className="divide-y divide-border">
               {points.map((p) => (
                 <tr key={p.longLabel}>
                   <td className="whitespace-nowrap py-1 pr-3">{p.longLabel}</td>
@@ -156,18 +204,18 @@ export default async function ServicePage({
         <div className={`${card} min-w-0`}>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="font-medium">Endpoints</h2>
-            <span className="text-xs text-zinc-500">
+            <span className="text-xs text-muted">
               {endpointCount > ENDPOINT_LIMIT
                 ? `Top ${ENDPOINT_LIMIT} of ${full.format(endpointCount)} by requests`
                 : `${plural(endpointCount, "endpoint", "endpoints")}, by requests`}
             </span>
           </div>
           {endpoints.length === 0 ? (
-            <p className="mt-3 text-sm text-zinc-500">No data in this period.</p>
+            <p className="mt-3 text-sm text-muted">No data in this period.</p>
           ) : (
             <div className="mt-3 overflow-x-auto">
               <table className="w-full text-left text-sm tabular-nums">
-                <thead className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800">
+                <thead className="border-b border-border text-muted">
                   <tr>
                     <th className="py-1.5 pr-3 font-medium">Endpoint</th>
                     <th className="py-1.5 pl-3 text-right font-medium">Requests</th>
@@ -177,11 +225,11 @@ export default async function ServicePage({
                     <th className="py-1.5 pl-3 text-right font-medium">p95</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                <tbody className="divide-y divide-border">
                   {endpoints.map((e) => (
                     <tr key={`${e.method} ${e.route}`}>
                       <td className="min-w-44 max-w-80 py-1.5 pr-3">
-                        <span className="block font-mono text-xs text-zinc-500 sm:mr-2 sm:inline-block sm:w-14">{e.method}</span>
+                        <span className="block font-mono text-xs text-muted sm:mr-2 sm:inline-block sm:w-14">{e.method}</span>
                         <span className="break-all font-mono text-xs">{e.route}</span>
                       </td>
                       <td className="py-1.5 pl-3 text-right">{formatCount(e.requests)}</td>
@@ -195,7 +243,7 @@ export default async function ServicePage({
               </table>
             </div>
           )}
-          <p className="mt-3 text-xs text-zinc-500">
+          <p className="mt-3 text-xs text-muted">
             Paths are grouped: IDs, Stellar addresses, UUIDs and hashes become placeholders such as {"{id}"}.
           </p>
         </div>
@@ -206,43 +254,28 @@ export default async function ServicePage({
   );
 }
 
-function StatTile({ label, value, note }: { label: string; value: string; note?: string }) {
+function StatTile({ label, value, note, trend }: { label: string; value: string; note?: string; trend?: (number | null)[] }) {
   return (
-    <div className={card}>
-      <p className="text-sm text-zinc-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold">{value}</p>
-      {note && <p className="mt-1 text-xs text-zinc-500">{note}</p>}
-    </div>
+    <MetricCard label={label} value={value} chart={trend && <Sparkline values={trend} />}>
+      {note && <span className="text-muted">{note}</span>}
+    </MetricCard>
   );
 }
 
 // Distribuição de status: código, barra e número por linha, como as listas do
 // painel web. A barra usa a cor da série; a classe (2xx, 4xx...) vem escrita.
 function StatusCodes({ statuses, total }: { statuses: { statusCode: number; requests: number }[]; total: ApiCounts["requests"] }) {
-  const max = Math.max(1, ...statuses.map((s) => s.requests));
   return (
-    <div className={`${card} [--series:#2a78d6] dark:[--series:#3987e5]`}>
-      <div className="flex items-baseline justify-between">
-        <h2 className="font-medium">Status codes</h2>
-        <span className="text-xs text-zinc-500">Requests</span>
-      </div>
-      {statuses.length === 0 ? (
-        <p className="mt-3 text-sm text-zinc-500">No data in this period.</p>
-      ) : (
-        <ol className="mt-3 space-y-2 text-sm">
-          {statuses.map((s) => (
-            <li key={s.statusCode}>
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="truncate">{statusLabel(s.statusCode)}</span>
-                <span className="whitespace-nowrap tabular-nums">
-                  {formatCount(s.requests)} <span className="text-zinc-500">· {formatShare(s.requests, total)}</span>
-                </span>
-              </div>
-              <div className="mt-1 h-1.5 rounded-r-[4px] bg-[var(--series)]" style={{ width: `${(s.requests / max) * 100}%` }} />
-            </li>
-          ))}
-        </ol>
-      )}
-    </div>
+    <RankedList
+      title="Status codes"
+      unit="Requests"
+      rows={statuses.map((s) => ({
+        key: String(s.statusCode),
+        name: statusLabel(s.statusCode),
+        value: s.requests,
+        display: formatCount(s.requests),
+        detail: formatShare(s.requests, total),
+      }))}
+    />
   );
 }

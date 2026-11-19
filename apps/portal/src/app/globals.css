@@ -1,9 +1,182 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-}
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
-  color-scheme: light dark;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --fg: #0f1623;
+  --muted: #586274;
+  --border: #e2e6ec;
+  --border-strong: #cdd3dc;
+  --accent: #1f63b8;
+  --accent-fg: #ffffff;
+  --accent-soft: #e6f0fc;
+  --accent-text: #1f63b8;
+  --brand: #1f63b8;
+  --series: #2a78d6;
+  --series-2: #0f8f84;
+  --series-soft: #cfe2f8;
+  --good: #15803d;
+  --good-soft: #dcfce7;
+  --bad: #b91c1c;
+  --bad-soft: #fee2e2;
+  --warn: #92400e;
+  --warn-soft: #fef3c7;
+  --info: #1e3a8a;
+  --info-soft: #dbeafe;
+  --op: #5b3fc4;
+  --op-soft: #ece8fb;
+  --c1: #2a78d6;
+  --c2: #0f8f84;
+  --c3: #b45309;
+  --c4: #7a5bd0;
+  --c5: #6b7686;
+  --warn-fill: #e08a1e;
+  --bad-fill: #d33b3b;
+  --ring: #1f63b8;
+  --shadow: 0 1px 2px rgb(15 22 35 / 6%);
+  --art-bg: #0b1730;
+  --art-fg: #eaf1fb;
+  --art-muted: #b9c8de;
+  --art-glow: #1d4a8f;
+  --art-line: #4f86d6;
+  --art-dot: #9cc8ff;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #0a0e15;
+    --surface: #121823;
+    --surface-2: #1a2230;
+    --fg: #eef1f6;
+    --muted: #9aa5b6;
+    --border: #243044;
+    --border-strong: #34425a;
+    --accent: #5aa0f0;
+    --accent-fg: #07111f;
+    --accent-soft: #14284a;
+    --accent-text: #7db6f7;
+    --brand: #2a78d6;
+    --series: #3987e5;
+    --series-2: #2dd4bf;
+    --series-soft: #1b3a63;
+    --good: #4ade80;
+    --good-soft: #0f2a1a;
+    --bad: #f87171;
+    --bad-soft: #3a1414;
+    --warn: #fcd34d;
+    --warn-soft: #33260a;
+    --info: #93c5fd;
+    --info-soft: #14284a;
+    --op: #a99bf0;
+    --op-soft: #201a3d;
+    --c1: #3987e5;
+    --c2: #2dd4bf;
+    --c3: #f59e0b;
+    --c4: #a78bfa;
+    --c5: #94a3b8;
+    --warn-fill: #f59e0b;
+    --bad-fill: #ef4444;
+    --ring: #7db6f7;
+    --shadow: none;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0a0e15;
+  --surface: #121823;
+  --surface-2: #1a2230;
+  --fg: #eef1f6;
+  --muted: #9aa5b6;
+  --border: #243044;
+  --border-strong: #34425a;
+  --accent: #5aa0f0;
+  --accent-fg: #07111f;
+  --accent-soft: #14284a;
+  --accent-text: #7db6f7;
+  --brand: #2a78d6;
+  --series: #3987e5;
+  --series-2: #2dd4bf;
+  --series-soft: #1b3a63;
+  --good: #4ade80;
+  --good-soft: #0f2a1a;
+  --bad: #f87171;
+  --bad-soft: #3a1414;
+  --warn: #fcd34d;
+  --warn-soft: #33260a;
+  --info: #93c5fd;
+  --info-soft: #14284a;
+  --op: #a99bf0;
+  --op-soft: #201a3d;
+  --c1: #3987e5;
+  --c2: #2dd4bf;
+  --c3: #f59e0b;
+  --c4: #a78bfa;
+  --c5: #94a3b8;
+  --warn-fill: #f59e0b;
+  --bad-fill: #ef4444;
+  --ring: #7db6f7;
+  --shadow: none;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --color-brand: var(--brand);
+  --color-series: var(--series);
+  --color-series-2: var(--series-2);
+  --color-series-soft: var(--series-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-op: var(--op);
+  --color-op-soft: var(--op-soft);
+  --color-c1: var(--c1);
+  --color-c2: var(--c2);
+  --color-c3: var(--c3);
+  --color-c4: var(--c4);
+  --color-c5: var(--c5);
+  --color-warn-fill: var(--warn-fill);
+  --color-bad-fill: var(--bad-fill);
+  --color-ring: var(--ring);
+  --color-art-bg: var(--art-bg);
+  --color-art-fg: var(--art-fg);
+  --color-art-muted: var(--art-muted);
+  --shadow-card: var(--shadow);
+  --font-sans: var(--font-geist), var(--font-geist-ext), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-card: 0.75rem;
+  --radius-control: 0.5rem;
+  --container-content: 76rem;
+}
+
+@layer base {
+  body {
+    font-size: 0.875rem;
+    line-height: 1.45;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
 }

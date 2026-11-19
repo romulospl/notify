@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { inputClass } from "@/components/auth-card";
+import { inputClass } from "@/components/ui/field";
 import { reactivateTenantAction, removeTenantAction, type StatusActionState } from "./actions";
 
 const idle: StatusActionState = { status: "idle" };
@@ -25,7 +25,7 @@ export function TenantStatusForm({
 
   return (
     <form action={action} className="mt-3 max-w-xl space-y-3 text-sm">
-      <p className="text-zinc-500">
+      <p className="text-muted">
         {removing
           ? "Removing stops web and API ingestion within a minute and hides the project's dashboards from its members. Collected data is kept, and the project can be reactivated."
           : "Reactivating accepts ingestion again within a minute and restores the project's dashboards."}
@@ -46,14 +46,14 @@ export function TenantStatusForm({
         disabled={pending}
         className={
           removing
-            ? "rounded-md bg-red-700 px-3 py-2 font-medium text-white hover:bg-red-600 disabled:opacity-60"
-            : "rounded-md bg-zinc-900 px-3 py-2 font-medium text-white hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+            ? "rounded-control bg-bad px-3 py-2 font-medium text-white hover:brightness-110 disabled:opacity-60"
+            : "rounded-control bg-accent px-3 py-2 font-medium text-accent-fg hover:brightness-110 disabled:opacity-60"
         }
       >
         {pending ? "Saving…" : removing ? "Remove project" : "Reactivate project"}
       </button>
       {state.status === "error" && (
-        <p role="alert" className="text-red-600 dark:text-red-400">
+        <p role="alert" className="text-bad">
           {state.message}
         </p>
       )}

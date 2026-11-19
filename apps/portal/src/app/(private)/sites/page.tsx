@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireTenantContext } from "@/lib/access";
 import { listSites } from "@/lib/data/sites";
 import { SiteForm } from "./site-form";
+import { cardClass } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "Websites" };
 
@@ -15,8 +16,8 @@ export default async function SitesPage() {
 
   return (
     <section>
-      <h1 className="text-2xl font-semibold">Websites</h1>
-      <p className="mt-2 text-zinc-500">
+      <h1 className="text-2xl font-semibold tracking-tight">Websites</h1>
+      <p className="mt-2 text-muted">
         Add each website you want to measure. Each website&apos;s page has its tracking script, ready to copy.
       </p>
 
@@ -25,11 +26,12 @@ export default async function SitesPage() {
           <SiteForm />
         </div>
       ) : (
-        <p className="mt-6 text-sm text-zinc-500">This project was removed; new websites can&apos;t be added.</p>
+        <p className="mt-6 text-sm text-muted">This project was removed; new websites can&apos;t be added.</p>
       )}
 
-      <table className="mt-8 w-full text-left text-sm">
-        <thead className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800">
+      <div className={`${cardClass} mt-8 overflow-x-auto px-4 py-1`}>
+      <table className="w-full text-left text-sm">
+        <thead className="border-b border-border text-muted">
           <tr>
             <th className="py-2 font-medium">Name</th>
             <th className="py-2 font-medium">Domain</th>
@@ -39,10 +41,10 @@ export default async function SitesPage() {
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+        <tbody className="divide-y divide-border">
           {sites.length === 0 && (
             <tr>
-              <td colSpan={4} className="py-3 text-zinc-500">
+              <td colSpan={4} className="py-3 text-muted">
                 No websites yet.
               </td>
             </tr>
@@ -57,7 +59,7 @@ export default async function SitesPage() {
               <td className="py-2">{site.domain}</td>
               <td className="py-2 font-mono text-xs">{site.umamiWebsiteId}</td>
               <td className="py-2 text-right">
-                <Link href={`/sites/${site.id}#install`} className="text-zinc-500 hover:underline">
+                <Link href={`/sites/${site.id}#install`} className="font-medium text-accent-text hover:underline">
                   Get script
                 </Link>
               </td>
@@ -65,6 +67,7 @@ export default async function SitesPage() {
           ))}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }

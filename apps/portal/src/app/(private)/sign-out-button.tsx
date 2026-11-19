@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { Icon } from "@/components/ui/icons";
 import { authClient } from "@/lib/auth-client";
 
 export function SignOutButton() {
@@ -14,8 +15,9 @@ export function SignOutButton() {
         router.replace("/sign-in");
         router.refresh();
       }}
-      className="rounded-md border border-zinc-300 px-3 py-1 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+      className="flex min-h-9 w-full items-center gap-2 rounded-control px-2.5 text-left hover:bg-surface-2"
     >
+      <Icon name="out" />
       Sign out
     </button>
   );

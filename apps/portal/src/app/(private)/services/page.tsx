@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireTenantContext } from "@/lib/access";
 import { listApiServices } from "@/lib/data/api-services";
 import { CreateServiceForm } from "./key-forms";
+import { cardClass } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "API services" };
 
@@ -15,8 +16,8 @@ export default async function ServicesPage() {
 
   return (
     <section>
-      <h1 className="text-2xl font-semibold">API services</h1>
-      <p className="mt-2 text-zinc-500">
+      <h1 className="text-2xl font-semibold tracking-tight">API services</h1>
+      <p className="mt-2 text-muted">
         Each service sends OpenTelemetry metrics with its own ingest key.
       </p>
 
@@ -25,11 +26,11 @@ export default async function ServicesPage() {
           <CreateServiceForm />
         </div>
       ) : (
-        <p className="mt-6 text-sm text-zinc-500">This project was removed; new services can&apos;t be added.</p>
+        <p className="mt-6 text-sm text-muted">This project was removed; new services can&apos;t be added.</p>
       )}
 
-      <ul className="mt-8 divide-y divide-zinc-200 border-y border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-        {services.length === 0 && <li className="py-3 text-sm text-zinc-500">No services yet.</li>}
+      <ul className={`${cardClass} mt-8 divide-y divide-border py-1`}>
+        {services.length === 0 && <li className="py-3 text-sm text-muted">No services yet.</li>}
         {services.map((service) => (
           <li key={service.id} className="py-3">
             <Link href={`/services/${service.id}`} className="font-medium hover:underline">
