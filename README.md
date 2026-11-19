@@ -1,243 +1,243 @@
 # stellytics
 
-Plataforma open source e multi-tenant de **analytics web e de API** para projetos do ecossistema [Stellar](https://stellar.org), proposta para o RFP *Web and API Analytics for Stellar Ecosystem Projects* do [Stellar Community Fund](https://communityfund.stellar.org) (SCF).
+Open source, multi-tenant **web and API analytics** platform for projects in the [Stellar](https://stellar.org) ecosystem, proposed for the *Web and API Analytics for Stellar Ecosystem Projects* RFP of the [Stellar Community Fund](https://communityfund.stellar.org) (SCF).
 
-> **Estado:** o código do MVP está implementado e testado no CI: portal, script de rastreamento, gateway web, coletor de API, consolidação das métricas, painéis do tenant e do SCF e a infraestrutura de produção como código. **Nenhuma produção real foi aplicada ainda** e não há pilotos; o que falta está em [`docs/andamento.md`](docs/andamento.md).
+> **Status:** the MVP code is implemented and tested in CI: portal, tracking script, web gateway, API collector, metric rollups, tenant and SCF dashboards, and production infrastructure as code. **No real production deployment has been applied yet** and there are no pilots; what is left is listed in [`docs/andamento.md`](docs/andamento.md).
 
-## O problema
+## The problem
 
-O SCF não tem uma fonte confiável e unificada de dados de uso dos projetos que financia. Hoje os revisores dependem de números informados pelos próprios projetos para decidir quem entra em programas de continuidade.
+The SCF has no reliable, unified source of usage data for the projects it funds. Today reviewers rely on numbers reported by the projects themselves to decide who gets into continuation programs.
 
-O stellytics oferece uma plataforma compartilhada e gratuita em que:
+stellytics offers a shared, free platform where:
 
-- cada projeto (tenant) mede o uso do seu site e da sua API e vê só os próprios dados;
-- operadores do SCF veem e comparam as métricas de todos os projetos.
+- each project (tenant) measures the usage of its website and API and sees only its own data;
+- SCF operators see and compare the metrics of every project.
 
-## O que a plataforma mede
+## What the platform measures
 
-**Web**, coletando só no frontend, sem cookies e sem dado pessoal:
+**Web**, collected on the frontend only, with no cookies and no personal data:
 
-- visualizações de página e visitantes únicos;
-- referenciadores;
-- duração da sessão e taxa de rejeição;
-- país, dispositivo e navegador;
-- eventos customizados opcionais (`window.stellytics.event`), sem endereço de carteira, hash ou valor;
-- adaptador opt-in para o Stellar Wallets Kit (`window.stellytics.wallets`), que reporta só a carteira escolhida e a desconexão, nunca o endereço ([ADR 0010](docs/adr/0010-adaptador-opt-in-do-wallets-kit.md)).
+- page views and unique visitors;
+- referrers;
+- session duration and bounce rate;
+- country, device and browser;
+- optional custom events (`window.stellytics.event`), with no wallet address, hash or amount;
+- an opt-in adapter for the Stellar Wallets Kit (`window.stellytics.wallets`), which reports only the selected wallet and disconnections, never the address ([ADR 0010](docs/adr/0010-adaptador-opt-in-do-wallets-kit.md)).
 
-**API**, a partir do OpenTelemetry que o projeto já envia ao próprio APM (dual-export):
+**API**, from the OpenTelemetry data the project already sends to its own APM (dual-export):
 
-- volume de requisições por endpoint normalizado;
-- distribuição de status code;
-- latência p50 e p95.
+- request volume per normalized endpoint;
+- status code distribution;
+- p50 and p95 latency.
 
-O coletor descarta traces, spans e logs e guarda só contadores e histogramas.
+The collector drops traces, spans and logs and keeps only counters and histograms.
 
-## Arquitetura
+## Architecture
 
 ```mermaid
 flowchart LR
   subgraph Tenant
-    B[Navegador<br/>script de versão fixa]
-    A[API do tenant<br/>OpenTelemetry]
+    B[Browser<br/>fixed-version script]
+    A[Tenant API<br/>OpenTelemetry]
   end
 
   subgraph stellytics
-    G[Gateway de ingestão web<br/>Go]
+    G[Web ingestion gateway<br/>Go]
     U[Umami<br/>headless]
-    C[Coletor OTel<br/>Go]
+    C[OTel collector<br/>Go]
     R[Rollup<br/>Go]
     P[Portal<br/>Next.js]
     PG[(PostgreSQL)]
   end
 
-  B -->|evento + prova de JS| G
-  G -->|IP truncado| U
+  B -->|event + JS proof| G
+  G -->|truncated IP| U
   A -->|OTLP| C
   U --> PG
-  C -->|contadores e histogramas| PG
-  R -->|1 min → 1 h → 1 dia, retenção| PG
+  C -->|counters and histograms| PG
+  R -->|1 min → 1 h → 1 day, retention| PG
   P --> U
   P --> PG
-  T[Tenant e operador SCF] --> P
+  T[Tenant and SCF operator] --> P
 ```
 
-| Componente | Stack | Papel |
+| Component | Stack | Role |
 |---|---|---|
-| Portal | Next.js | Cadastro self-service (com aprovação prévia opcional), painéis do tenant, painéis globais do SCF e API somente leitura para o SCF (`/api/v1`) |
-| Script de rastreamento | TypeScript | Versão fixa e imutável (`/s/vX.Y.Z/n.js`), com SRI e nome que ad blockers não bloqueiam |
-| Gateway de ingestão web | Go | Anti-bot (limite de taxa, prova de execução de JS, limite de fingerprints por IP), truncamento do IP e teto de repasses ao Umami para conter saturação ([ADR 0011](docs/adr/0011-limite-de-repasses-ao-umami.md)) |
-| [Umami](https://umami.is) v3.4.1 | Next.js | Motor de analytics web, usado sem fork |
-| Coletor de API | OpenTelemetry Collector + componentes Go | Autenticação por chave, normalização de rotas e gravação das métricas |
-| Rollup | Go | Consolida as métricas de API de 1 minuto em 1 hora e 1 dia e aplica as retenções (métricas de API e eventos web do Umami) |
-| Banco | PostgreSQL 17 | Bancos separados `umami` (analytics web) e `stellytics` (tenants, chaves e métricas de API, com 24 meses de agregados) |
-| Infra | OpenTofu, Ansible, Docker Compose, Caddy | Hospedagem na União Europeia (Hetzner), backup contínuo cifrado, recriável a partir deste repositório |
-| Monitoramento | Prometheus, blackbox exporter, Alertmanager e replication-monitor (Go) | VM separada: disponibilidade de portal, ingestão web e ingestão de API medida de fora, alerta por e-mail e alertas de atraso de replicação e de WAL retido do Postgres ([ADR 0005](docs/adr/0005-monitoramento-externo.md)) |
+| Portal | Next.js | Self-service sign-up (with optional prior approval), tenant dashboards, global SCF dashboards and a read-only API for the SCF (`/api/v1`) |
+| Tracking script | TypeScript | Fixed, immutable versions (`/s/vX.Y.Z/n.js`), with SRI and a name that ad blockers don't block |
+| Web ingestion gateway | Go | Anti-bot (rate limiting, JS execution proof, per-IP fingerprint limit), IP truncation and a cap on relays to Umami to contain saturation ([ADR 0011](docs/adr/0011-limite-de-repasses-ao-umami.md)) |
+| [Umami](https://umami.is) v3.4.1 | Next.js | Web analytics engine, used without a fork |
+| API collector | OpenTelemetry Collector + Go components | Key-based authentication, route normalization and metric storage |
+| Rollup | Go | Rolls up 1-minute API metrics into 1 hour and 1 day and applies retention (API metrics and Umami web events) |
+| Database | PostgreSQL 17 | Separate databases: `umami` (web analytics) and `stellytics` (tenants, keys and API metrics, with 24 months of aggregates) |
+| Infra | OpenTofu, Ansible, Docker Compose, Caddy | Hosted in the European Union (Hetzner), continuous encrypted backups, rebuildable from this repository |
+| Monitoring | Prometheus, blackbox exporter, Alertmanager and replication-monitor (Go) | Separate VM: availability of the portal, web ingestion and API ingestion measured from the outside, email alerts, and alerts for Postgres replication lag and retained WAL ([ADR 0005](docs/adr/0005-monitoramento-externo.md)) |
 
-Em produção, todos os serviços rodam em Docker Compose. O Caddy é o único serviço com portas públicas: termina TLS automaticamente e encaminha portal, ingestão web e ingestão de API (OTLP por HTTP e gRPC) pela rede Docker. O Umami nunca é exposto.
+In production, every service runs in Docker Compose. Caddy is the only service with public ports: it terminates TLS automatically and forwards the portal, web ingestion and API ingestion (OTLP over HTTP and gRPC) over the Docker network. Umami is never exposed.
 
-A visão completa, com os dois fluxos, está em [`docs/arquitetura.md`](docs/arquitetura.md). As decisões e as alternativas descartadas estão nos ADRs ([índice](docs/adr/README.md)); os de base são:
+The full picture, with both flows, is in [`docs/arquitetura.md`](docs/arquitetura.md). Decisions and discarded alternatives are in the ADRs ([index](docs/adr/README.md)); the foundational ones are:
 
-- [0001 — Umami como ferramenta base](docs/adr/0001-ferramenta-base.md)
-- [0002 — Arquitetura e stack](docs/adr/0002-arquitetura-e-stack.md)
-- [0003 — Isolamento entre tenants é responsabilidade do portal](docs/adr/0003-isolamento-no-portal.md)
-- [0004 — Hospedagem na Hetzner, OpenTofu e backup com WAL-G](docs/adr/0004-hospedagem-e-backup.md)
-- [0014 — Infraestrutura de produção em Docker Compose](docs/adr/0014-infra-em-docker-compose.md)
+- [0001 — Umami as the base tool](docs/adr/0001-ferramenta-base.md)
+- [0002 — Architecture and stack](docs/adr/0002-arquitetura-e-stack.md)
+- [0003 — Tenant isolation is the portal's responsibility](docs/adr/0003-isolamento-no-portal.md)
+- [0004 — Hetzner hosting, OpenTofu and WAL-G backups](docs/adr/0004-hospedagem-e-backup.md)
+- [0014 — Production infrastructure on Docker Compose](docs/adr/0014-infra-em-docker-compose.md)
 
-## Documentação
+## Documentation
 
-| Para | Leia |
+| To | Read |
 |---|---|
-| Integrar um projeto (script, dual-export, painéis) | [`docs/onboarding-de-tenant.md`](docs/onboarding-de-tenant.md) e [`examples/`](examples/README.md) |
-| Subir e operar uma instância | [`docs/deploy.md`](docs/deploy.md) e os [runbooks](docs/runbooks/README.md) |
-| Privacidade e dados coletados | [`docs/privacidade.md`](docs/privacidade.md) |
-| Anti-bot e cadeia de suprimentos | [`docs/anti-bot-e-cadeia-de-suprimentos.md`](docs/anti-bot-e-cadeia-de-suprimentos.md) |
-| Disponibilidade e limites atuais | [`docs/sla.md`](docs/sla.md) e o [relatório de carga](docs/relatorios/carga-1m-dia.md) |
-| Andamento e pendências | [`docs/andamento.md`](docs/andamento.md) |
+| Integrate a project (script, dual-export, dashboards) | [`docs/onboarding-de-tenant.md`](docs/onboarding-de-tenant.md) and [`examples/`](examples/README.md) |
+| Deploy and operate an instance | [`docs/deploy.md`](docs/deploy.md) and the [runbooks](docs/runbooks/README.md) |
+| Privacy and collected data | [`docs/privacidade.md`](docs/privacidade.md) |
+| Anti-bot and supply chain | [`docs/anti-bot-e-cadeia-de-suprimentos.md`](docs/anti-bot-e-cadeia-de-suprimentos.md) |
+| Availability and current limits | [`docs/sla.md`](docs/sla.md) and the [load report](docs/relatorios/carga-1m-dia.md) |
+| Progress and open items | [`docs/andamento.md`](docs/andamento.md) |
 
-## Estrutura do repositório
+## Repository layout
 
 ```
 apps/
-  portal/            Portal Next.js: cadastro, painéis do tenant e do SCF
+  portal/            Next.js portal: sign-up, tenant and SCF dashboards
 packages/
-  tracker/           Script de rastreamento (TypeScript, esbuild)
-services/            Módulo Go único (go.mod)
-  ingest-web/        Gateway de ingestão web
-  collector/         Coletor OpenTelemetry (manifesto do OCB)
-    components/      Autenticação por chave, normalização de rotas, exporter Postgres
-  rollup/            Consolidação e retenção das métricas de API
-  replication-monitor/ Métricas de replicação do Postgres para os alertas
-  loadtest/          Ferramenta de carga (web e API)
-  internal/          Código compartilhado dos testes Go (banco com as migrações do portal)
-infra/               OpenTofu, Ansible, Docker Compose, Caddy, monitoramento e scripts de operação
-examples/            Integrações de referência (HTML, SPA, SSR, backend com OTel)
-scripts/             Checagem de licenças e de vulnerabilidades das dependências
-docs/                ADRs, specs, guias, runbooks e registro de andamento
+  tracker/           Tracking script (TypeScript, esbuild)
+services/            Single Go module (go.mod)
+  ingest-web/        Web ingestion gateway
+  collector/         OpenTelemetry collector (OCB manifest)
+    components/      Key authentication, route normalization, Postgres exporter
+  rollup/            API metric rollups and retention
+  replication-monitor/ Postgres replication metrics for the alerts
+  loadtest/          Load testing tool (web and API)
+  internal/          Shared code for the Go tests (database with the portal migrations)
+infra/               OpenTofu, Ansible, Docker Compose, Caddy, monitoring and operations scripts
+examples/            Reference integrations (HTML, SPA, SSR, backend with OTel)
+scripts/             Dependency license and vulnerability checks
+docs/                ADRs, specs, guides, runbooks and progress log
 ```
 
-O portal, o script, cada serviço Go, `infra/` e `examples/` têm um `README.md` próprio.
+The portal, the script, each Go service, `infra/` and `examples/` have their own `README.md`.
 
-- **TypeScript:** pnpm workspaces (`apps/*`, `packages/*`, `examples/*`) e Turborepo. O pnpm só instala versões publicadas há pelo menos 14 dias (`minimumReleaseAge` no `pnpm-workspace.yaml`).
-- **Go:** um módulo só, em `services/`.
+- **TypeScript:** pnpm workspaces (`apps/*`, `packages/*`, `examples/*`) and Turborepo. pnpm only installs versions published at least 14 days ago (`minimumReleaseAge` in `pnpm-workspace.yaml`).
+- **Go:** a single module, in `services/`.
 
-## Rodar localmente
+## Running locally
 
-Requer Node.js 24, pnpm 10 (`corepack enable`), Go 1.26 e Docker com Compose v2 e BuildKit.
+Requires Node.js 24, pnpm 10 (`corepack enable`), Go 1.26 and Docker with Compose v2 and BuildKit.
 
 ```bash
 pnpm install
-pnpm bootstrap    # ou ./scripts/bootstrap.sh
+pnpm bootstrap    # or ./scripts/bootstrap.sh
 ```
 
-O comando de bootstrap prepara o `.env`, sobe o banco e o Umami, gera automaticamente a conta de serviço do portal e inicializa toda a stack.
+The bootstrap command prepares the `.env`, starts the database and Umami, generates the portal's service account automatically and starts the whole stack.
 
 <details>
-<summary>Como fazer o passo a passo manual</summary>
+<summary>Manual step-by-step</summary>
 
 ```bash
 cp .env.example .env
-docker compose up -d --wait   # banco, Umami, portal, gateway, coletor e rollup
+docker compose up -d --wait   # database, Umami, portal, gateway, collector and rollup
 
-# Publica o Umami em 127.0.0.1:3001 (só para desenvolvimento) e gera a chave.
+# Publishes Umami on 127.0.0.1:3001 (development only) and generates the key.
 docker compose -f compose.yaml -f infra/compose/umami-port.yaml up -d --wait
 UMAMI_ADMIN_PASSWORD=umami UMAMI_URL=http://127.0.0.1:3001 \
   pnpm --filter @stellytics/portal umami:service-account
 ```
 
-Ponha a chave impressa em `UMAMI_API_KEY`, no `.env` da raiz, e recrie o portal com `docker compose up -d portal`.
+Put the printed key in `UMAMI_API_KEY`, in the root `.env`, and recreate the portal with `docker compose up -d portal`.
 
 </details>
 
-| Serviço | Endereço |
+| Service | Address |
 |---|---|
 | Portal | http://localhost:3000 |
-| Gateway de ingestão web | http://localhost:3002 |
-| Coletor de API (OTLP) | http://localhost:4318 (HTTP) e `localhost:4317` (gRPC) |
-| Mailpit (e-mails do portal) | http://localhost:8025 |
-| PostgreSQL 17 | `localhost:5432` (`stellytics`/`stellytics` e `umami`/`umami`) |
+| Web ingestion gateway | http://localhost:3002 |
+| API collector (OTLP) | http://localhost:4318 (HTTP) and `localhost:4317` (gRPC) |
+| Mailpit (portal emails) | http://localhost:8025 |
+| PostgreSQL 17 | `localhost:5432` (`stellytics`/`stellytics` and `umami`/`umami`) |
 
-- Portas e senhas: copie `.env.example` para `.env`.
-- O Umami não publica porta por padrão; o override `infra/compose/umami-port.yaml` (usado acima) abre a interface dele em http://127.0.0.1:3001. Detalhes em [`docs/umami.md`](docs/umami.md).
-- Contas locais de teste (dois donos de projeto e um operador) já vêm do seed de desenvolvimento (`SEED_DEV_DATA`); contas e senha no [`apps/portal/README.md`](apps/portal/README.md).
-- `docker compose down -v` apaga os dados e a próxima subida recomeça do zero.
-- Testes: `pnpm lint`, `pnpm typecheck` e `pnpm test` na raiz; para o Go, `go test -race ./...` de dentro de `services/`.
+- Ports and passwords: copy `.env.example` to `.env`.
+- Umami publishes no port by default; the `infra/compose/umami-port.yaml` override (used above) opens its UI at http://127.0.0.1:3001. Details in [`docs/umami.md`](docs/umami.md).
+- Local test accounts (two project owners and one operator) come from the development seed (`SEED_DEV_DATA`); accounts and password are in [`apps/portal/README.md`](apps/portal/README.md).
+- `docker compose down -v` deletes the data, and the next start begins from scratch.
+- Tests: `pnpm lint`, `pnpm typecheck` and `pnpm test` at the root; for Go, `go test -race ./...` from inside `services/`.
 
-## Deploy em produção
+## Production deployment
 
-Para uma VPS Debian/Ubuntu já existente, o caminho mínimo é `sudo ./init.sh`, configurar `.env.production` e executar `sudo ./deploy.sh`. Ele sobe o portal, gateway web, API OTLP, Umami, Postgres e Caddy em Docker Compose. Os dados ficam em volumes locais da VPS, sem backup externo automático.
+For an existing Debian/Ubuntu VPS, the minimal path is `sudo ./init.sh`, filling in `.env.production` and running `sudo ./deploy.sh`. It starts the portal, web gateway, OTLP API, Umami, Postgres and Caddy in Docker Compose. Data lives in local volumes on the VPS, with no automatic external backup.
 
-O caminho gerenciado na Hetzner com OpenTofu, Ansible e backup WAL-G continua documentado em [`docs/deploy.md`](docs/deploy.md).
+The managed path on Hetzner with OpenTofu, Ansible and WAL-G backups is still documented in [`docs/deploy.md`](docs/deploy.md).
 
-| Passo | O que fazer | Ferramenta |
+| Step | What to do | Tool |
 |---|---|---|
-| 1. Pré-requisitos | VPS Debian/Ubuntu, DNS e SMTP | `sudo ./init.sh` |
-| 2. Configuração | Preencher domínios e SMTP; senhas são geradas pelo `init.sh` | `.env.production` |
-| 3. Deploy | Construir e iniciar os serviços | `sudo ./deploy.sh` |
-| 4. Analytics | Trocar a senha inicial do Umami e configurar sua chave de API | túnel `infra/scripts/admin-tunnel.sh` |
+| 1. Prerequisites | Debian/Ubuntu VPS, DNS and SMTP | `sudo ./init.sh` |
+| 2. Configuration | Fill in domains and SMTP; passwords are generated by `init.sh` | `.env.production` |
+| 3. Deploy | Build and start the services | `sudo ./deploy.sh` |
+| 4. Analytics | Change Umami's initial password and set up its API key | `infra/scripts/admin-tunnel.sh` tunnel |
 
-No caminho mínimo, atualize o código e rode `sudo ./deploy.sh` novamente; os volumes existentes são preservados. No caminho gerenciado da Hetzner, o playbook usa imagens assinadas por digest, backup WAL-G e monitoramento externo.
+On the minimal path, update the code and run `sudo ./deploy.sh` again; existing volumes are preserved. On the managed Hetzner path, the playbook uses signed images pinned by digest, WAL-G backups and external monitoring.
 
-O passo a passo dos dois caminhos está em [`docs/deploy.md`](docs/deploy.md); os procedimentos de operação, nos [runbooks](docs/runbooks/README.md).
+The step-by-step for both paths is in [`docs/deploy.md`](docs/deploy.md); operating procedures are in the [runbooks](docs/runbooks/README.md).
 
-## CI e cadeia de suprimentos
+## CI and supply chain
 
-Todo PR roda o [`ci.yml`](.github/workflows/ci.yml): lint, tipos e testes de TypeScript e Go, os testes ponta a ponta no Compose local, a pilha de produção inteira com um S3 local (rotas do Caddy, backup e restauração), a replicação do Postgres com failover e a pilha de monitoramento. O check a exigir é o agregador `ci`.
+Every PR runs [`ci.yml`](.github/workflows/ci.yml): lint, type checks and tests for TypeScript and Go, the end-to-end tests on the local Compose stack, the full production stack with a local S3 (Caddy routes, backup and restore), Postgres replication with failover, and the monitoring stack. The check to require is the `ci` aggregator.
 
-- **Dependências travadas** por lockfile, e só releases com pelo menos 14 dias (pnpm e [Renovate](renovate.json)).
-- **Licenças e vulnerabilidades** conferidas pelo [`dependencies.yml`](.github/workflows/dependencies.yml); só licenças aprovadas pela OSI, com exceções temporárias e datadas (`scripts/licenses/allowed.json`) e a atribuição de terceiros em [`docs/avisos-de-terceiros.md`](docs/avisos-de-terceiros.md). Para não distribuir sharp/libvips (LGPL-3.0), o otimizador de imagens do portal fica desligado e `/_next/image` responde 404.
-- **Ad blockers:** o [`adblock.yml`](.github/workflows/adblock.yml) confere todo dia se as listas de bloqueio mais usadas deixam passar o script e as rotas de ingestão.
-- Esses dois workflows ficam fora do agregador `ci`, porque o resultado deles muda sem mudança no código.
-- **Release:** cada imagem vai para `ghcr.io/romulospl/stellytics/<nome>`, assinada com cosign e com SBOM atestado.
+- **Dependencies locked** by lockfile, and only releases at least 14 days old (pnpm and [Renovate](renovate.json)).
+- **Licenses and vulnerabilities** checked by [`dependencies.yml`](.github/workflows/dependencies.yml); only OSI-approved licenses, with temporary, dated exceptions (`scripts/licenses/allowed.json`) and third-party attribution in [`docs/avisos-de-terceiros.md`](docs/avisos-de-terceiros.md). To avoid distributing sharp/libvips (LGPL-3.0), the portal's image optimizer is disabled and `/_next/image` returns 404.
+- **Ad blockers:** [`adblock.yml`](.github/workflows/adblock.yml) checks daily that the most widely used block lists let the script and the ingestion routes through.
+- These two workflows stay out of the `ci` aggregator, because their results change without any code change.
+- **Release:** each image goes to `ghcr.io/romulospl/stellytics/<name>`, signed with cosign and with an attested SBOM.
 
-Para verificar uma imagem publicada:
+To verify a published image:
 
 ```bash
-cosign verify ghcr.io/romulospl/stellytics/<nome>:<versão> \
+cosign verify ghcr.io/romulospl/stellytics/<name>:<version> \
   --certificate-identity-regexp '^https://github.com/romulospl/stellytics/\.github/workflows/release\.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-Os detalhes estão em [`docs/anti-bot-e-cadeia-de-suprimentos.md`](docs/anti-bot-e-cadeia-de-suprimentos.md).
+Details are in [`docs/anti-bot-e-cadeia-de-suprimentos.md`](docs/anti-bot-e-cadeia-de-suprimentos.md).
 
-## Privacidade
+## Privacy
 
-A meta é conformidade com a GDPR **sem banner de consentimento**:
+The goal is GDPR compliance **without a consent banner**:
 
-- **IP:** o último octeto do IPv4 é descartado (no IPv6 fica só o /48) antes da geolocalização. O IP completo nunca é gravado, nem em log.
-- **Navegador:** nenhum cookie, `localStorage` ou identificador persistente.
-- **Umami:** gravação de sessão e heatmaps ficam desligados.
-- **API:** traces, spans e logs são descartados no coletor; ficam só contadores e histogramas por rota normalizada.
-- **Retenção:** eventos web no Umami ficam cerca de seis meses (183 dias, aplicada pelo job de consolidação); métricas de API, 35 dias no detalhe e 25 meses nos agregados.
-- **Apagamento (direito à erasure):** quem tem conta no portal exclui a própria conta em `/settings`, com e-mail de confirmação — isso apaga o projeto do usuário, os sites no Umami e as métricas de API, e anonimiza as ações da pessoa no histórico de auditoria. O operador SCF pode apagar os dados de um projeto removido. O mesmo job aplica a retenção automática dos eventos web.
-- **Residência:** todos os dados ficam na União Europeia — a infraestrutura fixa Hetzner Nuremberg (`nbg1`), Alemanha, e backups na mesma região, cifrados.
-- **Jurisdições:** a lista provisória de jurisdições onde pode ser exigido opt-in (UE/EEE, Alemanha, França, Reino Unido) está em [`docs/privacidade.md`](docs/privacidade.md), seção 8, à espera de assessoria jurídica.
+- **IP:** the last IPv4 octet is discarded (for IPv6 only the /48 is kept) before geolocation. The full IP is never stored, not even in logs.
+- **Browser:** no cookies, `localStorage` or persistent identifiers.
+- **Umami:** session recording and heatmaps are disabled.
+- **API:** traces, spans and logs are dropped at the collector; only counters and histograms per normalized route are kept.
+- **Retention:** web events in Umami are kept for about six months (183 days, enforced by the rollup job); API metrics, 35 days at full detail and 25 months as aggregates.
+- **Erasure (right to erasure):** anyone with a portal account can delete their own account in `/settings`, with email confirmation — this deletes the user's project, its Umami sites and API metrics, and anonymizes the person's actions in the audit log. The SCF operator can delete the data of a removed project. The same job enforces automatic retention of web events.
+- **Residency:** all data stays in the European Union — the infrastructure is pinned to Hetzner Nuremberg (`nbg1`), Germany, with encrypted backups in the same region.
+- **Jurisdictions:** the provisional list of jurisdictions where opt-in may be required (EU/EEA, Germany, France, United Kingdom) is in [`docs/privacidade.md`](docs/privacidade.md), section 8, pending legal advice.
 
-O detalhe, com retenção, fluxos de apagamento e lacunas conhecidas, está em [`docs/privacidade.md`](docs/privacidade.md).
+The details, including retention, erasure flows and known gaps, are in [`docs/privacidade.md`](docs/privacidade.md).
 
 ## Roadmap
 
-O código de E1 a E6 está implementado; os guias do E7 estão escritos, à espera de teste por alguém de fora; o E8 (pilotos) não começou e o E9 está parcial. O backlog está nas [issues](https://github.com/romulospl/stellytics/issues), organizado em épicos, e no [quadro do projeto](https://github.com/users/romulospl/projects/1).
+The E1 to E6 code is implemented; the E7 guides are written and waiting to be tested by an outside person; E8 (pilots) has not started and E9 is partial. The backlog lives in the [issues](https://github.com/romulospl/stellytics/issues), organized into epics, and on the [project board](https://github.com/users/romulospl/projects/1).
 
-| Épico | Escopo |
+| Epic | Scope |
 |---|---|
-| [E1](https://github.com/romulospl/stellytics/issues/1) | Fundação do monorepo e infraestrutura |
-| [E2](https://github.com/romulospl/stellytics/issues/2) | Multi-tenant, cadastro e controle de acesso |
-| [E3](https://github.com/romulospl/stellytics/issues/3) | Coleta de analytics web |
-| [E4](https://github.com/romulospl/stellytics/issues/4) | Painéis de analytics web |
-| [E5](https://github.com/romulospl/stellytics/issues/5) | Pipeline de analytics de API (OpenTelemetry) |
-| [E6](https://github.com/romulospl/stellytics/issues/6) | Painéis de analytics de API |
-| [E7](https://github.com/romulospl/stellytics/issues/7) | Documentação, privacidade e conformidade |
-| [E8](https://github.com/romulospl/stellytics/issues/8) | Pilotos com projetos reais do SCF |
-| [E9](https://github.com/romulospl/stellytics/issues/9) | Pós-MVP: SLA, escala, chaves de API e transferência |
-| [E10](https://github.com/romulospl/stellytics/issues/63) | Proposta e submissão ao SCF |
+| [E1](https://github.com/romulospl/stellytics/issues/1) | Monorepo foundation and infrastructure |
+| [E2](https://github.com/romulospl/stellytics/issues/2) | Multi-tenancy, sign-up and access control |
+| [E3](https://github.com/romulospl/stellytics/issues/3) | Web analytics collection |
+| [E4](https://github.com/romulospl/stellytics/issues/4) | Web analytics dashboards |
+| [E5](https://github.com/romulospl/stellytics/issues/5) | API analytics pipeline (OpenTelemetry) |
+| [E6](https://github.com/romulospl/stellytics/issues/6) | API analytics dashboards |
+| [E7](https://github.com/romulospl/stellytics/issues/7) | Documentation, privacy and compliance |
+| [E8](https://github.com/romulospl/stellytics/issues/8) | Pilots with real SCF projects |
+| [E9](https://github.com/romulospl/stellytics/issues/9) | Post-MVP: SLA, scale, API keys and handover |
+| [E10](https://github.com/romulospl/stellytics/issues/63) | Proposal and submission to the SCF |
 
-## Contribuindo
+## Contributing
 
-O guia completo está no [`CONTRIBUTING.md`](CONTRIBUTING.md), e vulnerabilidades são relatadas como descrito no [`SECURITY.md`](SECURITY.md). Dúvidas e bugs vão para as [issues](https://github.com/romulospl/stellytics/issues/new/choose), que são o canal público de suporte.
+The full guide is in [`CONTRIBUTING.md`](CONTRIBUTING.md), and vulnerabilities are reported as described in [`SECURITY.md`](SECURITY.md). Questions and bugs go to the [issues](https://github.com/romulospl/stellytics/issues/new/choose), which are the public support channel.
 
-- Commits seguem o [Conventional Commits 1.0.0-beta.4](https://www.conventionalcommits.org/pt-br/v1.0.0-beta.4/), por exemplo `feat(collector): add Stellar address normalization`.
-- Decisões de arquitetura novas viram um ADR em [`docs/adr/`](docs/adr/README.md), a partir do [template](docs/adr/template.md).
+- Commits follow [Conventional Commits 1.0.0-beta.4](https://www.conventionalcommits.org/en/v1.0.0-beta.4/), for example `feat(collector): add Stellar address normalization`.
+- New architecture decisions become an ADR in [`docs/adr/`](docs/adr/README.md), based on the [template](docs/adr/template.md).
 
-## Licença
+## License
 
 [MIT](LICENSE).

@@ -79,6 +79,8 @@ services:
     build:
       context: ../..
       dockerfile: apps/portal/Dockerfile
+      # Estágio com as contas de desenvolvimento (drizzle-dev).
+      target: dev
     image: stellytics-portal:dev
     environment:
       DATABASE_URL: postgresql://stellytics:${STELLYTICS_DB_PASSWORD:-stellytics}@postgres:5432/stellytics

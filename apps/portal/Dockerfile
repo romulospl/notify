@@ -35,8 +35,16 @@ COPY --from=build --chown=app:app /repo/apps/portal/.next/standalone ./
 COPY --from=build --chown=app:app /repo/apps/portal/.next/static ./apps/portal/.next/static
 # Migrações aplicadas na subida quando RUN_MIGRATIONS=true (src/instrumentation.ts).
 COPY --from=build --chown=app:app /repo/apps/portal/drizzle ./apps/portal/drizzle
-COPY --from=build --chown=app:app /repo/apps/portal/drizzle-dev ./apps/portal/drizzle-dev
 USER app
 WORKDIR /app/apps/portal
 EXPOSE 3000
 CMD ["node", "server.js"]
+
+# Só para o Compose de desenvolvimento (target: dev): acrescenta as contas de
+# desenvolvimento (senhas conhecidas), aplicadas com SEED_DEV_DATA=true.
+FROM runner AS dev
+COPY --from=build --chown=app:app /repo/apps/portal/drizzle-dev ./drizzle-dev
+
+# Imagem de produção: o último estágio é o alvo padrão do build e do release.yml,
+# e não leva o drizzle-dev (test/dockerfile.test.ts).
+FROM runner

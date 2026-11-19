@@ -91,7 +91,7 @@ function exceptionFor(exceptions, ecosystem, name, license) {
   });
 }
 
-const MAX_EXCEPTION_DAYS = 183; // "no maximo seis meses" (CONTRIBUTING.md)
+const MAX_EXCEPTION_DAYS = 183; // "no maximo 183 dias" (CONTRIBUTING.md)
 
 // Devolve o motivo se date/expires forem invalidos, ou null. Data invalida
 // nunca pode "vencer" (Invalid Date < now e falso), por isso e checada antes.

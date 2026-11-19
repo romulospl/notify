@@ -1,25 +1,25 @@
-# Como contribuir
+# Contributing
 
-Obrigado pelo interesse no stellytics. Este guia explica como preparar o ambiente, rodar os testes e enviar mudanças.
+Thanks for your interest in stellytics. This guide explains how to set up the environment, run the tests and submit changes.
 
-## Antes de começar
+## Before you start
 
-- **Bugs e dúvidas:** abra uma [issue](https://github.com/romulospl/stellytics/issues/new/choose) com o modelo adequado.
-- **Vulnerabilidades:** não abra issue pública; siga o [`SECURITY.md`](SECURITY.md).
-- **Mudanças grandes ou de arquitetura:** abra uma issue antes de programar. Decisões de arquitetura viram um ADR em [`docs/adr/`](docs/adr/README.md), a partir do [template](docs/adr/template.md). ADR aceito não é reescrito: crie outro e marque o antigo como substituído.
+- **Bugs and questions:** open an [issue](https://github.com/romulospl/stellytics/issues/new/choose) using the matching template.
+- **Vulnerabilities:** do not open a public issue; follow [`SECURITY.md`](SECURITY.md).
+- **Large or architectural changes:** open an issue before writing code. Architecture decisions become an ADR in [`docs/adr/`](docs/adr/README.md), based on the [template](docs/adr/template.md). An accepted ADR is never rewritten: create a new one and mark the old one as superseded.
 
-## Ambiente
+## Environment
 
-Requisitos: Node.js 24 ou mais novo, pnpm 10 (`corepack enable`), Go 1.26 e Docker com Compose v2.
+Requirements: Node.js 24 or newer, pnpm 10 (`corepack enable`), Go 1.26 and Docker with Compose v2.
 
 ```bash
-pnpm install                 # dependências TypeScript
-docker compose up -d --wait  # Postgres e Umami locais
+pnpm install                 # TypeScript dependencies
+docker compose up -d --wait  # local Postgres and Umami
 ```
 
-O passo a passo do ambiente local, com portas e acessos, está no [README](README.md#ambiente-local-docker-compose).
+The step-by-step local setup, with ports and credentials, is in the [README](README.md#running-locally).
 
-## Testes
+## Tests
 
 ```bash
 pnpm lint
@@ -28,7 +28,7 @@ pnpm test
 pnpm build
 ```
 
-Para o código Go, de dentro de `services/`:
+For the Go code, from inside `services/`:
 
 ```bash
 gofmt -l .
@@ -36,49 +36,49 @@ go vet ./...
 go test -race ./...
 ```
 
-Testes de integração usam um Postgres real, lido de `DATABASE_URL` (no ambiente local, `postgresql://stellytics:stellytics@localhost:5432/stellytics`). O CI roda tudo isso em cada PR.
+Integration tests use a real Postgres, read from `DATABASE_URL` (locally, `postgresql://stellytics:stellytics@localhost:5432/stellytics`). CI runs all of this on every PR.
 
-Regras que os testes precisam cobrir:
+Rules the tests must cover:
 
-- **Isolamento entre tenants:** todo acesso a dados novo precisa de teste mostrando que um tenant não vê dados de outro.
-- **Privacidade:** o IP completo nunca é persistido; nada de cookies ou storage no navegador.
-- **Normalização de rotas:** cada regra com casos positivos e negativos.
+- **Tenant isolation:** every new data access needs a test showing that one tenant cannot see another tenant's data.
+- **Privacy:** the full IP address is never persisted; no cookies or browser storage.
+- **Route normalization:** every rule with positive and negative cases.
 
-## Dependências
+## Dependencies
 
-- Dependências devem usar licença aprovada pela [OSI](https://opensource.org/licenses); exceções específicas e temporárias para ferramentas de build são registradas em `scripts/licenses/allowed.json` e revistas na data indicada.
-- Fixe versões exatas e commite o lockfile (`pnpm-lock.yaml`, `services/go.sum`). O CI falha se o lockfile estiver desatualizado.
-- Só adote releases com pelo menos 14 dias, salvo a exceção restrita para correções de segurança críticas ou altas descrita no [runbook](docs/runbooks/vulnerabilidades.md). O pnpm aplica `minimumReleaseAge`; o Renovate ainda depende de instalação e dos alertas do GitHub.
-- Actions do GitHub fixadas por SHA, com a tag em comentário.
+- Dependencies must use an [OSI](https://opensource.org/licenses)-approved license; specific, temporary exceptions for build tools are recorded in `scripts/licenses/allowed.json` and reviewed on the stated date.
+- Pin exact versions and commit the lockfile (`pnpm-lock.yaml`, `services/go.sum`). CI fails if the lockfile is out of date.
+- Only adopt releases that are at least 14 days old, except for the narrow exception for critical or high security fixes described in the [runbook](docs/runbooks/vulnerabilidades.md). pnpm enforces `minimumReleaseAge`; Renovate still depends on being installed and on GitHub alerts.
+- GitHub Actions pinned by SHA, with the tag in a comment.
 
-### Alertas de dependências e licenças
+### Dependency and license alerts
 
-O workflow `dependencies` (`.github/workflows/dependencies.yml`) roda nos PRs que mexem em manifestos ou lockfiles, na `main` e todo dia. Ele não faz parte do check `ci`, porque um advisory novo muda o resultado sem mudança no código; um vermelho na `main` precisa de alguém olhando. Para rodar as checagens localmente:
+The `dependencies` workflow (`.github/workflows/dependencies.yml`) runs on PRs that touch manifests or lockfiles, on `main` and daily. It is not part of the `ci` check, because a new advisory changes the result without any code change; a red run on `main` needs someone to look at it. To run the checks locally:
 
 ```bash
-# de services/: vulnerabilidades alcançáveis. Fixe o Go das imagens: leia a versão
-# em `FROM golang:X.Y.Z` dos services/*/Dockerfile (hoje 1.26.9) e use no GOTOOLCHAIN
+# from services/: reachable vulnerabilities. Pin the Go version used by the images: read it
+# from `FROM golang:X.Y.Z` in services/*/Dockerfile (currently 1.26.9) and use it in GOTOOLCHAIN
 GOTOOLCHAIN=go1.26.9 go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
-# da raiz: vulnerabilidades do pnpm (high e critical falham; sai 2 se não consultou; lista também as de devDependencies, sem falhar)
+# from the root: pnpm vulnerabilities (high and critical fail; exits 2 if the query failed; also lists devDependencies ones, without failing)
 node scripts/deps/audit-pnpm.mjs
-# da raiz, depois de pnpm install: licenças
+# from the root, after pnpm install: licenses
 pnpm licenses list --json --prod > /tmp/npm-licenses.json
 (cd services && go run github.com/google/go-licenses/v2@v2.0.1 report ./... --template ../scripts/licenses/go-licenses.tpl --ignore github.com/romulospl/stellytics/services) > /tmp/go-licenses.tsv
 node scripts/deps/check-licenses.mjs --npm /tmp/npm-licenses.json --go /tmp/go-licenses.tsv
-node --test scripts/deps/*.test.mjs   # testes dos conferidores
+node --test scripts/deps/*.test.mjs   # tests for the checkers
 ```
 
-**Vulnerabilidade.** Leia o pacote, a versão corrigida e o caminho (o relatório mostra de quem a dependência vem). Prefira subir a versão, respeitando os 14 dias de espera. Se a correção ainda não tem 14 dias, espere a data em que ela passa a valer (o job `govulncheck` fica vermelho até a imagem subir, o que é esperado e curto) e avalie mitigação nesse intervalo; a regra de 14 dias não é afrouxada. Para uma dependência transitiva, suba a que a traz ou use `pnpm.overrides` com versão exata. `moderate` e `low` do `pnpm audit` não falham o job, mas aparecem no log: trate quando houver correção. Nunca silencie um alerta `high` ou `critical`, nem troque o limite do `audit`, para deixar o job verde. Um job vermelho com "Nao consegui consultar" não é vulnerabilidade: é falha do endpoint ou da rede, rode de novo.
+**Vulnerability.** Read the package, the fixed version and the path (the report shows which dependency pulls it in). Prefer upgrading, respecting the 14-day wait. If the fix is not yet 14 days old, wait for the date it becomes eligible (the `govulncheck` job stays red until the image is bumped, which is expected and short) and consider a mitigation in the meantime; the 14-day rule is not relaxed. For a transitive dependency, upgrade the one that pulls it in or use `pnpm.overrides` with an exact version. `moderate` and `low` findings from `pnpm audit` do not fail the job but show up in the log: handle them when a fix exists. Never silence a `high` or `critical` alert, or change the `audit` threshold, to turn the job green. A red job with "Nao consegui consultar" is not a vulnerability: it is an endpoint or network failure, run it again.
 
-**Licença fora da lista.** A allowlist é `scripts/licenses/allowed.json` (ids SPDX). Expressão com `OR` (dual license) passa se uma alternativa estiver na lista; com `AND`, todas precisam estar; `X WITH exceção` vale como `X`. Sem licença, `UNLICENSED`, `Unknown` e `SEE LICENSE IN ...` falham sempre. O que fazer, em ordem:
+**License not on the list.** The allowlist is `scripts/licenses/allowed.json` (SPDX ids). An `OR` expression (dual license) passes if one alternative is on the list; with `AND`, all must be; `X WITH exception` counts as `X`. No license, `UNLICENSED`, `Unknown` and `SEE LICENSE IN ...` always fail. What to do, in order:
 
-1. Trocar a dependência por uma com licença permitida.
-2. Se a licença é aprovada pela [OSI](https://opensource.org/licenses) e permissiva, acrescentar o id SPDX em `allowed` no PR, com a justificativa na descrição. Copyleft (LGPL, GPL, AGPL; a MPL-2.0 já está liberada) não entra na lista geral: vira exceção por pacote (`package` pode terminar em `*` para npm, como `@img/sharp-libvips-*`). No caso do libvips, a decisão atual é não distribuí-lo: a otimização de imagens está desativada e sharp/libvips são removidos do standalone. Uma futura distribuição de LGPL exige análise e cumprimento das obrigações aplicáveis antes de reativar o recurso.
-3. Se é um caso pontual (por exemplo, dependência de build sem licença OSI), acrescentar uma entrada em `exceptions` com `ecosystem` (`npm` ou `go`), `package` (nome npm ou caminho do módulo Go), `license` (exatamente a que o conferidor mostrou), `reason`, `date` e `expires` (no máximo seis meses, 183 dias; datas em AAAA-MM-DD, inválidas fazem o job falhar). A exceção vale só para aquele pacote e aquela licença, em qualquer versão, e **vence**: depois da data o job volta a falhar, para forçar a revisão. Exceção sem uso aparece como aviso e deve ser removida.
+1. Replace the dependency with one under an allowed license.
+2. If the license is [OSI](https://opensource.org/licenses)-approved and permissive, add the SPDX id to `allowed` in the PR, with the justification in the description. Copyleft (LGPL, GPL, AGPL; MPL-2.0 is already allowed) does not go on the general list: it becomes a per-package exception (`package` may end in `*` for npm, as in `@img/sharp-libvips-*`). For libvips, the current decision is not to distribute it: image optimization is disabled and sharp/libvips are removed from the standalone build. Distributing LGPL code in the future requires analyzing and meeting the applicable obligations before re-enabling the feature.
+3. If it is a one-off case (for example, a build dependency without an OSI license), add an entry to `exceptions` with `ecosystem` (`npm` or `go`), `package` (npm name or Go module path), `license` (exactly what the checker printed), `reason`, `date` and `expires` (at most 183 days, about six months; dates in YYYY-MM-DD, invalid ones fail the job). The exception applies only to that package and that license, in any version, and it **expires**: after the date the job fails again, to force a review. An unused exception shows up as a warning and should be removed.
 
-## Commits e pull requests
+## Commits and pull requests
 
-Commits seguem o [Conventional Commits 1.0.0-beta.4](https://www.conventionalcommits.org/pt-br/v1.0.0-beta.4/), **sempre em inglês**:
+Commits follow [Conventional Commits 1.0.0-beta.4](https://www.conventionalcommits.org/en/v1.0.0-beta.4/):
 
 ```
 <type>[optional scope]: <description>
@@ -88,20 +88,20 @@ Commits seguem o [Conventional Commits 1.0.0-beta.4](https://www.conventionalcom
 [optional footer]
 ```
 
-- Tipos: `feat`, `fix`, `docs`, `chore`, `style`, `refactor`, `perf`, `test`, `ci`, `build` e `improvement`.
-- Escopo: a parte do código afetada, por exemplo `feat(collector):`, `fix(tracker):`, `docs(adr):`.
-- Descrição no imperativo, curta e em minúsculas: `feat(collector): add Stellar address normalization`.
-- Quebra de compatibilidade: `BREAKING CHANGE: <descrição>` no corpo ou no rodapé, ou `!` antes dos dois-pontos.
-- Feche a issue pelo rodapé: `closes #32`.
+- Types: `feat`, `fix`, `docs`, `chore`, `style`, `refactor`, `perf`, `test`, `ci`, `build` and `improvement`.
+- Scope: the part of the code affected, for example `feat(collector):`, `fix(tracker):`, `docs(adr):`.
+- Description in the imperative, short and lowercase: `feat(collector): add Stellar address normalization`.
+- Breaking changes: `BREAKING CHANGE: <description>` in the body or footer, or `!` before the colon.
+- Close the issue from the footer: `closes #32`.
 
 Pull requests:
 
-- Um assunto por PR, com título no mesmo padrão dos commits.
-- Descreva o que mudou e como testou.
-- O CI precisa estar verde para o merge.
+- One topic per PR, with a title following the same pattern as commits.
+- Describe what changed and how you tested it.
+- CI must be green to merge.
 
-Documentação, ADRs e issues são escritos em português do Brasil.
+Everything in the repository is written in English: code, comments, documentation, ADRs, issues, commits and pull requests.
 
-## Licença
+## License
 
-Ao contribuir, você concorda que sua contribuição será licenciada sob a [licença MIT](LICENSE) do projeto.
+By contributing, you agree that your contribution will be licensed under the project's [MIT license](LICENSE).
