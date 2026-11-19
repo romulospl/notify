@@ -330,7 +330,7 @@ describe("membro de A diante dos recursos de B", () => {
 
     expect(
       await createSiteAction({ status: "idle" }, form({ name: "Forged", domain: "forged.example", tenantId: B.tenantId })),
-    ).toEqual({ status: "created" });
+    ).toMatchObject({ status: "created" });
     const [forgedSite] = await db.select().from(site).where(eq(site.domain, "forged.example"));
     expect(forgedSite!.tenantId).toBe(A.tenantId);
   });

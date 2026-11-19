@@ -30,6 +30,11 @@ export const env = {
   get umamiUrl() {
     return (process.env.UMAMI_URL ?? "http://127.0.0.1:3001").replace(/\/$/, "");
   },
+  // Public address of the web gateway, used in the installation tag shown on
+  // each site's page. In production it is https://INGEST_HOST (prod.yaml).
+  get ingestUrl() {
+    return (process.env.INGEST_URL ?? "http://localhost:3002").replace(/\/$/, "");
+  },
   // Cadastro com aprovação prévia (#49, ADR 0007): com `true` ou `1`, projeto
   // novo nasce `pending` até um operador aprovar. Desligado por padrão. Lido a
   // cada cadastro; mudar o valor exige reiniciar o portal.

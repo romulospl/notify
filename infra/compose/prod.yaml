@@ -124,6 +124,8 @@ services:
       MAIL_FROM: ${MAIL_FROM:?}
       # Cadastro com aprovação prévia (#49, ADR 0007); desligado por padrão.
       SIGNUP_APPROVAL: ${SIGNUP_APPROVAL:-false}
+      # Gateway address in the installation tag shown on each site's page.
+      INGEST_URL: https://${INGEST_HOST:?}
     depends_on:
       postgres:
         condition: service_healthy

@@ -101,6 +101,8 @@ services:
       # Cadastro com aprovação prévia (#49, ADR 0007): true deixa projetos novos
       # pendentes até um operador aprovar em /operator/approvals.
       SIGNUP_APPROVAL: ${SIGNUP_APPROVAL:-false}
+      # Gateway address in the installation tag shown on each site's page.
+      INGEST_URL: http://localhost:${INGEST_WEB_PORT:-3002}
     depends_on:
       postgres:
         condition: service_healthy

@@ -24,6 +24,8 @@ import { DeltaText } from "@/components/delta-text";
 import { PeriodPicker } from "@/components/period-picker";
 import { parsePeriodKey, resolvePeriod } from "@/lib/period";
 import { type CountedItem, getSiteDashboard, type RankedItem, type SiteDashboard, UmamiError } from "@/lib/umami/stats";
+import { trackerSnippets } from "@/lib/tracker-snippet";
+import { InstallScript } from "./install-script";
 import { PageviewsChart } from "./pageviews-chart";
 
 export const metadata: Metadata = { title: "Website analytics" };
@@ -67,6 +69,15 @@ export default async function SitePage({
     );
   }
 
+  // Installation tag (self-service enrollment): open while the site shows no
+  // page views, collapsed once data arrives.
+  const install = (open: boolean) => (
+    <details id="install" open={open} className={`mt-6 ${card}`}>
+      <summary className="cursor-pointer font-medium">Install the tracking script</summary>
+      <InstallScript snippets={trackerSnippets(site.umamiWebsiteId)} domain={site.domain} />
+    </details>
+  );
+
   const period = resolvePeriod(parsePeriodKey(query.period));
   let data: SiteDashboard | null;
   try {
@@ -82,6 +93,7 @@ export default async function SitePage({
         <p role="alert" className="mt-6 text-zinc-500">
           Web analytics is unavailable right now. Try again in a few minutes.
         </p>
+        {install(true)}
       </section>
     );
   }
@@ -101,6 +113,8 @@ export default async function SitePage({
     <section>
       {header}
       <PeriodPicker current={period.key} href={(key) => `/sites/${site.id}?period=${key}`} />
+
+      {install(empty)}
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatTile

@@ -17,7 +17,7 @@ export default async function SitesPage() {
     <section>
       <h1 className="text-2xl font-semibold">Websites</h1>
       <p className="mt-2 text-zinc-500">
-        Add each website you want to measure. The tracking script uses the website ID shown below.
+        Add each website you want to measure. Each website&apos;s page has its tracking script, ready to copy.
       </p>
 
       {canWrite ? (
@@ -34,12 +34,15 @@ export default async function SitesPage() {
             <th className="py-2 font-medium">Name</th>
             <th className="py-2 font-medium">Domain</th>
             <th className="py-2 font-medium">Website ID</th>
+            <th className="py-2 font-medium">
+              <span className="sr-only">Tracking script</span>
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
           {sites.length === 0 && (
             <tr>
-              <td colSpan={3} className="py-3 text-zinc-500">
+              <td colSpan={4} className="py-3 text-zinc-500">
                 No websites yet.
               </td>
             </tr>
@@ -53,6 +56,11 @@ export default async function SitesPage() {
               </td>
               <td className="py-2">{site.domain}</td>
               <td className="py-2 font-mono text-xs">{site.umamiWebsiteId}</td>
+              <td className="py-2 text-right">
+                <Link href={`/sites/${site.id}#install`} className="text-zinc-500 hover:underline">
+                  Get script
+                </Link>
+              </td>
             </tr>
           ))}
         </tbody>

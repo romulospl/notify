@@ -142,6 +142,7 @@ Quem ainda não tem projeto e abre uma página do tenant é levado a `/onboardin
 | `BETTER_AUTH_URL` | Não | URL pública do portal (padrão `http://localhost:3000`) |
 | `RUN_MIGRATIONS` | Não | `true` aplica as migrações do Drizzle na subida do servidor |
 | `UMAMI_URL` | Não | Endereço interno do Umami (padrão `http://127.0.0.1:3001`, publicado só pelo `infra/compose/umami-port.yaml`; no Compose, `http://umami:3000`) |
+| `INGEST_URL` | Não | Public gateway address used in the installation tag on each site's page (default `http://localhost:3002`; `https://INGEST_HOST` in `prod.yaml`) |
 | `UMAMI_API_KEY` | Para sites | Chave de API da conta de serviço. Sem ela o portal sobe, mas não cria sites nem lê estatísticas |
 
 ## Banco e migrações

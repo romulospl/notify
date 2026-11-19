@@ -15,6 +15,9 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 
 FROM deps AS build
 COPY apps/portal apps/portal
+# Versions and SRI hashes of the tracking script, for the installation tag on
+# each site's page (src/lib/tracker-snippet.ts).
+COPY packages/tracker/published/sri.json packages/tracker/published/sri.json
 RUN pnpm --filter @stellytics/portal build
 # O otimizador de imagem está desligado: sharp e libvips não são distribuídos
 # no standalone; caniuse-lite também não vai para a imagem. Remove os pacotes

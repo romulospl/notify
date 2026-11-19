@@ -1,6 +1,8 @@
 // Painel web do tenant (#28): períodos, formatação, leitura do Umami e página,
 // contra o Postgres de DATABASE_URL e um Umami falso com as respostas do 3.4.1.
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { inArray, like } from "drizzle-orm";
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -20,6 +22,7 @@ import {
 } from "@/lib/format";
 import { parsePeriodKey, resolvePeriod } from "@/lib/period";
 import { EVENT_FETCH_LIMIT, getSiteDashboard, TOP_LIMIT } from "@/lib/umami/stats";
+import { TRACKER_VERSION, trackerSnippets } from "@/lib/tracker-snippet";
 import SitePage from "@/app/(private)/sites/[siteId]/page";
 import { DEFAULT_EVENT_VALUES, DEFAULT_METRICS, startFakeUmami, type FakeUmami } from "./fake-umami";
 
@@ -316,6 +319,49 @@ describe("página do site", () => {
     expect(t).toContain("No wallet selections in this period. Track them with stellytics.wallets().");
     expect(t).toContain("Disconnections: 0");
     expect(t).not.toContain("NaN");
+  });
+
+  it("tag de instalação pronta para copiar, com o ID do site e o SRI da versão mais nova", async () => {
+    const m = await createMember();
+    sessionUser = { id: m.userId, role: "tenant" };
+    const html = await render(page(m.siteId));
+    const t = text(html);
+    expect(t).toContain("Install the tracking script");
+    expect(html).toContain(`data-site=&quot;${m.umamiWebsiteId}&quot;`);
+    expect(html).toContain(`/s/v${TRACKER_VERSION}/n.js`);
+    // With page views the section starts collapsed.
+    expect(html).toMatch(/<details id="install" class="[^"]*">/);
+
+    // The hash in the tag is the hash of the published file.
+    const published = path.join(import.meta.dirname, "../../../packages/tracker/published");
+    const versions = Object.keys(JSON.parse(readFileSync(path.join(published, "sri.json"), "utf8")) as object);
+    const newest = versions.sort((a, b) => a.localeCompare(b, "en", { numeric: true })).at(-1);
+    expect(TRACKER_VERSION).toBe(newest);
+    const file = readFileSync(path.join(published, `v${TRACKER_VERSION}`, "n.js"));
+    const sri = `sha384-${createHash("sha384").update(file).digest("base64")}`;
+    const { html: htmlTag, nextjs } = trackerSnippets(m.umamiWebsiteId);
+    expect(htmlTag).toContain(`integrity="${sri}"`);
+    expect(htmlTag).toContain('crossorigin="anonymous"');
+    expect(htmlTag).toMatch(/^<script\n[\s\S]*\n><\/script>$/);
+    expect(nextjs).toContain('crossOrigin="anonymous"');
+    expect(nextjs).toMatch(/\n\/>$/);
+  });
+
+  it("sem visualizações ou com o Umami fora do ar: a tag de instalação vem aberta", async () => {
+    const m = await createMember();
+    sessionUser = { id: m.userId, role: "tenant" };
+    umami.series = { pageviews: [], sessions: [] };
+    umami.metrics = { referrer: [], country: [], device: [], browser: [], event: [] };
+    umami.eventValues = {};
+    umami.statsBy.set(m.umamiWebsiteId, { pageviews: 0, visitors: 0, visits: 0, bounces: 0, totaltime: 0 });
+    expect(await render(page(m.siteId))).toMatch(/<details id="install" open="" /);
+
+    umami.down = true;
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const html = await render(page(m.siteId));
+    errors.mockRestore();
+    expect(html).toMatch(/<details id="install" open="" /);
+    expect(html).toContain(`data-site=&quot;${m.umamiWebsiteId}&quot;`);
   });
 
   it("site de outro tenant: 404, sem chamar o Umami", async () => {

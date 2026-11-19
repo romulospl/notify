@@ -59,9 +59,11 @@ You can delete your own account at `/settings`: the portal asks for your e-mail 
 
 ### 3.1 Register the site
 
-On `/sites`, enter **Name** and **Domain** (for example `docs.example.org`) and add it. The table then shows the **Website ID**, a UUID. This is the value that goes in the script's `data-site` attribute. The site name links to its dashboard.
+On `/sites`, enter **Name** and **Domain** (for example `docs.example.org`) and add it. The portal then opens the site's page, with the **Install the tracking script** section ready to copy: the tag already carries the gateway address, the newest script version, its SRI hash and the site's **Website ID** (a UUID, in the `data-site` attribute). It has one tab for static HTML and SPAs and one for Next.js. The section stays open while the site has no page views in the chosen period and collapses after that; the **Get script** link on `/sites` leads back to it.
 
-The portal **does not generate the installation snippet**: build the tag as below, replacing `<gateway>` and `<website-id>`.
+The tags below are the same ones the portal shows, with `<gateway>` and `<website-id>` in place of the real values. In production the gateway is the operator's `INGEST_HOST`.
+
+The site must be served over **HTTPS** (or from `localhost`): the script solves the JS execution proof with `crypto.subtle`, which browsers only offer there. On plain HTTP no event is sent.
 
 ### 3.2 Install the script
 
