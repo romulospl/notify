@@ -93,6 +93,7 @@ The full picture, with both flows, is in [`docs/arquitetura.md`](docs/arquitetur
 | Anti-bot and supply chain | [`docs/anti-bot-e-cadeia-de-suprimentos.md`](docs/anti-bot-e-cadeia-de-suprimentos.md) |
 | Availability and current limits | [`docs/sla.md`](docs/sla.md) and the [load report](docs/relatorios/carga-1m-dia.md) |
 | Progress and open items | [`docs/andamento.md`](docs/andamento.md) |
+| Validate the deploy and onboarding guides with someone who did not write them | [`docs/validation/deploy.md`](docs/validation/deploy.md) and [`docs/validation/onboarding-de-tenant.md`](docs/validation/onboarding-de-tenant.md) |
 
 ## Repository layout
 
