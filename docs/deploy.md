@@ -11,6 +11,8 @@ Production is one Debian or Ubuntu VPS running Docker Compose ([ADR 0016](adr/00
 - An S3-compatible bucket for the Postgres backup, with an access key that can read and write it.
 - A real SMTP service for sign-up confirmation and password reset (SPF, DKIM and DMARC of the `MAIL_FROM` domain are up to you).
 - A second, small host for monitoring, ideally with another provider or region.
+- `git` on both hosts, to clone the repository (minimal Debian images do not include it: `apt-get install -y git`).
+- On your own machine, for the first start: SSH, `git`, Node 24 and pnpm (`corepack enable` picks the version pinned in `package.json`).
 
 The VPS and bucket region is the data residency that must be declared ([`privacidade.md`](privacidade.md)).
 
@@ -92,7 +94,7 @@ Logs: `compose logs <service>` (caddy, portal, ingest-web, collector, rollup, um
 2. `git pull` (or check out the release tag) and `sudo ./deploy.sh`. Portal migrations run on start (`RUN_MIGRATIONS=true`).
 3. Repeat step 3.
 
-**Rollback.** Check out the previous version and run `deploy.sh` again. That reverts the code, **not the database**: if the new version brought a migration, restore the backup taken before the update (below) before starting the old version. Published tracking script versions stay available at `/s/`.
+**Rollback.** Check out the previous version and run `deploy.sh` again. That reverts the code, **not the database**: if the new version brought a migration, restore the backup taken before the update (below) before starting the old version. Published tracking script versions stay available at `/s/`. The systemd units that a newer `deploy.sh` installed stay in place: when going back past the version that added `stellytics-check.timer` (#172), run `systemctl disable --now stellytics-check.timer`, or the monitor raises `StackUnhealthy` after 5 minutes; the next `deploy.sh` of a newer version enables it again.
 
 **Rotating a secret.** Database users are created once, on an empty volume, and keep their old password. In order: edit `.env.production`; run `deploy.sh` (services may stay unhealthy until the next step); update the password in the database (`compose exec -T postgres sh < infra/compose/postgres/init/02-ingest-roles.sh` for the ingest and collector users; `compose exec -T postgres psql -U postgres -c "ALTER ROLE <role> PASSWORD '<new>'"` for `stellytics`, `umami` and `postgres`); then `compose restart portal umami ingest-web`. Events received in between are dropped. Other secrets: `PORTAL_AUTH_SECRET` ends all portal sessions; `UMAMI_APP_SECRET` ends Umami sessions (create a new service account key if the portal gets 401); `INGEST_PROOF_SECRET` invalidates pending challenges for up to 5 minutes. `WALG_LIBSODIUM_KEY` cannot be changed. Details in [`runbooks/rotacao-de-segredos.md`](runbooks/rotacao-de-segredos.md).
 
@@ -143,7 +145,7 @@ A second host checks the portal and ingestion from outside every 15 seconds and 
 
 What cannot be seen from outside is checked on the VPS: `deploy.sh` installs `stellytics-check.timer`, which runs [`infra/scripts/stack-check.py`](../infra/scripts/stack-check.py) every minute. It checks that every container is running and healthy (rollup turns unhealthy when the rollup stops), that Postgres is archiving WAL, that the newest base backup is at most 26 hours old and that the data disk is below 90% (`STACK_CHECK_DISK_MAX_PERCENT`). Caddy answers `https://<ingest_host>/healthz/stack` with 200 while the check passes and 503 otherwise (status code only); the monitor probes it. The reasons are in `journalctl -u stellytics-check -n 20`.
 
-1. Install Docker on the monitoring host and clone the repository.
+1. Install Docker Engine with the Compose plugin on the monitoring host from Docker's repository ([docs.docker.com/engine/install](https://docs.docker.com/engine/install/), the same repository `init.sh` uses; Debian's own `docker.io` package has no `docker compose`), then clone the repository.
 2. Create `monitoring.env` (mode `0600`, outside git) with the variables listed at the top of [`infra/monitoring/configure.sh`](../infra/monitoring/configure.sh): the hosts, `API_URL=https://<api_host>/v1/metrics`, the alert email and SMTP. **Recommended:** a `DEADMAN_URL` from an external heartbeat service, so you learn when the monitor itself is down.
 3. Run:
 
@@ -152,7 +154,7 @@ What cannot be seen from outside is checked on the VPS: `deploy.sh` installs `st
    cd infra/monitoring && docker compose up -d --wait
    ```
 
-   After changing `monitoring.env`, run `configure.sh` again and `docker compose kill -s SIGHUP prometheus alertmanager`.
+   `configure.sh` writes the Prometheus targets and `alertmanager.yml` (including `alertmanager/secrets/` with the SMTP password) inside the clone; `.gitignore` excludes them. After changing `monitoring.env`, run `configure.sh` again and `docker compose kill -s SIGHUP prometheus alertmanager`.
 
 | Alert | When |
 |---|---|
@@ -163,6 +165,15 @@ What cannot be seen from outside is checked on the VPS: `deploy.sh` installs `st
 | `ProberDown` | The blackbox exporter is down |
 
 Prometheus and Alertmanager listen on loopback only: `ssh -N -L 9090:127.0.0.1:9090 -L 9093:127.0.0.1:9093 root@<monitor-ip>`, then `http://127.0.0.1:9090` (`probe_success` must be `1` for every component). The API probe only confirms that the collector requires a key (401).
+
+## Remove a deployment
+
+For a test deploy, or after a handover ([`transferencia.md`](transferencia.md)) once the new operator has confirmed their copy. Removing the VPS disk and the bucket deletes the data and every backup for good.
+
+1. Decide what to keep. To keep the data, take a base backup (`systemctl start stellytics-backup`) and keep the bucket and `WALG_LIBSODIUM_KEY`, or export it as in `transferencia.md`.
+2. On the monitoring host first, so removing production does not raise alerts: `cd infra/monitoring && docker compose down -v`. Remove or pause the check at the heartbeat service (`DEADMAN_URL`), which would otherwise report the monitor as down.
+3. On the VPS: `systemctl disable --now stellytics-backup.timer stellytics-check.timer`, then `compose down`.
+4. At the providers: delete the VPS with its data disk (`/srv/stellytics`), the monitoring host, the DNS records, and, unless you kept it in step 1, the bucket. Revoke the bucket access key and the SMTP credentials used by the portal and by the monitor.
 
 ## Not covered yet
 
@@ -179,4 +190,6 @@ Without a real VPS, DNS or SMTP: `prod.yaml` with a generated `.env`, routes, po
 
 On 2026-11-19 the team rehearsed sections 1 to 3 at commit `ca28e07` in a clean Ubuntu 24.04 container with systemd standing in for the VPS, a local S3 (SeaweedFS), a local SMTP (Mailpit), `*.localhost` names with Caddy's internal CA and a second container as the operator's machine. `init.sh`, `deploy.sh`, both systemd timers, the first base backup, the tunnel, the Umami service account, `operator:create`, every `curl` and `nc` check, sign-up with the email link, a site visit with the pinned script, OTLP metrics with an ingest key and the tenant and operator dashboards all worked. The only gap found, the missing `pnpm install`, is fixed above. Details in [#42](https://github.com/romulospl/stellytics/issues/42).
 
-Not checked: a real VPS, DNS and certificate issuance, delivery through a real SMTP service, backup to a real bucket, external monitoring and alerts (Monitoring) and the restore on a deployed VPS.
+The same day the whole validation script was also run, as a simulation by an AI agent, on three throwaway Debian virtual machines (VPS, monitoring host and stand-in providers) with the same kind of local stand-ins ([report](validation/reports/deploy-2026-11-19-simulation.md)). Beyond sections 1 to 3, it covered the external monitoring with the `EndpointDown` and resolved e-mails, the dead-man heartbeat, the restore on the deployed VM, an update and a rollback, and the teardown. Its findings are fixed in this guide, `infra/monitoring/configure.sh` and `.gitignore`.
+
+Not checked: a real VPS, DNS and certificate issuance, delivery through a real SMTP service, backup to a real bucket, and a run by an operator from outside the team, which #42 asks for.
