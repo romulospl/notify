@@ -19,6 +19,11 @@ services/bin/
 !.env.example
 !.env.production.example
 
+# Monitoring config written by infra/monitoring/configure.sh (alertmanager/secrets
+# holds the SMTP password and the dead-man URL)
+infra/monitoring/alertmanager/
+infra/monitoring/prometheus/targets/
+
 # Sistema e editores
 .DS_Store
 .idea/

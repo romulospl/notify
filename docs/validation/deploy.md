@@ -1,6 +1,6 @@
 # Validation script for the deploy guide (#42)
 
-This script has not been run yet. It was written from [`docs/deploy.md`](../deploy.md) after the move to a single VPS ([ADR 0016](../adr/0016-producao-em-vps.md)), issue #42 and the repository. Its companion for the onboarding guide is [`onboarding-de-tenant.md`](onboarding-de-tenant.md).
+No outside operator has run this script yet. On 2026-11-19 it was run as a simulation by an AI agent on throwaway virtual machines ([report](reports/deploy-2026-11-19-simulation.md)); that run does not count for #42 (rule 1 and section 8), and its findings were fixed in the guide. The script was written from [`docs/deploy.md`](../deploy.md) after the move to a single VPS ([ADR 0016](../adr/0016-producao-em-vps.md)), issue #42 and the repository. Its companion for the onboarding guide is [`onboarding-de-tenant.md`](onboarding-de-tenant.md).
 
 ## What it is for
 
@@ -84,7 +84,7 @@ Record the time from "started reading" to the first dashboard data, hands-on tim
 Not confirmed, from reading the guide:
 
 - D7 and D9: the tunnel logs in as `root`; the guide has no fallback when root SSH login is disabled.
-- D24: the guide has no teardown steps.
+- D24: the guide now has a "Remove a deployment" section, added after the simulation; check that it is enough.
 
 ## 7. Report template
 
@@ -150,4 +150,4 @@ Proposal, for the maintainers to confirm:
 
 ## 9. Known limits
 
-- No step has been executed. The "expected results" come from the text of the guide and the files; the guide's own "How this guide was checked" section lists what was never run on a real VPS (`init.sh`, `deploy.sh`, certificate issuance, e-mail delivery, backup to a real bucket).
+- No outside operator has executed it; the 2026-11-19 simulation used local stand-ins for DNS, certificates, SMTP and S3. The "expected results" come from the text of the guide and the files; the guide's own "How this guide was checked" section lists what was never run on a real VPS (`init.sh`, `deploy.sh`, certificate issuance, e-mail delivery, backup to a real bucket).

@@ -24,8 +24,15 @@ SMTP_FROM=monitor@example.org
 SMTP_REQUIRE_TLS=false
 DEADMAN_URL=http://deadman:8080/ping
 EOT
-"$root/monitoring/configure.sh" "$work/monitoring.env" "$work" >/dev/null
+# A restrictive umask must not leave the config unreadable to nobody.
+(umask 077; "$root/monitoring/configure.sh" "$work/monitoring.env" "$work" >/dev/null)
 grep -q 'https://ingest.invalid/healthz/stack' "$work/prometheus/targets/endpoints.yml" || { echo "FALHOU: sem o alvo da checagem da pilha" >&2; exit 1; }
+for path in prometheus/targets alertmanager; do
+  [ -n "$(find "$work/$path" -maxdepth 0 -perm -0005)" ] || { echo "FAILED: $path is not readable by nobody with umask 077" >&2; exit 1; }
+done
+for path in prometheus/targets/endpoints.yml alertmanager/alertmanager.yml; do
+  [ -n "$(find "$work/$path" -perm -0004)" ] || { echo "FAILED: $path is not readable by nobody with umask 077" >&2; exit 1; }
+done
 
 cat > "$work/prometheus/targets/endpoints.yml" <<'EOT'
 - targets: ["http://target:8080/"]

@@ -73,6 +73,12 @@ inhibit_rules:
 YAML
 } > "$out/alertmanager/alertmanager.yml"
 
+# Prometheus and Alertmanager run as nobody: the generated config must be
+# readable whatever the caller's umask (with umask 077 Alertmanager could not
+# read alertmanager.yml and kept restarting).
+chmod 0755 "$out/prometheus/targets" "$out/alertmanager"
+chmod 0644 "$out/prometheus/targets/endpoints.yml" "$out/alertmanager/alertmanager.yml"
+
 printf '%s' "${SMTP_PASSWORD:-}" > "$out/alertmanager/secrets/smtp_password"
 printf '%s' "${DEADMAN_URL:-}" > "$out/alertmanager/secrets/deadman_url"
 # Alertmanager runs as nobody (65534).
