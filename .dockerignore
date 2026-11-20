@@ -6,6 +6,6 @@
 **/next-env.d.ts
 .git
 .github
-.env
-.env.*
+**/.env
+**/.env.*
 docs
