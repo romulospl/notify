@@ -12,7 +12,7 @@
 # - Caddy terminates TLS and proxies portal, gateway and collector (OTLP/HTTP
 #   and OTLP/gRPC) over the Docker network; Postgres listens only on loopback
 #   for the SSH admin tunnel;
-# - no Mailpit: SMTP comes from SMTP_URL;
+# - no Mailpit: SMTP, when set, comes from SMTP_URL;
 # - every password and key is required (no default).
 
 # Fixed project name: containers stellytics-<service>-1 and network stellytics_internal.
@@ -122,8 +122,10 @@ services:
       # Generated after the first start (docs/deploy.md); without it the portal
       # starts, but creates no sites.
       UMAMI_API_KEY: ${UMAMI_API_KEY:-}
-      SMTP_URL: ${SMTP_URL:?}
-      MAIL_FROM: ${MAIL_FROM:?}
+      # Optional: the public portal sends no email in this version (no
+      # sign-up, operator invites disabled).
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       # Sign-up with prior approval (#49, ADR 0007); off by default.
       SIGNUP_APPROVAL: ${SIGNUP_APPROVAL:-false}
       # Public demo: slug of the one tenant shown without sign-in at
