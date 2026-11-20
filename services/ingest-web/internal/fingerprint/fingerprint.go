@@ -1,15 +1,17 @@
-// Package fingerprint desconfia de muitos navegadores diferentes no mesmo IP (#26).
+// Package fingerprint is suspicious of many different browsers on the same IP
+// (#26).
 //
-// A fingerprint é um hash de User-Agent, Accept-Language, idioma e tela. Ela não
-// identifica uma pessoa (muita gente tem a mesma combinação) e só existe em
-// memória, por uma janela curta. Por IP truncado e site, o Counter aceita até
-// Limit fingerprints distintas vistas dentro da janela; eventos de
-// fingerprints além disso são descartados. Um robô que troca de User-Agent a
-// cada request, a partir de um IP só, não infla as métricas; as primeiras
-// fingerprints do IP continuam contando normalmente.
+// The fingerprint is a hash of User-Agent, Accept-Language, language and
+// screen. It does not identify a person (many people have the same combination)
+// and only exists in memory, for a short window. Per truncated IP and site, the
+// Counter accepts up to Limit distinct fingerprints seen within the window;
+// events from fingerprints beyond that are dropped. A bot that changes
+// User-Agent on every request, from a single IP, does not inflate the metrics;
+// the first fingerprints of the IP keep counting normally.
 //
-// A conta é separada por site: um robô no mesmo /24 (ou na mesma CGNAT) que
-// lote a cota do próprio site não tira as vagas dos sites de outros tenants.
+// The count is separate per site: a bot in the same /24 (or behind the same
+// CGNAT) that fills the quota of its own site does not take the slots of other
+// tenants' sites.
 package fingerprint
 
 import (
@@ -21,8 +23,8 @@ import (
 	"time"
 )
 
-// Of calcula a fingerprint de um evento. Os campos são separados por um byte
-// zero para que "ab"+"c" e "a"+"bc" deem hashes diferentes.
+// Of computes the fingerprint of an event. The fields are separated by a zero
+// byte so that "ab"+"c" and "a"+"bc" give different hashes.
 func Of(userAgent, acceptLanguage, language, screen string) uint64 {
 	h := sha256.New()
 	for _, s := range []string{userAgent, acceptLanguage, language, screen} {
@@ -32,7 +34,7 @@ func Of(userAgent, acceptLanguage, language, screen string) uint64 {
 	return binary.BigEndian.Uint64(h.Sum(nil)[:8])
 }
 
-// Counter conta fingerprints distintas por IP truncado numa janela deslizante.
+// Counter counts distinct fingerprints per truncated IP in a sliding window.
 type Counter struct {
 	limit  int
 	window time.Duration
@@ -42,36 +44,37 @@ type Counter struct {
 	keys map[key]map[uint64]time.Time
 }
 
-// key é a conta: o IP truncado e o site (UUID em minúsculas).
+// key is the count: the truncated IP and the site (lowercase UUID).
 type key struct {
 	ip   netip.Addr
 	site string
 }
 
-// New cria um Counter que aceita até limit fingerprints por IP em window.
-// limit 0 desliga a checagem.
+// New creates a Counter that accepts up to limit fingerprints per IP in window.
+// limit 0 turns the check off.
 func New(limit int, window time.Duration) *Counter {
 	return &Counter{limit: limit, window: window, now: time.Now, keys: make(map[key]map[uint64]time.Time)}
 }
 
-// WithClock troca o relógio (para testes) e devolve o próprio Counter.
+// WithClock replaces the clock (for tests) and returns the Counter itself.
 func (c *Counter) WithClock(now func() time.Time) *Counter {
 	c.now = now
 	return c
 }
 
-// Allow registra fp na conta do IP truncado ip no site e diz se o evento pode
-// seguir. Uma fingerprint já vista na janela sempre segue; uma nova só entra
-// enquanto a conta tiver menos de limit fingerprints ativas.
+// Allow records fp in the count of truncated IP ip on the site and says whether
+// the event may proceed. A fingerprint already seen in the window always
+// proceeds; a new one only gets in while the count has fewer than limit active
+// fingerprints.
 func (c *Counter) Allow(ip netip.Addr, site string, fp uint64) bool {
 	ok, _ := c.Admit(ip, site, fp)
 	return ok
 }
 
-// Admit é o Allow que também diz se a fingerprint entrou agora na conta
-// (fresh). Quem descarta o evento depois por outro motivo (saturação do
-// repasse) chama Forget com fresh verdadeiro, para o descarte não gastar uma
-// das vagas de fingerprint do IP.
+// Admit is Allow that also says whether the fingerprint entered the count just
+// now (fresh). Whoever drops the event later for another reason (relay
+// saturation) calls Forget when fresh is true, so that the drop does not spend
+// one of the IP's fingerprint slots.
 func (c *Counter) Admit(ip netip.Addr, site string, fp uint64) (ok, fresh bool) {
 	if c.limit <= 0 {
 		return true, false
@@ -100,8 +103,8 @@ func (c *Counter) Admit(ip netip.Addr, site string, fp uint64) (ok, fresh bool) 
 	return true, true
 }
 
-// Forget tira fp da conta do IP truncado ip no site. Só para desfazer um
-// Admit que devolveu fresh.
+// Forget removes fp from the count of truncated IP ip on the site. Only to undo
+// an Admit that returned fresh.
 func (c *Counter) Forget(ip netip.Addr, site string, fp uint64) {
 	if c.limit <= 0 {
 		return
@@ -126,7 +129,8 @@ func (c *Counter) expire(seen map[uint64]time.Time, now time.Time) {
 	}
 }
 
-// Sweep tira da memória as fingerprints fora da janela e as contas sem nenhuma.
+// Sweep removes from memory the fingerprints outside the window and the counts
+// left with none.
 func (c *Counter) Sweep() {
 	now := c.now()
 	c.mu.Lock()
@@ -139,14 +143,14 @@ func (c *Counter) Sweep() {
 	}
 }
 
-// Len diz quantas contas (IP e site) estão em memória.
+// Len says how many counts (IP and site) are in memory.
 func (c *Counter) Len() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return len(c.keys)
 }
 
-// Run chama Sweep a cada every até o contexto acabar.
+// Run calls Sweep at each every interval until the context ends.
 func (c *Counter) Run(ctx context.Context, every time.Duration) {
 	t := time.NewTicker(every)
 	defer t.Stop()

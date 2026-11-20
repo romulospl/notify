@@ -1,4 +1,4 @@
-// Teste de integração do login contra um Postgres real (DATABASE_URL).
+// Integration test of sign-in against a real Postgres (DATABASE_URL).
 import { randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
 import { eq, like } from "drizzle-orm";
@@ -25,7 +25,7 @@ async function createUser(email: string, role: "tenant" | "operator" = "tenant")
   return id;
 }
 
-// Cada chamada usa um IP diferente para não esbarrar no limite de tentativas.
+// Each call uses a different IP so it does not hit the attempt limit.
 function post(path: string, body: unknown, cookie?: string) {
   return auth.handler(
     new Request(`${BASE}${path}`, {
@@ -62,8 +62,8 @@ afterAll(async () => {
   await sql.end();
 });
 
-describe("login por e-mail e senha", () => {
-  it("entra com a senha certa e cria a sessão sem guardar o IP", async () => {
+describe("sign-in by e-mail and password", () => {
+  it("signs in with the right password and creates the session without storing the IP", async () => {
     const email = `tenant${DOMAIN}`;
     const userId = await createUser(email);
 
@@ -79,7 +79,7 @@ describe("login por e-mail e senha", () => {
     expect(rows[0]?.ipAddress).toBeNull();
   });
 
-  it("recusa senha errada", async () => {
+  it("rejects a wrong password", async () => {
     const email = `wrong${DOMAIN}`;
     await createUser(email);
 
@@ -87,7 +87,7 @@ describe("login por e-mail e senha", () => {
     expect(response.status).toBe(401);
   });
 
-  it("devolve o papel de operador", async () => {
+  it("returns the operator role", async () => {
     const email = `operator${DOMAIN}`;
     await createUser(email, "operator");
 
@@ -96,7 +96,7 @@ describe("login por e-mail e senha", () => {
     expect(current?.user.role).toBe("operator");
   });
 
-  it("sair invalida a sessão", async () => {
+  it("signing out invalidates the session", async () => {
     const email = `signout${DOMAIN}`;
     await createUser(email);
 
@@ -108,9 +108,9 @@ describe("login por e-mail e senha", () => {
     expect(await getSession(cookie)).toBeNull();
   });
 
-  // O cadastro está aberto desde a #60 (fluxo completo em email-flows.test.ts),
-  // mas o papel nunca vem do cliente.
-  it("o cadastro não deixa escolher o papel de operador", async () => {
+  // Sign-up has been open since #60 (full flow in email-flows.test.ts),
+  // but the role never comes from the client.
+  it("sign-up does not let you pick the operator role", async () => {
     const response = await post("/sign-up/email", {
       email: `signup${DOMAIN}`,
       password: PASSWORD,
@@ -118,7 +118,7 @@ describe("login por e-mail e senha", () => {
       role: "operator",
     });
     const [created] = await db.select().from(user).where(eq(user.email, `signup${DOMAIN}`));
-    // O Better Auth recusa o campo ou cria a conta como tenant; nunca como operador.
+    // Better Auth rejects the field or creates the account as tenant; never as operator.
     if (created) expect(created.role).toBe("tenant");
     else expect(response.ok).toBe(false);
   });

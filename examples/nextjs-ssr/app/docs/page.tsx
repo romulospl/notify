@@ -1,9 +1,9 @@
-export const metadata = { title: "Next.js: documentação" };
+export const metadata = { title: "Next.js: documentation" };
 
 export default function Docs() {
   return (
     <main>
-      <h1>Documentação</h1>
+      <h1>Documentation</h1>
     </main>
   );
 }

@@ -1,28 +1,28 @@
 # apps/portal
 
-Portal em Next.js (App Router), com Drizzle ORM, Better Auth e Tailwind. É a única porta de entrada da plataforma: cadastro self-service, login, painéis do tenant e painéis globais do SCF.
+Next.js portal (App Router), with Drizzle ORM, Better Auth and Tailwind. It is the platform's only entry point: self-service sign-up, login, tenant dashboards and global SCF dashboards.
 
-Lê as estatísticas web pela API do Umami (com uma conta de serviço, [#58](https://github.com/romulospl/stellytics/issues/58)) e as métricas de API direto do banco `stellytics`. O isolamento entre tenants na leitura é responsabilidade do portal: o tenant vem sempre da sessão ([#18](https://github.com/romulospl/stellytics/issues/18)).
+It reads web statistics through the Umami API (with a service account, [#58](https://github.com/romulospl/stellytics/issues/58)) and API metrics directly from the `stellytics` database. Tenant isolation on reads is the portal's responsibility: the tenant always comes from the session ([#18](https://github.com/romulospl/stellytics/issues/18)).
 
-## O que já existe ([#57](https://github.com/romulospl/stellytics/issues/57))
+## What already exists ([#57](https://github.com/romulospl/stellytics/issues/57))
 
-- Login por e-mail e senha com sessão no servidor (Better Auth, tabelas no banco `stellytics`).
-- Rotas privadas: `/dashboard` (área do tenant) e `/operator` (área do operador SCF, só para o papel `operator`; outros recebem 404).
-- O `proxy.ts` redireciona para `/sign-in` quem não tem cookie de sessão; a validação de verdade é feita no servidor (`src/lib/access.ts`).
-- Cadastro aberto com confirmação de e-mail e recuperação de senha ([#60](https://github.com/romulospl/stellytics/issues/60)); ver a seção "Cadastro e e-mail".
-- O IP de quem entra no portal não é gravado na sessão; ele só é usado em memória para o limite de tentativas.
+- Login by e-mail and password with a server-side session (Better Auth, tables in the `stellytics` database).
+- Private routes: `/dashboard` (tenant area) and `/operator` (SCF operator area, only for the `operator` role; others get 404).
+- `proxy.ts` redirects anyone without a session cookie to `/sign-in`; the real validation happens on the server (`src/lib/access.ts`).
+- Open sign-up with e-mail confirmation and password recovery ([#60](https://github.com/romulospl/stellytics/issues/60)); see the "Sign-up and e-mail" section.
+- The IP of whoever signs in to the portal is not stored in the session; it is only used in memory for the attempt limit.
 
-A interface é em inglês, porque o público são os projetos do ecossistema Stellar e o SCF.
+The interface is in English, because the audience is the Stellar ecosystem projects and the SCF.
 
-## Rodando
+## Running
 
-Pelo Docker Compose, na raiz do repositório (aplica as migrações na subida):
+With Docker Compose, at the repository root (applies the migrations at startup):
 
 ```bash
 docker compose up -d --wait
 ```
 
-O portal fica em http://localhost:3000. Para desenvolver com recarga automática, suba só o banco e rode o `next dev`:
+The portal is at http://localhost:3000. To develop with automatic reload, start only the database and run `next dev`:
 
 ```bash
 docker compose up -d --wait postgres
@@ -32,21 +32,21 @@ BETTER_AUTH_SECRET=dev-only-portal-auth-secret-change-me \
 pnpm db:migrate && pnpm dev
 ```
 
-### Criar um usuário
+### Create a user
 
-A senha vem da variável `PORTAL_USER_PASSWORD` (mínimo de 12 caracteres), para não ficar no histórico do shell:
+The password comes from the `PORTAL_USER_PASSWORD` variable (minimum of 12 characters), so it does not stay in the shell history:
 
 ```bash
 cd apps/portal
 read -rs PORTAL_USER_PASSWORD && export PORTAL_USER_PASSWORD
-pnpm user:create --email voce@example.com --name "Seu nome"
+pnpm user:create --email you@example.com --name "Your name"
 ```
 
-O usuário nasce com e-mail confirmado e sem projeto; ao entrar, cai em `/onboarding`. Esse script não cria operador.
+The user is created with a confirmed e-mail and no project; on sign-in, they land on `/onboarding`. This script does not create an operator.
 
-### Seed de desenvolvimento ([#19](https://github.com/romulospl/stellytics/issues/19))
+### Development seed ([#19](https://github.com/romulospl/stellytics/issues/19))
 
-Cria 2 projetos de teste (cada um com dono, um serviço de API e uma chave) e 1 operador SCF. Pode rodar mais de uma vez; o que já existe fica como está. Com `UMAMI_API_KEY` definida, cada projeto ganha também um site no Umami.
+Creates 2 test projects (each with an owner, an API service and a key) and 1 SCF operator. It can run more than once; what already exists stays as it is. With `UMAMI_API_KEY` set, each project also gets a site in Umami.
 
 ```bash
 cd apps/portal
@@ -54,42 +54,42 @@ read -rs SEED_PASSWORD && export SEED_PASSWORD
 pnpm db:seed
 ```
 
-Contas, todas com a senha de `SEED_PASSWORD`: `owner-a@seed.stellytics.localhost`, `owner-b@seed.stellytics.localhost` e `operator@seed.stellytics.localhost`. Os testes de integração rodam o seed com a senha de teste deles, então o banco local fica com essas contas.
+Accounts, all with the `SEED_PASSWORD` password: `owner-a@seed.stellytics.localhost`, `owner-b@seed.stellytics.localhost` and `operator@seed.stellytics.localhost`. The integration tests run the seed with their own test password, so the local database ends up with these accounts.
 
-## Operador SCF ([#19](https://github.com/romulospl/stellytics/issues/19))
+## SCF operator ([#19](https://github.com/romulospl/stellytics/issues/19))
 
-- Lê todos os projetos, inclusive os removidos: `/operator` lista os projetos com contagens e `/operator/tenants/[tenantId]` mostra membros, sites e serviços. Das chaves de ingestão aparecem só o prefixo e as datas.
-- Não é membro de tenant (D2). O banco recusa pôr um operador num tenant e promover um membro a operador (`drizzle/0003_operator_not_member.sql`); quem é do SCF e tem um projeto usa duas contas.
-- Só nasce pelo comando de administração (D3), nunca pela tela de cadastro, onde o papel enviado pelo cliente é ignorado. Cada mudança vai para o `audit_log` e encerra as sessões da conta:
+- Reads all projects, including removed ones: `/operator` lists the projects with counts and `/operator/tenants/[tenantId]` shows members, sites and services. Of the ingest keys, only the prefix and the dates are shown.
+- Is not a tenant member (D2). The database rejects putting an operator in a tenant and promoting a member to operator (`drizzle/0003_operator_not_member.sql`); someone from the SCF who has a project uses two accounts.
+- Is only created by the administration command (D3), never by the sign-up screen, where the role sent by the client is ignored. Every change goes to the `audit_log` and ends the account's sessions:
 
 ```bash
 cd apps/portal
 read -rs OPERATOR_PASSWORD && export OPERATOR_PASSWORD
-pnpm operator:create --email scf@example.org --name "Nome"
-pnpm operator:promote --email pessoa@example.org
-pnpm operator:demote --email pessoa@example.org
+pnpm operator:create --email scf@example.org --name "Name"
+pnpm operator:promote --email person@example.org
+pnpm operator:demote --email person@example.org
 ```
 
 ## Umami ([#58](https://github.com/romulospl/stellytics/issues/58))
 
-O portal fala com o Umami só por `src/lib/umami/` (o ESLint proíbe importar `src/lib/umami/http.ts` de outro lugar):
+The portal talks to Umami only through `src/lib/umami/` (ESLint forbids importing `src/lib/umami/http.ts` from anywhere else):
 
-- `createSite(ctx, …)` em `src/lib/data/sites.ts` cria o site no Umami e depois grava a linha em `site`; se a gravação falhar, apaga o site no Umami.
-- `getSiteStats(ctx, siteId, …)` recebe o ID do site do portal, confere que é do tenant do contexto e só então chama o Umami com o `umami_website_id`. Site de outro tenant devolve nulo sem nenhuma chamada ao Umami.
-- `findUmamiInconsistencies()` lista sites do portal que sumiram do Umami e sites do Umami sem linha em `site`.
+- `createSite(ctx, …)` in `src/lib/data/sites.ts` creates the site in Umami and then writes the row in `site`; if the write fails, it deletes the site in Umami.
+- `getSiteStats(ctx, siteId, …)` takes the portal's site ID, checks that it belongs to the context's tenant and only then calls Umami with the `umami_website_id`. Another tenant's site returns null with no call to Umami.
+- `findUmamiInconsistencies()` lists portal sites that disappeared from Umami and Umami sites with no row in `site`.
 
-O portal cria só sites no Umami, nunca usuários nem equipes (ADR 0003).
+The portal creates only sites in Umami, never users or teams (ADR 0003).
 
-## Isolamento entre tenants ([#18](https://github.com/romulospl/stellytics/issues/18))
+## Tenant isolation ([#18](https://github.com/romulospl/stellytics/issues/18))
 
-- `src/lib/access.ts` cria os contextos a partir da sessão: `requireTenantContext()` / `getTenantContext()` para membros de tenant e `requireOperatorContext()` para operadores. Os tipos são marcados, então só esse arquivo consegue criá-los.
-- Toda leitura e gravação passa por `src/lib/data/` (banco) e `src/lib/umami/` (Umami), com o contexto como primeiro argumento. Funções do operador ficam em `src/lib/data/operator/`.
-- O ESLint proíbe importar o cliente do banco, o driver `postgres` e o cliente HTTP do Umami fora dessas pastas. O esquema (`src/lib/db/schema.ts`) pode ser importado em qualquer lugar.
-- Quem não tem acesso recebe 404: operador em `/dashboard` é levado a `/operator`, membro de tenant em `/operator` recebe 404, e usuário sem projeto vê um aviso até o cadastro self-service ([#17](https://github.com/romulospl/stellytics/issues/17)).
+- `src/lib/access.ts` creates the contexts from the session: `requireTenantContext()` / `getTenantContext()` for tenant members and `requireOperatorContext()` for operators. The types are branded, so only that file can create them.
+- Every read and write goes through `src/lib/data/` (database) and `src/lib/umami/` (Umami), with the context as the first argument. Operator functions live in `src/lib/data/operator/`.
+- ESLint forbids importing the database client, the `postgres` driver and the Umami HTTP client outside these folders. The schema (`src/lib/db/schema.ts`) can be imported anywhere.
+- Whoever has no access gets 404: an operator on `/dashboard` is taken to `/operator`, a tenant member on `/operator` gets 404, and a user with no project sees a notice until the self-service sign-up ([#17](https://github.com/romulospl/stellytics/issues/17)).
 
-### Conta de serviço
+### Service account
 
-Um usuário comum do Umami (`stellytics-portal`, papel `user`), autenticado por chave de API. O script abaixo cria o usuário (ou troca a senha dele por uma aleatória, que ninguém guarda) e imprime uma chave nova. A senha de administrador só é usada aqui:
+A regular Umami user (`stellytics-portal`, role `user`), authenticated by API key. The script below creates the user (or replaces its password with a random one, which nobody keeps) and prints a new key. The administrator password is only used here:
 
 ```bash
 cd apps/portal
@@ -97,69 +97,69 @@ read -rs UMAMI_ADMIN_PASSWORD && export UMAMI_ADMIN_PASSWORD
 UMAMI_URL=http://127.0.0.1:3001 pnpm umami:service-account
 ```
 
-O Umami só fica em `127.0.0.1:3001` com o override de desenvolvimento (`infra/compose/umami-port.yaml`, ver o [README da raiz](../../README.md#rodar-localmente)).
+Umami is only at `127.0.0.1:3001` with the development override (`infra/compose/umami-port.yaml`, see the [root README](../../README.md#running-locally)).
 
-Ponha a chave em `UMAMI_API_KEY` (no `.env` da raiz para o Compose) e recrie o portal (`docker compose up -d portal`). Para trocar a chave, rode de novo, atualize o portal e depois rode com `--revoke-old`, que deixa só a chave mais nova.
+Put the key in `UMAMI_API_KEY` (in the root `.env` for Compose) and recreate the portal (`docker compose up -d portal`). To rotate the key, run it again, update the portal and then run with `--revoke-old`, which leaves only the newest key.
 
-Use `127.0.0.1`, não `localhost`: se outro programa escutar a mesma porta em IPv6, `localhost` cai nele.
+Use `127.0.0.1`, not `localhost`: if another program listens on the same port over IPv6, `localhost` reaches it.
 
-## Serviços de API e chaves de ingestão ([#59](https://github.com/romulospl/stellytics/issues/59))
+## API services and ingest keys ([#59](https://github.com/romulospl/stellytics/issues/59))
 
-- Telas: `/services` (lista e criação de serviços) e `/services/[serviceId]` (chaves do serviço: criar e revogar).
-- Formato e hash da chave em `src/lib/ingest-key.ts`: `ntf_<prefixo>_<segredo>`, prefixo de 8 caracteres base32 e segredo de 32 bytes em base64url. O banco guarda só o prefixo e o SHA-256 da chave completa; é o contrato com o coletor ([#30](https://github.com/romulospl/stellytics/issues/30)), que lê a visão `ingest_key_active`.
-- Funções em `src/lib/data/api-services.ts`. Criar um serviço já gera a primeira chave. Limite de 5 chaves ativas por serviço, garantido com trava na linha do serviço. Criar e revogar chave entram no `audit_log` só com o prefixo.
-- A chave completa aparece uma única vez, no retorno da server action, e nunca é registrada em log. Revogar tira a chave da visão do coletor na hora; o cache do coletor faz valer em até 60 segundos.
+- Screens: `/services` (list and creation of services) and `/services/[serviceId]` (the service's keys: create and revoke).
+- Key format and hash in `src/lib/ingest-key.ts`: `ntf_<prefix>_<secret>`, an 8-character base32 prefix and a 32-byte secret in base64url. The database stores only the prefix and the SHA-256 of the full key; this is the contract with the collector ([#30](https://github.com/romulospl/stellytics/issues/30)), which reads the `ingest_key_active` view.
+- Functions in `src/lib/data/api-services.ts`. Creating a service already generates the first key. Limit of 5 active keys per service, enforced with a lock on the service row. Creating and revoking a key go to the `audit_log` with the prefix only.
+- The full key appears only once, in the server action's return value, and is never logged. Revoking removes the key from the collector's view immediately; the collector's cache makes it effective within 60 seconds.
 
-## Cadastro self-service ([#17](https://github.com/romulospl/stellytics/issues/17))
+## Self-service sign-up ([#17](https://github.com/romulospl/stellytics/issues/17))
 
-Um projeto Stellar entra sozinho, sem ajuda do SCF:
+A Stellar project joins on its own, without help from the SCF:
 
-1. `/sign-up`: cria a conta e confirma o e-mail pelo link (ver a seção seguinte).
-2. `/onboarding`: dá nome ao projeto. O portal cria o tenant `active` e torna a pessoa `owner`, na mesma transação, e registra `tenant.created` no `audit_log`. Só chega aqui quem tem e-mail confirmado e ainda não tem projeto (`requireOnboardingContext()`); quem já tem vai para o painel.
-3. `/sites`: cadastra os sites web; cada um vira um site no Umami e mostra o ID que o script de rastreamento usa.
-4. `/services`: cadastra os serviços de API; cada um já sai com a primeira chave de ingestão.
+1. `/sign-up`: creates the account and confirms the e-mail through the link (see the next section).
+2. `/onboarding`: names the project. The portal creates the `active` tenant and makes the person `owner`, in the same transaction, and records `tenant.created` in the `audit_log`. Only someone with a confirmed e-mail and no project yet gets here (`requireOnboardingContext()`); whoever already has one goes to the dashboard.
+3. `/sites`: registers the web sites; each one becomes a site in Umami and shows the ID the tracking script uses.
+4. `/services`: registers the API services; each one already comes with the first ingest key.
 
-Quem ainda não tem projeto e abre uma página do tenant é levado a `/onboarding`. O slug do projeto vem do nome; se já existir, ganha um sufixo aleatório.
+Whoever has no project yet and opens a tenant page is taken to `/onboarding`. The project slug comes from the name; if it already exists, it gets a random suffix.
 
-## Cadastro e e-mail ([#60](https://github.com/romulospl/stellytics/issues/60))
+## Sign-up and e-mail ([#60](https://github.com/romulospl/stellytics/issues/60))
 
-- `/sign-up` cria a conta e envia o link de confirmação (vale 24 horas). Sem confirmar, a pessoa não entra, então não cria projeto; ao tentar entrar, recebe outro link.
-- O link de confirmação abre a sessão e leva a `/dashboard`. Link vencido ou inválido leva a `/email-verified`, que explica o que fazer.
-- `/forgot-password` envia um link de redefinição que vale 30 minutos e uma vez só. Trocar a senha encerra todas as sessões.
-- Cadastro com e-mail já existente e pedido de redefinição para e-mail sem conta recebem a mesma resposta dos casos normais, sem revelar quem tem conta.
-- Limites por IP (em memória, por instância): entrar, 3 a cada 10 segundos; cadastrar, 10 por hora; pedir redefinição ou novo link de confirmação, 5 por hora. Atrás do proxy, o IP vem de `X-Forwarded-For`, então o portal não deve ficar exposto sem o Caddy na frente.
-- Os e-mails são só texto (`src/lib/mail.ts`), sem HTML, e nem o destinatário nem o link vão para o log.
-- No Compose, os e-mails vão para o Mailpit: caixa de entrada em http://127.0.0.1:8025 e SMTP em `127.0.0.1:1025` (para o `next dev`, use `SMTP_URL=smtp://127.0.0.1:1025`). Em produção, o SMTP vem da IaC ([#14](https://github.com/romulospl/stellytics/issues/14)).
+- `/sign-up` creates the account and sends the confirmation link (valid for 24 hours). Without confirming, the person cannot sign in, so they create no project; when they try to sign in, they get another link.
+- The confirmation link opens the session and leads to `/dashboard`. An expired or invalid link leads to `/email-verified`, which explains what to do.
+- `/forgot-password` sends a reset link that is valid for 30 minutes and only once. Changing the password ends all sessions.
+- Sign-up with an existing e-mail and a reset request for an e-mail with no account get the same response as the normal cases, without revealing who has an account.
+- Limits per IP (in memory, per instance): sign in, 3 every 10 seconds; sign up, 10 per hour; request a reset or a new confirmation link, 5 per hour. Behind the proxy, the IP comes from `X-Forwarded-For`, so the portal must not be exposed without Caddy in front.
+- The e-mails are text only (`src/lib/mail.ts`), with no HTML, and neither the recipient nor the link goes to the log.
+- In Compose, the e-mails go to Mailpit: inbox at http://127.0.0.1:8025 and SMTP at `127.0.0.1:1025` (for `next dev`, use `SMTP_URL=smtp://127.0.0.1:1025`). In production, SMTP comes from the IaC ([#14](https://github.com/romulospl/stellytics/issues/14)).
 
-## Variáveis de ambiente
+## Environment variables
 
-| Variável | Obrigatória | Uso |
+| Variable | Required | Use |
 |---|---|---|
-| `DATABASE_URL` | Sim | Conexão com o banco `stellytics` |
-| `BETTER_AUTH_SECRET` | Sim | Segredo das sessões (gere com `openssl rand -base64 32` em produção) |
-| `SMTP_URL` | Para e-mail | Servidor SMTP, ex.: `smtp://mailpit:1025` ou `smtps://usuario:senha@host:465`. Sem ele, o portal sobe, mas os e-mails de confirmação e de senha falham (o erro vai para o log) |
-| `MAIL_FROM` | Não | Remetente (padrão `stellytics <no-reply@stellytics.localhost>`) |
-| `BETTER_AUTH_URL` | Não | URL pública do portal (padrão `http://localhost:3000`) |
-| `RUN_MIGRATIONS` | Não | `true` aplica as migrações do Drizzle na subida do servidor |
-| `UMAMI_URL` | Não | Endereço interno do Umami (padrão `http://127.0.0.1:3001`, publicado só pelo `infra/compose/umami-port.yaml`; no Compose, `http://umami:3000`) |
-| `INGEST_URL` | Não | Public gateway address used in the installation tag on each site's page (default `http://localhost:3002`; `https://INGEST_HOST` in `prod.yaml`) |
+| `DATABASE_URL` | Yes | Connection to the `stellytics` database |
+| `BETTER_AUTH_SECRET` | Yes | Session secret (generate with `openssl rand -base64 32` in production) |
+| `SMTP_URL` | For e-mail | SMTP server, e.g. `smtp://mailpit:1025` or `smtps://user:password@host:465`. Without it, the portal starts, but the confirmation and password e-mails fail (the error goes to the log) |
+| `MAIL_FROM` | No | Sender (default `stellytics <no-reply@stellytics.localhost>`) |
+| `BETTER_AUTH_URL` | No | Public URL of the portal (default `http://localhost:3000`) |
+| `RUN_MIGRATIONS` | No | `true` applies the Drizzle migrations at server startup |
+| `UMAMI_URL` | No | Internal Umami address (default `http://127.0.0.1:3001`, published only by `infra/compose/umami-port.yaml`; in Compose, `http://umami:3000`) |
+| `INGEST_URL` | No | Public gateway address used in the installation tag on each site's page (default `http://localhost:3002`; `https://INGEST_HOST` in `prod.yaml`) |
 | `COLLECTOR_URL` | No | Public OTLP address of the API collector, shown with each service's ingest keys (default `http://127.0.0.1:4318`; `https://API_HOST` in `prod.yaml`) |
-| `UMAMI_API_KEY` | Para sites | Chave de API da conta de serviço. Sem ela o portal sobe, mas não cria sites nem lê estatísticas |
+| `UMAMI_API_KEY` | For sites | API key of the service account. Without it the portal starts, but does not create sites or read statistics |
 
-## Banco e migrações
+## Database and migrations
 
-- Esquema em `src/lib/db/schema.ts`; migrações versionadas em `drizzle/`.
-- O modelo de tenants (`tenant`, `tenant_member`, `site`, `api_service`, `ingest_key` e `audit_log`) segue a seção 3 do [spec do E2](../../docs/specs/e2-tenants-e-controle-de-acesso.md). O `audit_log` só aceita inserções (um gatilho recusa `UPDATE`, `DELETE` e `TRUNCATE`).
-- As visões `ingest_site` (gateway web) e `ingest_key_active` (coletor) e as permissões dos usuários `stellytics_ingest` e `stellytics_collector` estão em `drizzle/0002_ingest_views.sql`, escrito à mão. Para SQL que o Drizzle não gera: `pnpm db:generate --custom --name <descricao>`.
-- **As migrações exigem os usuários `stellytics_ingest` e `stellytics_collector`**, que só um superusuário cria. No Compose, `infra/compose/postgres/init/02-ingest-roles.sh` roda com o volume vazio. Para um volume que já existe, sem apagar os dados:
+- Schema in `src/lib/db/schema.ts`; versioned migrations in `drizzle/`.
+- The tenant model (`tenant`, `tenant_member`, `site`, `api_service`, `ingest_key` and `audit_log`) follows section 3 of the [E2 spec](../../docs/specs/e2-tenants-and-access-control.md). The `audit_log` only accepts inserts (a trigger rejects `UPDATE`, `DELETE` and `TRUNCATE`).
+- The `ingest_site` (web gateway) and `ingest_key_active` (collector) views and the privileges of the `stellytics_ingest` and `stellytics_collector` users are in `drizzle/0002_ingest_views.sql`, written by hand. For SQL that Drizzle does not generate: `pnpm db:generate --custom --name <description>`.
+- **The migrations require the `stellytics_ingest` and `stellytics_collector` users**, which only a superuser creates. In Compose, `infra/compose/postgres/init/02-ingest-roles.sh` runs with the volume empty. For a volume that already exists, without erasing the data:
 
   ```bash
   docker compose exec -T postgres sh < infra/compose/postgres/init/02-ingest-roles.sh
   ```
 
-- Depois de mudar o esquema: `pnpm db:generate --name <descricao>` e commite o SQL gerado.
-- `pnpm db:migrate` aplica as migrações no banco de `DATABASE_URL`.
+- After changing the schema: `pnpm db:generate --name <description>` and commit the generated SQL.
+- `pnpm db:migrate` applies the migrations to the `DATABASE_URL` database.
 
-## Testes
+## Tests
 
-`pnpm test` roda os testes com Vitest. Os de integração (`test/auth.test.ts`, `test/tenant-model.test.ts`, `test/umami.test.ts`, `test/access.test.ts` e `test/ingest-keys.test.ts` e `test/email-flows.test.ts`) usam o Postgres de `DATABASE_URL` (padrão: o do Compose local) e aplicam as migrações antes de rodar. Os testes de permissão assumem os papéis de ingestão com `SET ROLE`, por isso o script acima também dá ao usuário `stellytics` o direito de assumi-los (sem herdar nada deles). Os testes do Umami usam um Umami falso (`test/fake-umami.ts`); o job `compose` do CI confere a conta de serviço contra o Umami de verdade.
+`pnpm test` runs the tests with Vitest. The integration ones (`test/auth.test.ts`, `test/tenant-model.test.ts`, `test/umami.test.ts`, `test/access.test.ts` and `test/ingest-keys.test.ts` and `test/email-flows.test.ts`) use the `DATABASE_URL` Postgres (default: the local Compose one) and apply the migrations before running. The permission tests assume the ingest roles with `SET ROLE`, which is why the script above also gives the `stellytics` user the right to assume them (without inheriting anything from them). The Umami tests use a fake Umami (`test/fake-umami.ts`); the CI `compose` job checks the service account against the real Umami.

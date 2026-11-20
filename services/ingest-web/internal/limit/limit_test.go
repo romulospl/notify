@@ -15,23 +15,23 @@ func TestLimiter(t *testing.T) {
 	b := netip.MustParseAddr("198.51.100.0")
 
 	if !l.Allow(a) || !l.Allow(a) {
-		t.Fatal("rajada de 2 recusada")
+		t.Fatal("burst of 2 refused")
 	}
 	if l.Allow(a) {
-		t.Fatal("terceiro evento passou do limite")
+		t.Fatal("third event went past the limit")
 	}
 	if !l.Allow(b) {
-		t.Fatal("outra chave não deveria ser afetada")
+		t.Fatal("another key should not be affected")
 	}
 
 	now = now.Add(time.Second)
 	if !l.Allow(a) {
-		t.Fatal("token não foi reposto depois de 1 s")
+		t.Fatal("token was not refilled after 1 s")
 	}
 
 	now = now.Add(2 * time.Minute)
 	l.Sweep()
 	if n := l.Len(); n != 0 {
-		t.Fatalf("Sweep deixou %d chaves", n)
+		t.Fatalf("Sweep left %d keys", n)
 	}
 }

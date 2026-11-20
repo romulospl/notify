@@ -1,5 +1,5 @@
-// Umami falso para os testes: implementa só as rotas que o portal usa, com
-// as mesmas respostas do Umami 3.4.1, e registra cada pedido recebido.
+// Fake Umami for the tests: implements only the routes the portal uses, with
+// the same responses as Umami 3.4.1, and records every request received.
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -9,27 +9,27 @@ export type FakeUmami = {
   apiKey: string;
   websites: Map<string, { id: string; name: string; domain: string }>;
   requests: { method: string; path: string }[];
-  // Corpos recebidos em POST /api/websites, para conferir o que o portal envia.
+  // Bodies received on POST /api/websites, to check what the portal sends.
   createBodies: unknown[];
-  // Caminho com a query string de cada pedido, na ordem.
+  // Path with the query string of each request, in order.
   queries: string[];
-  // Respostas de /metrics por tipo e da série de /pageviews (#28). Sem valor,
-  // a série tem um ponto só, no primeiro balde do período.
+  // Responses of /metrics per type and of the /pageviews series (#28). Without a
+  // value, the series has a single point, in the first bucket of the period.
   metrics: Record<string, { x: string | null; y: number }[]>;
   series: { pageviews: { x: string; y: number }[]; sessions: { x: string; y: number }[] } | null;
   // /event-data/values answers per "event:property" (#50); no entry means an
   // empty list.
   eventValues: Record<string, { value: string; total: number }[]>;
-  // Simula o Umami fora do ar nas leituras de estatísticas.
+  // Simulates Umami being down for the statistics reads.
   down: boolean;
-  // Sites cujas leituras falham (500), para testar falha parcial (#29).
+  // Sites whose reads fail (500), to test partial failure (#29).
   failWebsites: Set<string>;
-  // Totais do /stats por site (o período anterior fica com os mesmos números);
-  // sem entrada, o padrão de 7 visualizações, 3 visitantes, 4 visitas, 1
-  // rejeição e 60 s.
+  // /stats totals per site (the previous period gets the same numbers);
+  // without an entry, the default of 7 page views, 3 visitors, 4 visits, 1
+  // bounce and 60 s.
   statsBy: Map<string, { pageviews: number; visitors: number; visits: number; bounces: number; totaltime: number }>;
-  // Atraso das leituras e o máximo de leituras ao mesmo tempo, para testar o
-  // limite de chamadas simultâneas.
+  // Delay of the reads and the maximum number of reads at the same time, to test
+  // the limit of simultaneous calls.
   delayMs: number;
   maxInFlight: number;
   close: () => Promise<void>;
@@ -126,7 +126,7 @@ export async function startFakeUmami(apiKey: string): Promise<FakeUmami> {
         return send(200, { ...totals, comparison: { ...totals, pageviews: 5 } });
       }
       if (method === "GET" && match[2] === "/pageviews") {
-        // Como o Umami 3.4.1: só os baldes com dados, com x em ISO sem milissegundos.
+        // Like Umami 3.4.1: only the buckets with data, with x in ISO without milliseconds.
         const first = new Date(Number(url.searchParams.get("startAt"))).toISOString().replace(".000Z", "Z");
         return send(
           200,

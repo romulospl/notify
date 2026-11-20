@@ -1,45 +1,46 @@
 # loadtest
 
-Gerador de carga do pipeline web e do pipeline de API (issue #51). Resultado e
-método em `docs/relatorios/carga-1m-dia.md`.
+Load generator for the web pipeline and the API pipeline (issue #51). Result and
+method in `docs/reports/load-1m-per-day.md`.
 
 ```sh
 cd services
 go build -o /tmp/loadtest ./loadtest
-/tmp/loadtest setup    -stellytics-db ... -umami-url ... -out state.json   # site no Umami, tenant, serviços e chaves
-/tmp/loadtest web      -state state.json -profile "11.6x10m,116x5m"    # GET /c, prova de JS, POST /e
-/tmp/loadtest api      -state state.json -profile "11.6x10m,116x5m"    # OTLP/HTTP (métricas e spans)
+/tmp/loadtest setup    -stellytics-db ... -umami-url ... -out state.json   # site in Umami, tenant, services and keys
+/tmp/loadtest web      -state state.json -profile "11.6x10m,116x5m"    # GET /c, JS proof, POST /e
+/tmp/loadtest api      -state state.json -profile "11.6x10m,116x5m"    # OTLP/HTTP (metrics and spans)
 /tmp/loadtest teardown -state state.json
 ```
 
-- **Perfil:** lista de degraus `taxaxduração` (page views ou requisições por
-  segundo). Chegada de Poisson, sem esperar as respostas (um servidor lento
-  aparece como latência e erro). Chegadas além de `-max-inflight` contam como
-  saturação do gerador.
-- **web:** cada visitante tem IP, UA, idioma e tela fixos, num /24 próprio; o IP
-  vai em `X-Forwarded-For`, então o gateway precisa de `TRUSTED_PROXIES` com o
-  endereço do gerador. A prova de JS é resolvida como o script faz (o pacote
-  `internal/proof` não pode ser importado de fora de `services/ingest-web`, por
-  isso o algoritmo é repetido em `web.go`). No fim, conta `website_event` no
-  banco do Umami (`-umami-db`) contra os 204 recebidos. O relatório traz uma
-  linha extra `event <status>` por código (204, 503, 502...), para separar a
-  latência de cada status. Desde a #133, 204 inclui descartes; use a contagem do Umami para saber quantos foram gravados.
-- **api:** simula serviços de API que exportam histogramas delta
-  (`-modes metrics`) ou um span de servidor por requisição (`-modes spans`),
-  com `Authorization: Bearer` de chaves criadas no `setup`. No fim compara
-  `request_count` em `api_metric_1m` com o que foi enviado com sucesso.
-- `-watch nome=pid,...` e `-docker contêiner,...` amostram CPU e memória a cada
-  2 s e resumem por degrau (Linux; o docker usa `docker stats`).
+- **Profile:** list of `ratexduration` steps (page views or requests per
+  second). Poisson arrivals, without waiting for the responses (a slow server
+  shows up as latency and errors). Arrivals beyond `-max-inflight` count as
+  generator saturation.
+- **web:** each visitor has a fixed IP, UA, language and screen, in its own
+  /24; the IP goes in `X-Forwarded-For`, so the gateway needs
+  `TRUSTED_PROXIES` with the generator's address. The JS proof is solved the
+  way the script does it (the `internal/proof` package cannot be imported from
+  outside `services/ingest-web`, so the algorithm is repeated in `web.go`). At
+  the end, it counts `website_event` in the Umami database (`-umami-db`)
+  against the 204s received. The report has an extra `event <status>` line per
+  code (204, 503, 502...), to separate the latency of each status. Since #133, 204 includes drops; use the Umami count to know how many were written.
+- **api:** simulates API services that export delta histograms
+  (`-modes metrics`) or one server span per request (`-modes spans`), with
+  `Authorization: Bearer` from keys created in `setup`. At the end it compares
+  `request_count` in `api_metric_1m` with what was sent successfully.
+- `-watch name=pid,...` and `-docker container,...` sample CPU and memory every
+  2 s and summarize per step (Linux; docker uses `docker stats`).
 
-## Segurança
+## Security
 
-- `setup`, `teardown`, `web` e `api` recusam qualquer alvo que não seja
-  loopback (`-stellytics-db`, `-umami-url`, `-gateway`, `-umami-db`, `-collector`)
-  sem `-allow-remote`, e imprimem host e banco antes de agir. Não aponte para
-  produção.
-- O arquivo de estado (`state.json`, no `.gitignore`) guarda as chaves de
-  ingestão `ntf_...` completas, em modo 0600. Apague-o depois do `teardown`.
-- O `setup` grava o estado a cada passo; se falhar no meio, o `teardown` apaga
-  o que foi criado. O `teardown` só apaga usuário `loadtest-*` e os tenants
-  `<usuário>-web` e `<usuário>-api`, e aborta se o estado não bater com o banco.
-- Os IPs dos visitantes simulados ficam em 10.0.0.0/8.
+- `setup`, `teardown`, `web` and `api` refuse any target that is not loopback
+  (`-stellytics-db`, `-umami-url`, `-gateway`, `-umami-db`, `-collector`)
+  without `-allow-remote`, and print host and database before acting. Do not
+  point it at production.
+- The state file (`state.json`, in `.gitignore`) holds the full `ntf_...`
+  ingest keys, in mode 0600. Delete it after `teardown`.
+- `setup` writes the state at each step; if it fails halfway, `teardown`
+  deletes what was created. `teardown` only deletes the `loadtest-*` user and
+  the `<user>-web` and `<user>-api` tenants, and aborts if the state does not
+  match the database.
+- The IPs of the simulated visitors are in 10.0.0.0/8.

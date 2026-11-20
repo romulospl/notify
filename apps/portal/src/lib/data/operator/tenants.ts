@@ -5,11 +5,11 @@ import { db } from "../../db";
 import { apiService, auditLog, ingestKey, site, tenant, tenantMember, user } from "../../db/schema";
 import { purgeTenantData } from "../erasure";
 
-// Visão global do operador SCF (#19, spec do E2, seção 2): leitura de todos os
-// tenants. Das chaves de ingestão, só prefixo e datas; nunca o hash.
+// Global view of the SCF operator (#19, E2 spec, section 2): read of all
+// tenants. Of the ingest keys, only prefix and dates; never the hash.
 //
-// A única escrita é mudar o status do tenant (#20, #49): remover, reativar,
-// aprovar e rejeitar.
+// The only write is changing the tenant's status (#20, #49): remove,
+// reactivate, approve and reject.
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -26,7 +26,7 @@ export type TenantOverview = {
 };
 
 export async function listTenants(ctx: OperatorContext): Promise<TenantOverview[]> {
-  void ctx; // Exigir o contexto prova que quem chama é operador.
+  void ctx; // Requiring the context proves that the caller is an operator.
   const members = db
     .select({ tenantId: tenantMember.tenantId, n: count().as("members") })
     .from(tenantMember)
@@ -71,7 +71,7 @@ export async function listTenants(ctx: OperatorContext): Promise<TenantOverview[
     .orderBy(asc(tenant.name));
 }
 
-// Detalhe de um tenant, inclusive removido. Nulo quando não existe.
+// Detail of a tenant, including a removed one. Null when it does not exist.
 export async function getTenantDetail(ctx: OperatorContext, tenantId: string) {
   void ctx;
   if (!UUID_REGEX.test(tenantId)) return null;
@@ -126,7 +126,7 @@ export async function getTenantDetail(ctx: OperatorContext, tenantId: string) {
       .from(ingestKey)
       .where(eq(ingestKey.tenantId, tenantId))
       .orderBy(desc(ingestKey.createdAt)),
-    // Histórico de status (criação, remoções e reativações), do audit_log.
+    // Status history (creation, removals and reactivations), from the audit_log.
     db
       .select({ at: auditLog.at, action: auditLog.action, actor: user.email, details: auditLog.details })
       .from(auditLog)
@@ -154,12 +154,12 @@ export async function getTenantDetail(ctx: OperatorContext, tenantId: string) {
   };
 }
 
-// Remoção e reativação de tenant (#20, spec do E2, seção 6, D6).
+// Tenant removal and reactivation (#20, E2 spec, section 6, D6).
 //
-// Remover é desativar: os dados ficam no banco. As visões de ingestão
-// (migração 0002) só aceitam tenant `active`, então o gateway web e o coletor
-// passam a recusar a ingestão em até 1 minuto (o cache deles). Cada mudança
-// vai para o audit_log com quem fez e o motivo.
+// Removing is deactivating: the data stays in the database. The ingest views
+// (migration 0002) only accept an `active` tenant, so the web gateway and the
+// collector start rejecting ingestion within 1 minute (their cache). Each
+// change goes to the audit_log with who did it and the reason.
 
 export const REASON_MAX = 500;
 
@@ -173,8 +173,8 @@ export class TenantStatusError extends Error {
   }
 }
 
-// Nulo: o tenant não existe. "unchanged": já estava no status pedido (por
-// exemplo, dois operadores ao mesmo tempo); nada é gravado.
+// Null: the tenant does not exist. "unchanged": it was already in the
+// requested status (for example, two operators at the same time); nothing is written.
 export type StatusChangeResult = "changed" | "unchanged" | null;
 
 function cleanReason(raw: string | undefined, required: boolean): string | null {
@@ -190,7 +190,7 @@ function cleanReason(raw: string | undefined, required: boolean): string | null 
 
 type Transition = {
   to: "active" | "removed";
-  // Status de onde a mudança vale; de outro, nada é gravado ("unchanged").
+  // Statuses the change is valid from; from any other, nothing is written ("unchanged").
   from: ReadonlyArray<"active" | "removed" | "pending">;
   action: "tenant.removed" | "tenant.reactivated" | "tenant.approved" | "tenant.rejected";
 };
@@ -204,7 +204,7 @@ async function changeStatus(
   if (!UUID_REGEX.test(tenantId)) return null;
   const { to, from, action } = transition;
   return db.transaction(async (tx) => {
-    // Trava a linha: duas mudanças ao mesmo tempo gravam um registro só.
+    // Locks the row: two changes at the same time write a single record.
     const [current] = await tx
       .select({ status: tenant.status })
       .from(tenant)
@@ -219,14 +219,15 @@ async function changeStatus(
         status: to,
         statusChangedAt: sql`clock_timestamp()`,
         statusChangedBy: ctx.userId,
-        // O motivo da coluna é o do status atual; o da reativação e o da
-        // aprovação ficam só no audit_log.
+        // The reason in the column is the current status's; the reactivation
+        // and approval ones stay only in the audit_log.
         statusReason: to === "removed" ? reason : null,
       })
       .where(eq(tenant.id, tenantId));
     await tx.insert(auditLog).values({
-      // Horário de agora, já com a trava: o now() padrão é o do início da
-      // transação, e mudanças concorrentes sairiam fora de ordem no histórico.
+      // The time right now, already holding the lock: the default now() is the
+      // transaction's start, and concurrent changes would come out of order in
+      // the history.
       at: sql`clock_timestamp()`,
       actorUserId: ctx.userId,
       action,
@@ -237,7 +238,7 @@ async function changeStatus(
   });
 }
 
-// O motivo é obrigatório: o projeto o vê no painel.
+// The reason is required: the project sees it on the dashboard.
 export async function removeTenant(
   ctx: OperatorContext,
   tenantId: string,
@@ -251,13 +252,13 @@ export async function removeTenant(
   );
 }
 
-// O motivo é opcional e fica só no audit_log; o painel do projeto volta ao normal.
+// The reason is optional and stays only in the audit_log; the project's dashboard goes back to normal.
 export async function reactivateTenant(
   ctx: OperatorContext,
   tenantId: string,
   input: { reason?: string } = {},
 ): Promise<StatusChangeResult> {
-  // Reativar vale só para tenant removido; `pending` se aprova em approveTenant (#49).
+  // Reactivating applies only to a removed tenant; `pending` is approved in approveTenant (#49).
   return changeStatus(
     ctx,
     tenantId,
@@ -266,11 +267,12 @@ export async function reactivateTenant(
   );
 }
 
-// Aprovação de cadastro (#49, ADR 0007). Só vale para tenant `pending`; de
-// outro status devolve "unchanged". Aprovar vira `active` (a ingestão passa a
-// aceitar em até 1 minuto, pelas visões). Rejeitar vira `removed`, com o motivo
-// que o projeto vê no painel; o operador ainda pode reativar depois (D6).
-// O motivo da aprovação é opcional e fica só no audit_log.
+// Sign-up approval (#49, ADR 0007). Only applies to a `pending` tenant; from
+// another status it returns "unchanged". Approving makes it `active` (ingestion
+// starts accepting within 1 minute, through the views). Rejecting makes it
+// `removed`, with the reason the project sees on the dashboard; the operator
+// can still reactivate it later (D6). The approval reason is optional and
+// stays only in the audit_log.
 export async function approveTenant(
   ctx: OperatorContext,
   tenantId: string,
@@ -297,9 +299,10 @@ export async function rejectTenant(
   );
 }
 
-// Apaga os dados de um tenant já removido (#154, ação separada da remoção,
-// como o spec do E2 pede). Nulo quando o tenant não existe; "unchanged" quando
-// ainda não está `removed` — o painel só mostra o formulário para removido.
+// Erases the data of an already removed tenant (#154, an action separate from
+// removal, as the E2 spec asks). Null when the tenant does not exist;
+// "unchanged" when it is not yet `removed`: the dashboard only shows the form
+// for a removed one.
 export async function purgeRemovedTenant(
   ctx: OperatorContext,
   tenantId: string,
@@ -313,8 +316,8 @@ export async function purgeRemovedTenant(
     .limit(1);
   if (!current) return null;
   if (current.status !== "removed") return "unchanged";
-  // Confirmação digitada no formulário: o slug do projeto, para não apagar
-  // por engano (o clique do mouse não basta).
+  // Confirmation typed in the form: the project slug, so as not to erase by
+  // mistake (a mouse click is not enough).
   if (input.confirmSlug.trim() !== current.slug) {
     throw new TenantStatusError("invalid_confirm", "Type the project slug to confirm erasure.");
   }
@@ -326,8 +329,8 @@ export async function purgeRemovedTenant(
   return "changed";
 }
 
-// Projetos à espera de aprovação, do mais antigo para o mais novo, com quem
-// os criou. Só nome, e-mail e data: nada além do que o detalhe já mostra.
+// Projects waiting for approval, from oldest to newest, with who created
+// them. Only name, e-mail and date: nothing beyond what the detail already shows.
 export async function listPendingTenants(ctx: OperatorContext) {
   void ctx;
   return db

@@ -3,8 +3,8 @@ import { handleRead, periodBody } from "@/lib/read-api";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/v1/api?period=7d: métricas de API de cada projeto ativo, as mesmas
-// do painel /operator/api. Latências em segundos (p50, p95), nulas sem requisições.
+// GET /api/v1/api?period=7d: API metrics of each active project, the same as
+// the /operator/api dashboard. Latencies in seconds (p50, p95), null with no requests.
 export function GET(request: Request) {
   return handleRead(request, async (ctx, period) => ({
     period: periodBody(period),

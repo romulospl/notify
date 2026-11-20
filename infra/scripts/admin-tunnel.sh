@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Túnel SSH de administração para a produção (#14, docs/deploy.md).
+# SSH admin tunnel to production (#14, docs/deploy.md).
 #
-# Leva o Postgres e o Umami da VM para portas locais, sem publicar nada na
-# internet: o Postgres escuta só no loopback da VM e o Umami só na rede
-# interna do Compose (IP fixo 172.30.0.20, ver infra/compose/prod.yaml).
+# Brings the VM's Postgres and Umami to local ports, without publishing anything on
+# the internet: Postgres listens only on the VM's loopback and Umami only on the
+# Compose internal network (fixed IP 172.30.0.20, see infra/compose/prod.yaml).
 #
-#   infra/scripts/admin-tunnel.sh <ip-da-vm>
+#   infra/scripts/admin-tunnel.sh <vm-ip>
 #
-# Com o túnel aberto, em outro terminal:
-#   Postgres: postgresql://stellytics:<senha>@127.0.0.1:15432/stellytics
-#   Umami:    http://127.0.0.1:13001 (interface e API)
-# Ctrl+C fecha o túnel.
+# With the tunnel open, in another terminal:
+#   Postgres: postgresql://stellytics:<password>@127.0.0.1:15432/stellytics
+#   Umami:    http://127.0.0.1:13001 (UI and API)
+# Ctrl+C closes the tunnel.
 set -euo pipefail
-host="${1:?uso: admin-tunnel.sh <ip-da-vm>}"
-echo "Postgres em 127.0.0.1:15432 e Umami em http://127.0.0.1:13001 (Ctrl+C fecha)."
+host="${1:?usage: admin-tunnel.sh <vm-ip>}"
+echo "Postgres at 127.0.0.1:15432 and Umami at http://127.0.0.1:13001 (Ctrl+C closes)."
 exec ssh -N \
   -o ExitOnForwardFailure=yes \
   -L 127.0.0.1:15432:127.0.0.1:5432 \

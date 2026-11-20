@@ -1,17 +1,17 @@
-// Confere se as listas de bloqueio mais usadas bloqueiam o script ou os endpoints do gateway (#23).
-// Baixa as listas na hora (nada é commitado) e avalia cada requisição com o matcher de regras de
-// rede do @ghostery/adblocker, como se ela partisse da página de um tenant.
+// Checks whether the most used block lists block the script or the gateway endpoints (#23).
+// Downloads the lists on the spot (nothing is committed) and evaluates each request with the
+// network rule matcher of @ghostery/adblocker, as if it came from a tenant's page.
 //
-// Uso: pnpm --filter @stellytics/tracker check:adblock [host...]
-// Os hosts passados como argumento entram na lista dos que não podem ser bloqueados.
+// Usage: pnpm --filter @stellytics/tracker check:adblock [host...]
+// Hosts passed as arguments join the list of those that must not be blocked.
 import { FiltersEngine, Request } from "@ghostery/adblocker";
 import type { RequestType } from "@ghostery/adblocker";
 import { readManifest } from "./bundle.ts";
 
 const UBO = "https://ublockorigin.github.io/uAssets/filters";
 
-// Listas ligadas por padrão no uBlock Origin (exceto a de URLs maliciosas, que só tem domínios
-// de malware), que incluem a EasyList e a EasyPrivacy.
+// Lists enabled by default in uBlock Origin (except the malicious URL one, which only has
+// malware domains), which include EasyList and EasyPrivacy.
 const lists: Record<string, string> = {
   EasyList: "https://easylist.to/easylist/easylist.txt",
   EasyPrivacy: "https://easylist.to/easylist/easyprivacy.txt",
@@ -23,14 +23,14 @@ const lists: Record<string, string> = {
   "Peter Lowe": "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=0&mimetype=plaintext",
 };
 
-// Hosts que não podem ser bloqueados: o exemplo neutro da documentação e os passados na linha de
-// comando (aceita "e.foo.org" ou "https://e.foo.org/").
+// Hosts that must not be blocked: the neutral example from the documentation and those passed on
+// the command line (accepts "e.foo.org" or "https://e.foo.org/").
 const requiredHosts = [
   "gw.example.com",
   ...process.argv.slice(2).map((arg) => (arg.includes("://") ? new URL(arg).host : arg.replace(/\/.*$/, ""))),
 ];
 
-// Subdomínios que alguém poderia escolher em produção. Só informativo: mostra quais nomes evitar.
+// Subdomains someone might pick in production. Informational only: shows which names to avoid.
 const candidateHosts = [
   "stellytics",
   "ingest",
@@ -46,7 +46,7 @@ const candidateHosts = [
   "umami",
 ].map((label) => `${label}.example.com`);
 
-// Página de terceiro (o caso comum) e página no mesmo domínio do gateway.
+// Third-party page (the common case) and a page on the same domain as the gateway.
 const sources = ["https://www.tenant-site.example.net/", "https://www.example.com/"];
 
 const websiteId = "5f2b6c1e-8a43-4d1f-9b7e-3c0a2d4e6f81";
@@ -67,8 +67,8 @@ const probes: Probe[] = [
   { label: "GET /c", path: `/c?s=${websiteId}`, type: "xmlhttprequest" },
 ];
 
-// Controles que as listas precisam bloquear: se algum passar, o matcher ou as listas quebraram e o
-// resultado acima não vale. Os dois primeiros são os caminhos padrão do Umami no host do gateway.
+// Controls the lists must block: if any passes, the matcher or the lists are broken and the
+// result above does not count. The first two are Umami's default paths on the gateway host.
 const controls: { url: string; type: RequestType }[] = [
   { url: `https://${requiredHosts[0]}/umami.js`, type: "script" },
   { url: `https://${requiredHosts[0]}/api/collect`, type: "xmlhttprequest" },
@@ -82,13 +82,13 @@ async function download(url: string): Promise<string> {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.text();
     } catch (error) {
-      if (attempt === 3) throw new Error(`falha ao baixar ${url}: ${error}`);
+      if (attempt === 3) throw new Error(`failed to download ${url}: ${error}`);
       await new Promise((resolve) => setTimeout(resolve, 2_000 * attempt));
     }
   }
 }
 
-// Resolve os "!#include" (o filters.txt do uBO divide as regras em vários arquivos).
+// Resolves the "!#include" lines (uBO's filters.txt splits the rules across several files).
 async function downloadList(url: string): Promise<string> {
   const text = await download(url);
   const parts = await Promise.all(
@@ -100,7 +100,7 @@ async function downloadList(url: string): Promise<string> {
   return parts.join("\n");
 }
 
-// Só regras de rede; os filtros cosméticos escondem elementos e não afetam requisições.
+// Network rules only; cosmetic filters hide elements and do not affect requests.
 function engineFor(text: string): FiltersEngine {
   return FiltersEngine.parse(text, { loadCosmeticFilters: false, loadNetworkFilters: true });
 }
@@ -111,23 +111,23 @@ const texts = Object.fromEntries(
   ),
 );
 
-// O veredito vem das listas juntas, como no navegador (uma exceção de uma lista vale para as outras).
+// The verdict comes from the lists together, as in the browser (an exception in one list applies to the others).
 const combined = engineFor(Object.values(texts).join("\n"));
 const perList = Object.entries(texts).map(([name, text]) => [name, engineFor(text)] as const);
 
-// Cada lista precisa virar regras de rede de verdade: uma página de erro, captcha ou limite de taxa
-// devolvida com 200 tem linhas de texto, mas nenhuma regra, e faria o teste passar sem testar nada.
+// Each list must turn into real network rules: an error, captcha or rate limit page returned
+// with 200 has lines of text, but no rule, and would make the test pass without testing anything.
 const MIN_NETWORK_FILTERS = 20;
-console.log(`Listas baixadas em ${new Date().toISOString()}:`);
+console.log(`Lists downloaded at ${new Date().toISOString()}:`);
 for (const [name, engine] of perList) {
   const text = texts[name]!;
   const filters = engine.getFilters().networkFilters.length;
-  const version = /^! (?:Version|Last modified):\s*(.+)$/m.exec(text)?.[1]?.trim() ?? "sem versão";
-  console.log(`  ${name}: ${filters} regras de rede (${version})`);
-  if (filters < MIN_NETWORK_FILTERS) throw new Error(`a lista ${name} virou só ${filters} regras de rede`);
+  const version = /^! (?:Version|Last modified):\s*(.+)$/m.exec(text)?.[1]?.trim() ?? "no version";
+  console.log(`  ${name}: ${filters} network rules (${version})`);
+  if (filters < MIN_NETWORK_FILTERS) throw new Error(`the ${name} list turned into only ${filters} network rules`);
 }
 
-// Devolve as regras que bloqueiam a requisição, com a lista de origem, ou [] se ela passa.
+// Returns the rules that block the request, with the source list, or [] if it passes.
 function blockedBy(host: string, probe: Probe, sourceUrl: string): string[] {
   const request = Request.fromRawDetails({
     url: `https://${host}${probe.path}`,
@@ -140,53 +140,53 @@ function blockedBy(host: string, probe: Probe, sourceUrl: string): string[] {
     const { filter } = engine.match(request);
     return filter ? [`${name}: ${filter.toString()}`] : [];
   });
-  return reasons.length > 0 ? reasons : ["(combinação de listas)"];
+  return reasons.length > 0 ? reasons : ["(combination of lists)"];
 }
 
 function check(host: string): string[] {
   return probes.flatMap((probe) =>
     sources.flatMap((source) =>
       blockedBy(host, probe, source).map(
-        (reason) => `${probe.label} em ${host} a partir de ${new URL(source).hostname}: ${reason}`,
+        (reason) => `${probe.label} on ${host} from ${new URL(source).hostname}: ${reason}`,
       ),
     ),
   );
 }
 
 let failures = 0;
-console.log("\nControles (precisam ser bloqueados):");
+console.log("\nControls (must be blocked):");
 for (const control of controls) {
   const request = Request.fromRawDetails({ ...control, sourceUrl: sources[0] });
   const { match, filter } = combined.match(request);
   if (!match) failures++;
-  console.log(`  ${match ? "bloqueado" : "PASSOU   "} ${control.url}${filter ? ` (${filter.toString()})` : ""}`);
+  console.log(`  ${match ? "blocked" : "PASSED "} ${control.url}${filter ? ` (${filter.toString()})` : ""}`);
 }
 
-console.log("\nHosts que não podem ser bloqueados:");
+console.log("\nHosts that must not be blocked:");
 for (const host of requiredHosts) {
   const blocks = check(host);
   failures += blocks.length;
-  console.log(`  ${blocks.length === 0 ? "ok       " : "BLOQUEADO"} ${host}`);
+  console.log(`  ${blocks.length === 0 ? "ok     " : "BLOCKED"} ${host}`);
   for (const block of blocks) console.log(`    ${block}`);
 }
 
-// sendBeacon vira uma requisição do tipo ping, que a EasyPrivacy bloqueia de terceiros ($ping,3p).
-// Informativo: mostra por que o script usa fetch com keepalive e nunca sendBeacon.
+// sendBeacon becomes a request of type ping, which EasyPrivacy blocks from third parties ($ping,3p).
+// Informational: shows why the script uses fetch with keepalive and never sendBeacon.
 const beacon = blockedBy(requiredHosts[0]!, { label: "POST /e (sendBeacon)", path: "/e", type: "ping" }, sources[0]!);
-console.log("\nPOST /e como sendBeacon (informativo; o script usa fetch):");
-console.log(`  ${beacon.length === 0 ? "ok       " : "bloqueado"} ${beacon[0] ?? ""}`);
+console.log("\nPOST /e as sendBeacon (informational; the script uses fetch):");
+console.log(`  ${beacon.length === 0 ? "ok     " : "blocked"} ${beacon[0] ?? ""}`);
 
-console.log("\nSubdomínios candidatos (informativo):");
+console.log("\nCandidate subdomains (informational):");
 for (const host of candidateHosts) {
   const blocks = check(host);
-  console.log(`  ${blocks.length === 0 ? "ok       " : "bloqueado"} ${host}`);
+  console.log(`  ${blocks.length === 0 ? "ok     " : "blocked"} ${host}`);
   for (const block of [...new Set(blocks.map((b) => b.replace(/^.*?: /, "")))]) {
     console.log(`    ${block}`);
   }
 }
 
 if (failures > 0) {
-  console.error(`\n${failures} falha(s): requisição bloqueada num host obrigatório ou controle que passou.`);
+  console.error(`\n${failures} failure(s): request blocked on a required host or control that passed.`);
   process.exit(1);
 }
-console.log("\nNenhuma requisição bloqueada nos hosts obrigatórios.");
+console.log("\nNo request blocked on the required hosts.");

@@ -1,11 +1,11 @@
 # services/collector/components
 
-Componentes Go do coletor, um pacote por componente:
+Go components of the collector, one package per component:
 
-| Componente | Tipo | Papel |
+| Component | Type | Role |
 |---|---|---|
-| Autenticação por chave | extension | [`ingestkeyauth/`](ingestkeyauth/) (#30): valida a chave de ingestão na `ingest_key_active` e põe tenant e serviço no contexto do pedido. Nunca confia em atributo enviado pelo cliente |
-| Carimbo de tenant | processor | [`tenantattr/`](tenantattr/) (#30): troca os atributos de tenant do recurso por `stellytics.tenant.id` e `stellytics.api_service.id` da chave. Vem antes do `batch` |
-| Normalização de rotas | processor | Regras em [`routenorm/`](routenorm/) (#32): `{uuid}`, `{address}` (StrKey G/C/M), `{hash}` (16+ hex) e `{id}`, sem barra final. Um `http.route` enviado pelo cliente tem prioridade. O processor que usa o pacote entra na #31 |
-| PostgreSQL | exporter | [`pgexporter/`](pgexporter/) (#31): grava os pontos de 1 minuto em `api_metric_1m` |
-| Extração de métricas | pacote | [`httpmetrics/`](httpmetrics/) (#31): spans de servidor HTTP e `http.server.request.duration` viram pontos de 1 minuto; o resto é descartado |
+| Key authentication | extension | [`ingestkeyauth/`](ingestkeyauth/) (#30): validates the ingest key against `ingest_key_active` and puts tenant and service in the request context. Never trusts an attribute sent by the client |
+| Tenant stamp | processor | [`tenantattr/`](tenantattr/) (#30): replaces the resource's tenant attributes with the key's `stellytics.tenant.id` and `stellytics.api_service.id`. Comes before `batch` |
+| Route normalization | processor | Rules in [`routenorm/`](routenorm/) (#32): `{uuid}`, `{address}` (StrKey G/C/M), `{hash}` (16+ hex) and `{id}`, without a trailing slash. An `http.route` sent by the client takes priority. The processor that uses the package lands in #31 |
+| PostgreSQL | exporter | [`pgexporter/`](pgexporter/) (#31): writes the 1-minute points to `api_metric_1m` |
+| Metric extraction | package | [`httpmetrics/`](httpmetrics/) (#31): HTTP server spans and `http.server.request.duration` become 1-minute points; the rest is dropped |

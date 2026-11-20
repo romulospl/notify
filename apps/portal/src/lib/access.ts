@@ -4,19 +4,20 @@ import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { db } from "./db";
 import { operatorApiKey, operatorInvite, tenant, tenantMember, user } from "./db/schema";
+import { env } from "./env";
 import { READ_KEY_PATTERN, readKeyFromHeader } from "./read-key";
 import { requireSession } from "./session";
 
-// Contextos de acesso do spec do E2, seção 4 (ADR 0003). O tenant vem sempre
-// da sessão, nunca de um valor enviado pelo cliente.
+// Access contexts from the E2 spec, section 4 (ADR 0003). The tenant always
+// comes from the session, never from a value sent by the client.
 //
-// Os tipos são marcados (branded): fora deste arquivo ninguém consegue montar
-// um contexto à mão, então as funções de src/lib/data/ e src/lib/umami/ só
-// recebem contextos criados aqui, a partir da sessão. Junto com a regra de
-// lint (eslint.config.mjs), isso faz de data/ e umami/ a camada única.
+// The types are branded: outside this file nobody can build a context by
+// hand, so the functions in src/lib/data/ and src/lib/umami/ only take
+// contexts created here, from the session. Together with the lint rule
+// (eslint.config.mjs), this makes data/ and umami/ the single layer.
 //
-// Quem não tem acesso recebe 404, nunca 403, para não revelar que o recurso
-// ou a área existe.
+// Whoever has no access gets 404, never 403, so as not to reveal that the
+// resource or the area exists.
 
 declare const tenantContextBrand: unique symbol;
 declare const operatorContextBrand: unique symbol;
@@ -34,8 +35,45 @@ export type OperatorContext = {
   readonly [operatorContextBrand]: true;
 };
 
-// Busca o tenant do usuário (D1: no máximo um). Nulo para quem não é membro.
-// Não confere o papel: use getTenantContext() ou requireTenantContext().
+// Context of the public demo (/demo and /demo/operator): no session, fixed on
+// the one tenant named by DEMO_TENANT_SLUG. It carries no user and is not a
+// TenantContext or an OperatorContext, so only the read functions that accept
+// TenantReadContext or DemoContext take it: nothing that writes, and nothing
+// that reads across tenants, type-checks with it.
+declare const demoContextBrand: unique symbol;
+
+export type DemoContext = {
+  readonly tenantId: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly [demoContextBrand]: true;
+};
+
+// What the tenant read functions need: a tenant that did not come from the client.
+export type TenantReadContext = TenantContext | DemoContext;
+
+// Null when the demo is off (no DEMO_TENANT_SLUG) or the tenant does not exist
+// or is not active. The slug comes from the server environment, never from
+// the request.
+export async function loadDemoContext(): Promise<DemoContext | null> {
+  const slug = env.demoTenantSlug;
+  if (!slug) return null;
+  const [row] = await db
+    .select({ tenantId: tenant.id, name: tenant.name, slug: tenant.slug })
+    .from(tenant)
+    .where(and(eq(tenant.slug, slug), eq(tenant.status, "active")))
+    .limit(1);
+  return row ? (row as DemoContext) : null;
+}
+
+export async function requireDemoContext(): Promise<DemoContext> {
+  const ctx = await loadDemoContext();
+  if (!ctx) notFound();
+  return ctx;
+}
+
+// Loads the user's tenant (D1: at most one). Null for someone who is not a
+// member. Does not check the role: use getTenantContext() or requireTenantContext().
 export async function loadTenantContext(userId: string): Promise<TenantContext | null> {
   const [row] = await db
     .select({ tenantId: tenantMember.tenantId, memberRole: tenantMember.role, tenantStatus: tenant.status })
@@ -47,19 +85,19 @@ export async function loadTenantContext(userId: string): Promise<TenantContext |
   return { userId, ...row } as TenantContext;
 }
 
-// Contexto do tenant de quem está na sessão, ou nulo para quem ainda não tem
-// projeto. Sem sessão vai para o login; operador recebe 404 (D2: operador não
-// é membro de tenant).
+// Tenant context of whoever is in the session, or null for someone who has no
+// project yet. With no session it goes to the login; an operator gets 404 (D2:
+// an operator is not a tenant member).
 export async function getTenantContext(): Promise<TenantContext | null> {
   const session = await requireSession();
   if (session.user.role === "operator") notFound();
   return loadTenantContext(session.user.id);
 }
 
-// Quem ainda não tem projeto vai para a criação do projeto (#17). Projeto
-// `pending` (cadastro com aprovação, #49) só vê a tela de espera em /dashboard,
-// que pede `allowPending`; qualquer outra página ou ação do tenant redireciona
-// para lá, então nenhuma delas chega à camada de dados.
+// Whoever has no project yet goes to project creation (#17). A `pending`
+// project (sign-up with approval, #49) only sees the waiting screen at
+// /dashboard, which asks for `allowPending`; any other tenant page or action
+// redirects there, so none of them reaches the data layer.
 export async function requireTenantContext(options: { allowPending?: boolean } = {}): Promise<TenantContext> {
   const ctx = await getTenantContext();
   if (!ctx) redirect("/onboarding");
@@ -67,8 +105,9 @@ export async function requireTenantContext(options: { allowPending?: boolean } =
   return ctx;
 }
 
-// Quem pode criar um projeto (#17): membro com e-mail confirmado e ainda sem
-// tenant (D1: um tenant por usuário). Quem já tem projeto vai para o painel.
+// Who can create a project (#17): a member with a confirmed e-mail and no
+// tenant yet (D1: one tenant per user). Whoever already has a project goes to
+// the dashboard.
 declare const onboardingContextBrand: unique symbol;
 
 export type OnboardingContext = {
@@ -79,8 +118,8 @@ export type OnboardingContext = {
 export async function requireOnboardingContext(): Promise<OnboardingContext> {
   const session = await requireSession();
   if (session.user.role === "operator") notFound();
-  // O login já exige e-mail confirmado (#60); conferir de novo aqui garante
-  // que conta sem confirmação nunca cria projeto.
+  // The login already requires a confirmed e-mail (#60); checking again here
+  // guarantees that an unconfirmed account never creates a project.
   if (!session.user.emailVerified) notFound();
   if (await loadTenantContext(session.user.id)) redirect("/dashboard");
   return { userId: session.user.id } as OnboardingContext;
@@ -92,16 +131,16 @@ export async function requireOperatorContext(): Promise<OperatorContext> {
   return { userId: session.user.id } as OperatorContext;
 }
 
-// Contexto de quem chama a API de leitura com uma chave do SCF (#48, ADR 0006).
-// É um OperatorContext (as funções de data/operator/ valem as mesmas), mais o
-// ID da chave, usado no limite de requisições. `userId` é quem criou a chave.
+// Context of whoever calls the read API with an SCF key (#48, ADR 0006).
+// It is an OperatorContext (the same data/operator/ functions apply), plus the
+// key ID, used in the request limit. `userId` is who created the key.
 export type OperatorKeyContext = OperatorContext & { readonly keyId: string };
 
-// Autentica `Authorization: Bearer nrk_...`. Nulo para qualquer falha (sem
-// header, formato errado, prefixo desconhecido, segredo errado, chave
-// revogada ou criada por quem deixou de ser operador); quem chama responde 401
-// igual em todos os casos. Só a chave de leitura vale: a de ingestão (`ntf_`)
-// não passa do formato. A chave completa nunca vai para log nem para erro.
+// Authenticates `Authorization: Bearer nrk_...`. Null for any failure (no
+// header, wrong format, unknown prefix, wrong secret, key revoked or created
+// by someone who is no longer an operator); the caller answers the same 401
+// in every case. Only the read key is valid: the ingest key (`ntf_`) does not
+// get past the format. The full key never goes to a log or an error.
 export async function authenticateReadKey(authorization: string | null): Promise<OperatorKeyContext | null> {
   const key = readKeyFromHeader(authorization);
   const parsed = key ? READ_KEY_PATTERN.exec(key) : null;
@@ -120,18 +159,18 @@ export async function authenticateReadKey(authorization: string | null): Promise
   if (!row) return null;
   const given = createHash("sha256").update(key, "utf8").digest();
   if (!timingSafeEqual(given, row.keyHash)) return null;
-  // No máximo uma escrita por dia e chave.
+  // At most one write per day and key.
   const today = new Date().toISOString().slice(0, 10);
   if (row.lastUsedOn !== today) {
-    // Melhor esforço: falhar em gravar o último uso não pode derrubar uma
-    // chave válida. O log leva só o nome do erro.
+    // Best effort: failing to record the last use must not take down a valid
+    // key. The log carries only the error name.
     try {
       await db
         .update(operatorApiKey)
         .set({ lastUsedOn: sql`${today}::date` })
         .where(eq(operatorApiKey.id, row.id));
     } catch (error) {
-      console.error("Falha ao gravar o último uso da chave de leitura", (error as Error).name);
+      console.error("Failed to record the last use of the read key", (error as Error).name);
     }
   }
   return { userId: row.createdBy, keyId: row.id } as OperatorKeyContext;

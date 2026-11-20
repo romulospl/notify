@@ -1,11 +1,11 @@
-# Só para desenvolvimento: publica o Umami em 127.0.0.1:${UMAMI_PORT:-3001},
-# para a interface de administração, o script da conta de serviço (#58), o
-# `next dev` fora do Docker e o teste ponta a ponta do gateway.
+# Development only: publishes Umami on 127.0.0.1:${UMAMI_PORT:-3001},
+# for the admin UI, the service account script (#58),
+# `next dev` outside Docker and the gateway end-to-end test.
 #
 #   docker compose -f compose.yaml -f infra/compose/umami-port.yaml up -d --wait
 #
-# Ou, no .env da raiz: COMPOSE_FILE=compose.yaml:infra/compose/umami-port.yaml
-# Nunca use este arquivo fora da máquina de desenvolvimento ou do CI (#62).
+# Or, in the root .env: COMPOSE_FILE=compose.yaml:infra/compose/umami-port.yaml
+# Never use this file outside the development machine or CI (#62).
 services:
   umami:
     ports:

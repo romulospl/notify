@@ -6,7 +6,7 @@
     "docker:pinDigests",
     ":semanticCommitTypeAll(chore)"
   ],
-  "description": "Atualizações por PR, só com releases de pelo menos 14 dias (ADR 0002).",
+  "description": "Updates by PR, only with releases at least 14 days old (ADR 0002).",
   "timezone": "Europe/Berlin",
   "schedule": [
     "before 6am on monday"
@@ -28,14 +28,14 @@
   },
   "packageRules": [
     {
-      "description": "Versão maior só abre PR depois de aprovada no Dependency Dashboard (atualizações de segurança passam direto).",
+      "description": "A major version only opens a PR after being approved in the Dependency Dashboard (security updates go straight through).",
       "matchUpdateTypes": [
         "major"
       ],
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Umami só sobe por PR revisado, nunca agrupado nem automático.",
+      "description": "Umami is only upgraded by a reviewed PR, never grouped or automatic.",
       "matchDepNames": [
         "ghcr.io/umami-software/umami"
       ],
@@ -47,7 +47,7 @@
       ]
     },
     {
-      "description": "Postgres: só minor e patch dentro da mesma versão maior.",
+      "description": "Postgres: only minor and patch within the same major version.",
       "matchDepNames": [
         "postgres"
       ],
@@ -57,7 +57,7 @@
       "enabled": false
     },
     {
-      "description": "Actions do GitHub agrupadas em um PR.",
+      "description": "GitHub Actions grouped in one PR.",
       "matchManagers": [
         "github-actions"
       ],

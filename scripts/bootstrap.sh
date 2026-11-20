@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Script de bootstrap para o ambiente local de desenvolvimento do stellytics.
-# Configura o .env, dependências, credenciais da conta de serviço do Umami
-# e inicializa a stack completa via Docker Compose.
+# Bootstrap script for the stellytics local development environment.
+# Sets up the .env, dependencies, Umami service account credentials
+# and starts the full stack through Docker Compose.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -15,48 +15,48 @@ for arg in "$@"; do
       FORCE_REGEN=true
       ;;
     -h|--help)
-      echo "Uso: ./scripts/bootstrap.sh [--force]"
+      echo "Usage: ./scripts/bootstrap.sh [--force]"
       echo ""
-      echo "Opções:"
-      echo "  --force    Gera uma chave nova do Umami mesmo se já existir no .env (não revoga a anterior)"
+      echo "Options:"
+      echo "  --force    Generates a new Umami key even if one already exists in the .env (does not revoke the previous one)"
       exit 0
       ;;
     *)
-      echo "Opção desconhecida: $arg" >&2
+      echo "Unknown option: $arg" >&2
       exit 1
       ;;
   esac
 done
 
-echo "=== [1/5] Verificando pré-requisitos ==="
+echo "=== [1/5] Checking prerequisites ==="
 for cmd in docker pnpm node curl; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "Erro: '$cmd' não está instalado ou não foi encontrado no PATH." >&2
+    echo "Error: '$cmd' is not installed or was not found in the PATH." >&2
     exit 1
   fi
 done
 
 if ! docker compose version >/dev/null 2>&1; then
-  echo "Erro: Docker Compose (v2) não foi encontrado." >&2
+  echo "Error: Docker Compose (v2) was not found." >&2
   exit 1
 fi
 
 if ! docker info >/dev/null 2>&1; then
-  echo "Erro: O daemon do Docker não está em execução." >&2
+  echo "Error: The Docker daemon is not running." >&2
   exit 1
 fi
 
 if [ ! -d "node_modules" ]; then
-  echo "Dependências (node_modules) não encontradas. Executando 'pnpm install'..."
+  echo "Dependencies (node_modules) not found. Running 'pnpm install'..."
   pnpm install
 fi
 
-echo "=== [2/5] Configurando variáveis de ambiente (.env) ==="
+echo "=== [2/5] Setting up environment variables (.env) ==="
 if [ ! -f .env ]; then
-  echo "Criando .env a partir de .env.example..."
+  echo "Creating .env from .env.example..."
   cp .env.example .env
 else
-  echo ".env já existe."
+  echo ".env already exists."
 fi
 
 # Parse the simple dotenv syntax used by Compose, including quoted values and
@@ -79,8 +79,8 @@ ENV_VALUES="$(node --input-type=module -e '
 ')"
 UMAMI_PORT="$(node -e 'const e=JSON.parse(process.argv[1]); console.log(e.UMAMI_PORT || "3001")' "$ENV_VALUES")"
 CURRENT_API_KEY="$(node -e 'const e=JSON.parse(process.argv[1]); console.log(e.UMAMI_API_KEY || "")' "$ENV_VALUES")"
-case "$UMAMI_PORT" in ''|*[!0-9]*) echo "Erro: UMAMI_PORT deve ser uma porta numérica." >&2; exit 1 ;; esac
-[ "$UMAMI_PORT" -ge 1 ] && [ "$UMAMI_PORT" -le 65535 ] || { echo "Erro: UMAMI_PORT fora do intervalo válido." >&2; exit 1; }
+case "$UMAMI_PORT" in ''|*[!0-9]*) echo "Error: UMAMI_PORT must be a numeric port." >&2; exit 1 ;; esac
+[ "$UMAMI_PORT" -ge 1 ] && [ "$UMAMI_PORT" -le 65535 ] || { echo "Error: UMAMI_PORT is outside the valid range." >&2; exit 1; }
 
 NEED_KEY_GEN=false
 if [ -z "$CURRENT_API_KEY" ] || [ "$FORCE_REGEN" = true ]; then
@@ -88,40 +88,40 @@ if [ -z "$CURRENT_API_KEY" ] || [ "$FORCE_REGEN" = true ]; then
 fi
 
 if [ "$NEED_KEY_GEN" = true ]; then
-  echo "=== [3/5] Subindo dependências base para configuração da API Key ==="
+  echo "=== [3/5] Starting base dependencies to set up the API key ==="
   docker compose -f compose.yaml -f infra/compose/umami-port.yaml up -d --wait postgres mailpit umami
 
-  echo "Aguardando Umami responder em http://127.0.0.1:${UMAMI_PORT}/api/heartbeat..."
+  echo "Waiting for Umami to respond at http://127.0.0.1:${UMAMI_PORT}/api/heartbeat..."
   max_retries=30
   retry_count=0
   until curl -fsS "http://127.0.0.1:${UMAMI_PORT}/api/heartbeat" >/dev/null 2>&1; do
     retry_count=$((retry_count + 1))
     if [ "$retry_count" -ge "$max_retries" ]; then
-      echo "Erro: Tempo limite aguardando o Umami." >&2
+      echo "Error: Timed out waiting for Umami." >&2
       exit 1
     fi
     sleep 1
   done
 
-  echo "=== [4/5] Configurando conta de serviço do Umami ==="
-  echo "Gerando chave de serviço para o portal..."
+  echo "=== [4/5] Setting up the Umami service account ==="
+  echo "Generating the service key for the portal..."
   if [ -z "${UMAMI_ADMIN_PASSWORD:-}" ]; then
     if [ -t 0 ]; then
-      read -r -s -p "Senha de administrador do Umami: " UMAMI_ADMIN_PASSWORD
+      read -r -s -p "Umami administrator password: " UMAMI_ADMIN_PASSWORD
       echo
     else
-      echo "Defina UMAMI_ADMIN_PASSWORD para autenticar no Umami." >&2
+      echo "Set UMAMI_ADMIN_PASSWORD to authenticate with Umami." >&2
       exit 1
     fi
   fi
   NEW_KEY="$(UMAMI_ADMIN_PASSWORD="$UMAMI_ADMIN_PASSWORD" UMAMI_URL="http://127.0.0.1:${UMAMI_PORT}" node apps/portal/scripts/umami-service-account.mjs | tr -d '\r\n ')"
 
   if [ -z "$NEW_KEY" ]; then
-    echo "Erro: Falha ao obter a chave de serviço do Umami." >&2
+    echo "Error: Failed to get the Umami service key." >&2
     exit 1
   fi
 
-  # Gravar com segurança no .env usando Node (evita problemas de delimitador e escape do sed)
+  # Write safely to the .env using Node (avoids sed delimiter and escaping problems)
   node -e '
     const fs = require("node:fs");
     const key = process.argv[1];
@@ -137,25 +137,25 @@ if [ "$NEED_KEY_GEN" = true ]; then
     fs.renameSync(tmp, ".env");
   ' "$NEW_KEY"
 
-  echo "Chave de serviço salva no .env."
+  echo "Service key saved to the .env."
 else
-  echo "=== [3/5] Dependências base já configuradas ==="
-  echo "=== [4/5] Chave UMAMI_API_KEY já presente no .env (use --force para regenerar) ==="
+  echo "=== [3/5] Base dependencies already set up ==="
+  echo "=== [4/5] UMAMI_API_KEY already present in the .env (use --force to regenerate) ==="
 fi
 
-echo "=== [5/5] Subindo a stack de desenvolvimento completa ==="
+echo "=== [5/5] Starting the full development stack ==="
 docker compose up -d --wait
 
 echo ""
 echo "=========================================================="
-echo "🚀 Ambiente stellytics pronto e em execução!"
+echo "🚀 stellytics environment ready and running!"
 echo "=========================================================="
-echo "Portal Web:            http://localhost:3000"
-echo "  - Contas fixas: usadas apenas pelo seed local; troque as senhas antes de expor o portal."
-echo "Gateway Web:           http://localhost:3002"
-echo "Coletor API (OTLP):    http://localhost:4318 (HTTP) | localhost:4317 (gRPC)"
-echo "Mailpit (E-mails):     http://localhost:8025"
-echo "PostgreSQL:            localhost:5432 (stellytics/stellytics e umami/umami)"
+echo "Web portal:            http://localhost:3000"
+echo "  - Fixed accounts: used only by the local seed; change the passwords before exposing the portal."
+echo "Web gateway:           http://localhost:3002"
+echo "API collector (OTLP):  http://localhost:4318 (HTTP) | localhost:4317 (gRPC)"
+echo "Mailpit (emails):      http://localhost:8025"
+echo "PostgreSQL:            localhost:5432 (stellytics/stellytics and umami/umami)"
 echo "=========================================================="
-echo "Dica: Para parar os serviços, execute: docker compose down"
-echo "Para reiniciar os dados do zero:      docker compose down -v"
+echo "Tip: To stop the services, run: docker compose down"
+echo "To reset the data from scratch:  docker compose down -v"

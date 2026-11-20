@@ -1,8 +1,8 @@
-# Release: roda quando uma release é publicada no GitHub (tag vX.Y.Z).
-# - Anexa à release um SBOM (SPDX) do repositório, gerado com syft.
-# - Para cada Dockerfile em apps/* e services/*, publica a imagem no GHCR,
-#   assina com cosign (keyless, OIDC do GitHub) e anexa o SBOM da imagem como atestado.
-# Actions fixadas por SHA (comentário com a tag), conforme o ADR 0002.
+# Release: runs when a release is published on GitHub (tag vX.Y.Z).
+# - Attaches to the release an SBOM (SPDX) of the repository, generated with syft.
+# - For each Dockerfile in apps/* and services/*, publishes the image to GHCR,
+#   signs it with cosign (keyless, GitHub OIDC) and attaches the image SBOM as an attestation.
+# Actions pinned by SHA (comment with the tag), as per ADR 0002.
 name: release
 
 on:
@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
-      contents: write # anexar o SBOM à release
+      contents: write # attach the SBOM to the release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
@@ -37,12 +37,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: find
-        name: Lista os Dockerfiles
+        name: List the Dockerfiles
         run: |
           images=$(find apps services -mindepth 2 -maxdepth 2 -name Dockerfile -printf '%h\n' 2>/dev/null \
             | sort | jq -R -s -c 'split("\n") | map(select(. != "")) | map({context: ., name: (split("/") | last)})')
           echo "images=${images:-[]}" >> "$GITHUB_OUTPUT"
-          echo "Imagens: ${images:-[]}"
+          echo "Images: ${images:-[]}"
 
   image:
     name: image (${{ matrix.image.name }})
@@ -52,8 +52,8 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-      packages: write # publicar no GHCR
-      id-token: write # assinatura keyless do cosign
+      packages: write # publish to GHCR
+      id-token: write # cosign keyless signing
     strategy:
       fail-fast: false
       matrix:
@@ -91,7 +91,7 @@ jobs:
           output-file: sbom.spdx.json
           upload-artifact: false
           upload-release-assets: false
-      - name: Assina a imagem e anexa o SBOM
+      - name: Sign the image and attach the SBOM
         env:
           REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
         run: |

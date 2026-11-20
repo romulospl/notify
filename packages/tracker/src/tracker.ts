@@ -1,38 +1,39 @@
-// Lógica do script de rastreamento, separada da entrada (index.ts) para os testes.
-// Não usa cookie, localStorage, sessionStorage nem identificador persistente:
-// a sessão é calculada pelo Umami a partir do IP truncado pelo gateway e do User-Agent.
+// Tracking script logic, kept apart from the entry point (index.ts) for the tests.
+// It uses no cookie, localStorage, sessionStorage or persistent identifier:
+// Umami computes the session from the IP truncated by the gateway and the User-Agent.
 
-// Caminho do endpoint de eventos no gateway. Neutro de propósito (ver #23).
+// Path of the events endpoint on the gateway. Neutral on purpose (see #23).
 export const EVENT_PATH = "/e";
 
-// Caminho do desafio da prova de execução de JS (#25).
+// Path of the JS execution proof challenge (#25).
 export const CHALLENGE_PATH = "/c";
 
-// O desafio vale 10 minutos no gateway; o script pede outro antes disso.
+// The challenge is valid for 10 minutes on the gateway; the script requests another before that.
 export const CHALLENGE_REFRESH_MS = 5 * 60_000;
 
-// Limite de tentativas da prova. Com a dificuldade padrão (12 bits), a média é
-// de 4 mil; passar disso indica um gateway mal configurado, e o evento é perdido.
+// Attempt limit for the proof. With the default difficulty (12 bits), the average
+// is 4 thousand; going past the limit points to a misconfigured gateway, and the
+// event is lost.
 const MAX_ATTEMPTS = 1 << 22;
 
-// Espera antes de enviar o page view de uma navegação de SPA, para o título da
-// página nova já estar no document (mesmo atraso do script do Umami).
+// Wait before sending the page view of an SPA navigation, so the new page's
+// title is already in the document (same delay as the Umami script).
 export const NAVIGATION_DELAY_MS = 300;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Só os parâmetros de campanha saem da query string; o resto pode ter dado pessoal
-// (e-mail, token de convite etc.).
+// Only the campaign parameters leave the query string; the rest may hold personal
+// data (e-mail, invite token etc.).
 const KEPT_PARAMS = /^utm_(source|medium|campaign|term|content)$/;
 
-// Prova de execução de JS: o token do desafio e o nonce que o resolve.
+// JS execution proof: the challenge token and the nonce that solves it.
 export interface Proof {
   t: string;
   n: string;
 }
 
-// Payload no formato do /api/send do Umami, que o gateway valida e repassa.
-// O campo p (a prova) fica no gateway.
+// Payload in the format of Umami's /api/send, which the gateway validates and relays.
+// The p field (the proof) stays at the gateway.
 export interface EventPayload {
   type: "event";
   p: Proof;
@@ -44,24 +45,24 @@ export interface EventPayload {
     title: string;
     language: string;
     screen: string;
-    // Evento customizado (#50); ausentes no page view.
+    // Custom event (#50); absent in the page view.
     name?: string;
     data?: Record<string, EventValue>;
   };
 }
 
-// Valores aceitos nas propriedades de um evento customizado.
+// Values accepted in the properties of a custom event.
 export type EventValue = string | number | boolean;
 
-// Mesmos limites do gateway (services/ingest-web/internal/relay). O gateway é
-// quem manda; aqui só se evita enviar o que ele recusaria.
+// Same limits as the gateway (services/ingest-web/internal/relay). The gateway
+// is the authority; this only avoids sending what it would reject.
 const NAME = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,49}$/;
 const KEY = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$/;
 const MAX_DATA_KEYS = 10;
 const MAX_DATA_STRING = 100;
 
-// Valida nome e propriedades de um evento customizado. Devolve as propriedades
-// limpas ou nulo se algo estiver fora do contrato (o evento então não é enviado).
+// Validates the name and properties of a custom event. Returns the clean
+// properties, or null if anything is outside the contract (the event is then not sent).
 export function validateCustomEvent(name: unknown, data?: unknown): Record<string, EventValue> | null {
   if (typeof name !== "string" || !NAME.test(name)) return null;
   const out: Record<string, EventValue> = {};
@@ -79,19 +80,19 @@ export function validateCustomEvent(name: unknown, data?: unknown): Record<strin
   return out;
 }
 
-// API pública do script, em window.stellytics.
+// Public API of the script, at window.stellytics.
 export interface StellyticsApi {
   event(name: string, data?: Record<string, EventValue>): void;
   wallets(kit: unknown, types: unknown): () => void;
 }
 
-// ID genérico de módulo de carteira (freighter, albedo...). Mesmo charset das
-// chaves de propriedade do gateway e no máximo 32 caracteres: um endereço
-// Stellar (56) ou hash (64) nunca passa, nem hex de 40 caracteres (formato EVM).
+// Generic wallet module ID (freighter, albedo...). Same charset as the gateway's
+// property keys and at most 32 characters: a Stellar address (56) or hash (64)
+// never passes, nor does 40-character hex (EVM format).
 const WALLET_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$/;
 
-// Lê o id de WALLET_SELECTED. Formato da documentação do kit (consulta de
-// 15/11/2026): { eventType, payload: { id } }. Só o id sai; o resto é ignorado.
+// Reads the id from WALLET_SELECTED. Format from the kit's documentation (checked
+// on 15 November 2026): { eventType, payload: { id } }. Only the id leaves; the rest is ignored.
 export function walletId(event: unknown): string | null {
   const payload = (event as { payload?: { id?: unknown } } | null | undefined)?.payload;
   const id = payload?.id;
@@ -107,14 +108,14 @@ export function pageUrl(location: Location | URL): string {
   return location.pathname + (query ? `?${query}` : "") + hashRoute(location.hash);
 }
 
-// Rota de SPA no fragmento (#/rota ou #!/rota), sem query; âncoras (#secao) e
-// fragmentos que não são rota (ex.: #access_token=...) não saem.
+// SPA route in the fragment (#/route or #!/route), without query; anchors (#section)
+// and fragments that are not a route (e.g. #access_token=...) are not sent.
 function hashRoute(hash: string): string {
   const match = /^#!?(\/[^?#]*)/.exec(hash);
   return match ? `#${match[1]}` : "";
 }
 
-// Referenciador sem query string nem fragmento; vazio quando é a própria página.
+// Referrer without query string or fragment; empty when it is the page itself.
 export function cleanReferrer(referrer: string, hostname: string): string {
   if (!referrer) return "";
   try {
@@ -126,7 +127,7 @@ export function cleanReferrer(referrer: string, hostname: string): string {
   }
 }
 
-// Conta os bits zero no começo do hash.
+// Counts the leading zero bits of the hash.
 export function leadingZeroBits(hash: Uint8Array): number {
   let n = 0;
   for (const byte of hash) {
@@ -136,7 +137,7 @@ export function leadingZeroBits(hash: Uint8Array): number {
   return n;
 }
 
-// Acha o nonce tal que SHA-256(token + ":" + nonce) comece com `bits` bits zero.
+// Finds the nonce such that SHA-256(token + ":" + nonce) starts with `bits` zero bits.
 export async function solve(token: string, bits: number): Promise<string | null> {
   const encoder = new TextEncoder();
   for (let i = 0; i < MAX_ATTEMPTS; i++) {
@@ -147,8 +148,8 @@ export async function solve(token: string, bits: number): Promise<string | null>
   return null;
 }
 
-// Pede o desafio ao gateway e o resolve. Sem crypto.subtle (página fora de
-// HTTPS) ou sem resposta do gateway, devolve nulo e os eventos não saem.
+// Requests the challenge from the gateway and solves it. Without crypto.subtle (page
+// not on HTTPS) or without a gateway response, returns null and no events are sent.
 async function fetchProof(url: string): Promise<Proof | null> {
   try {
     const response = await fetch(url, { credentials: "omit" });
@@ -161,20 +162,20 @@ async function fetchProof(url: string): Promise<Proof | null> {
   }
 }
 
-// Inicia o rastreamento. Devolve uma função que desfaz os ganchos (usada nos testes).
+// Starts tracking. Returns a function that undoes the hooks (used in the tests).
 export function start(script: HTMLScriptElement | null): () => void {
   const website = script?.dataset.site ?? "";
   if (!script?.src || !UUID.test(website)) return () => {};
   const endpoint = new URL(EVENT_PATH, script.src).href;
   const challenge = new URL(`${CHALLENGE_PATH}?s=${website}`, script.src).href;
 
-  // Um desafio por carregamento de página, renovado em páginas abertas por muito tempo.
+  // One challenge per page load, renewed on pages left open for a long time.
   let proof: Promise<Proof | null> | undefined;
   let proofAt = 0;
   const getProof = () => {
     if (!proof || Date.now() - proofAt > CHALLENGE_REFRESH_MS) {
       proofAt = Date.now();
-      // Falhou? Esquece o resultado, e o próximo evento tenta de novo.
+      // Failed? Forget the result, and the next event tries again.
       proof = fetchProof(challenge).then((p) => {
         if (!p) proof = undefined;
         return p;
@@ -184,7 +185,7 @@ export function start(script: HTMLScriptElement | null): () => void {
   };
 
   const send = (url: string, referrer: string, custom?: { name: string; data: Record<string, EventValue> }) => {
-    // O payload é lido agora (título, URL), antes de esperar a prova.
+    // The payload is read now (title, URL), before waiting for the proof.
     const payload: EventPayload["payload"] = {
       website,
       hostname: location.hostname,
@@ -201,7 +202,7 @@ export function start(script: HTMLScriptElement | null): () => void {
     getProof().then((p) => {
       if (!p) return;
       const body: EventPayload = { type: "event", p, payload };
-      // text/plain evita o preflight de CORS; o gateway lê o corpo como JSON.
+      // text/plain avoids the CORS preflight; the gateway reads the body as JSON.
       return fetch(endpoint, {
         method: "POST",
         body: JSON.stringify(body),
@@ -214,9 +215,9 @@ export function start(script: HTMLScriptElement | null): () => void {
 
   let current = pageUrl(location);
 
-  // window.stellytics.event(nome, propriedades): evento customizado na página atual.
-  // Nome ou propriedades fora do contrato são ignorados em silêncio. Nunca passe
-  // dado pessoal, endereço de carteira nem hash de transação nas propriedades.
+  // window.stellytics.event(name, properties): custom event on the current page.
+  // A name or properties outside the contract are silently ignored. Never pass
+  // personal data, a wallet address or a transaction hash in the properties.
   const api: StellyticsApi = {
     event(name, data) {
       const clean = validateCustomEvent(name, data);
@@ -225,10 +226,10 @@ export function start(script: HTMLScriptElement | null): () => void {
     },
     wallets: () => () => {},
   };
-  // window.stellytics.wallets(kit, KitEventType) (opt-in, #50): o tenant chama uma vez,
-  // passando o kit e o enum. Assina só WALLET_SELECTED e DISCONNECT, nunca
-  // STATE_UPDATED (traz o endereço). Manda só o nome do evento e o id do módulo.
-  // Idempotente por kit; devolve a função que cancela. Nunca lança.
+  // window.stellytics.wallets(kit, KitEventType) (opt-in, #50): the tenant calls it once,
+  // passing the kit and the enum. Subscribes only to WALLET_SELECTED and DISCONNECT,
+  // never STATE_UPDATED (it carries the address). Sends only the event name and the
+  // module id. Idempotent per kit; returns the function that cancels. Never throws.
   const subscriptions = new WeakMap<object, () => void>();
   const noop = () => {};
   api.wallets = (kit, types) => {
@@ -242,8 +243,8 @@ export function start(script: HTMLScriptElement | null): () => void {
       const disconnect = t?.DISCONNECT;
       if (typeof on !== "function" || typeof selected !== "string" || typeof disconnect !== "string") return noop;
       if (selected === disconnect) return noop;
-      // Depois de cancelar, handlers antigos ainda vivos (o kit pode não ter
-      // desassinado, se `on` não devolveu função) não enviam mais nada.
+      // After cancelling, old handlers still alive (the kit may not have
+      // unsubscribed, if `on` returned no function) send nothing more.
       let cancelled = false;
       const subscribe = (type: string, handler: (event: unknown) => void): (() => void) => {
         const off: unknown = on.call(kit, type, (event: unknown) => {
@@ -251,7 +252,7 @@ export function start(script: HTMLScriptElement | null): () => void {
           try {
             handler(event);
           } catch {
-            // Falha do evento não pode afetar a página do tenant.
+            // An event failure must not affect the tenant's page.
           }
         });
         return typeof off === "function" ? (off as () => void) : noop;
@@ -276,7 +277,7 @@ export function start(script: HTMLScriptElement | null): () => void {
         try {
           offSelected();
         } catch {
-          // Já falhou; só garante que o handler antigo não envia mais.
+          // Already failed; just make sure the old handler sends nothing more.
         }
         return noop;
       }
@@ -288,7 +289,7 @@ export function start(script: HTMLScriptElement | null): () => void {
           try {
             off();
           } catch {
-            // Cancelar duas vezes ou com kit quebrado não deve lançar.
+            // Cancelling twice or with a broken kit must not throw.
           }
         }
       };
@@ -302,7 +303,7 @@ export function start(script: HTMLScriptElement | null): () => void {
 
   send(current, cleanReferrer(document.referrer, location.hostname));
 
-  // Navegação de SPA: um page view por mudança de rota, com a rota anterior como referenciador.
+  // SPA navigation: one page view per route change, with the previous route as the referrer.
   let timer: ReturnType<typeof setTimeout> | undefined;
   const onNavigate = () => {
     clearTimeout(timer);

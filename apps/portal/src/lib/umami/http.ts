@@ -1,9 +1,9 @@
 import "server-only";
 import { env } from "../env";
 
-// Único ponto do portal que fala HTTP com o Umami (#58). Só os módulos de
-// src/lib/umami/ importam este arquivo; o ESLint proíbe o resto do código.
-// A credencial é a chave de API da conta de serviço, vinda de UMAMI_API_KEY.
+// The only place in the portal that speaks HTTP with Umami (#58). Only the
+// modules in src/lib/umami/ import this file; ESLint forbids the rest of the
+// code. The credential is the service account's API key, from UMAMI_API_KEY.
 
 export class UmamiError extends Error {
   constructor(
@@ -35,9 +35,9 @@ export async function umamiRequest<T>(
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (error) {
-    throw new UmamiError(`Umami ${method} ${path}: sem resposta (${(error as Error).name})`);
+    throw new UmamiError(`Umami ${method} ${path}: no response (${(error as Error).name})`);
   }
-  // A mensagem não leva o corpo da resposta nem a chave.
+  // The message carries neither the response body nor the key.
   if (!response.ok) {
     throw new UmamiError(`Umami ${method} ${path}: ${response.status}`, response.status);
   }

@@ -1,9 +1,9 @@
 package tenantattr_test
 
-// Caminho inteiro em processo (#30): receiver OTLP real (HTTP e gRPC) com a
-// extensão ingestkeyauth, o processor tenantattr e um consumidor de teste.
-// Confere que a chave define o tenant e o serviço, por cima do que o cliente
-// mandar, e que chave inválida é recusada com 401 / Unauthenticated.
+// Whole path in process (#30): real OTLP receiver (HTTP and gRPC) with the
+// ingestkeyauth extension, the tenantattr processor and a test consumer.
+// Checks that the key sets the tenant and the service, over whatever the
+// client sends, and that an invalid key is refused with 401 / Unauthenticated.
 
 import (
 	"bytes"
@@ -50,7 +50,7 @@ func (store) Lookup(_ context.Context, prefix string) (ingestkeyauth.Key, bool, 
 	return ingestkeyauth.Key{Hash: h[:], TenantID: tenantID, ServiceID: service}, true, nil
 }
 
-// authExt embrulha o autenticador como extensão do coletor.
+// authExt wraps the authenticator as a collector extension.
 type authExt struct {
 	auth interface {
 		Authenticate(context.Context, map[string][]string) (context.Context, error)
@@ -79,7 +79,7 @@ func freeAddr(t *testing.T) string {
 	return l.Addr().String()
 }
 
-// start sobe receiver -> tenantattr -> sink e devolve os endereços gRPC e HTTP.
+// start brings up receiver -> tenantattr -> sink and returns the gRPC and HTTP addresses.
 func start(t *testing.T) (sink *consumertest.TracesSink, grpcAddr, httpAddr string) {
 	t.Helper()
 	ctx := context.Background()
@@ -118,13 +118,13 @@ func start(t *testing.T) (sink *consumertest.TracesSink, grpcAddr, httpAddr stri
 	return sink, grpcAddr, httpAddr
 }
 
-// traces monta um span cujo recurso tenta se passar por outro tenant.
+// traces builds a span whose resource tries to pass as another tenant.
 func traces() ptrace.Traces {
 	td := ptrace.NewTraces()
 	rs := td.ResourceSpans().AppendEmpty()
 	rs.Resource().Attributes().PutStr("service.name", "api")
-	rs.Resource().Attributes().PutStr("tenant.id", "outro-tenant")
-	rs.Resource().Attributes().PutStr(tenantattr.AttrTenantID, "outro-tenant")
+	rs.Resource().Attributes().PutStr("tenant.id", "other-tenant")
+	rs.Resource().Attributes().PutStr(tenantattr.AttrTenantID, "other-tenant")
 	rs.ScopeSpans().AppendEmpty().Spans().AppendEmpty().SetName("GET /ledgers/{id}")
 	return td
 }
@@ -137,7 +137,7 @@ func checkStamped(t *testing.T, sink *consumertest.TracesSink) {
 	}
 	all := sink.AllTraces()
 	if len(all) != 1 {
-		t.Fatalf("lotes recebidos = %d, quero 1", len(all))
+		t.Fatalf("batches received = %d, want 1", len(all))
 	}
 	attrs := all[0].ResourceSpans().At(0).Resource().Attributes()
 	got := map[string]string{}
@@ -148,11 +148,11 @@ func checkStamped(t *testing.T, sink *consumertest.TracesSink) {
 		tenantattr.AttrServiceID: service,
 	}
 	if len(got) != len(want) {
-		t.Fatalf("atributos = %v, quero %v", got, want)
+		t.Fatalf("attributes = %v, want %v", got, want)
 	}
 	for k, v := range want {
 		if got[k] != v {
-			t.Errorf("%s = %q, quero %q", k, got[k], v)
+			t.Errorf("%s = %q, want %q", k, got[k], v)
 		}
 	}
 }
@@ -196,14 +196,14 @@ func TestHTTP(t *testing.T) {
 	sink, _, addr := start(t)
 	for _, auth := range []string{"", "Bearer ntf_abcdefgh_" + "x", "Bearer " + key[:len(key)-1] + "H"} {
 		if code := postHTTP(t, addr, auth); code != http.StatusUnauthorized {
-			t.Errorf("Authorization %q: status = %d, quero 401", auth, code)
+			t.Errorf("Authorization %q: status = %d, want 401", auth, code)
 		}
 	}
 	if sink.SpanCount() != 0 {
-		t.Fatal("pedido recusado chegou ao pipeline")
+		t.Fatal("refused request reached the pipeline")
 	}
 	if code := postHTTP(t, addr, "Bearer "+key); code != http.StatusOK {
-		t.Fatalf("chave válida: status = %d, quero 200", code)
+		t.Fatalf("valid key: status = %d, want 200", code)
 	}
 	checkStamped(t, sink)
 }
@@ -212,14 +212,14 @@ func TestGRPC(t *testing.T) {
 	sink, addr, _ := start(t)
 	for _, auth := range []string{"", "Bearer " + key[:len(key)-1] + "H"} {
 		if err := exportGRPC(t, addr, auth); status.Code(err) != codes.Unauthenticated {
-			t.Errorf("authorization %q: %v, quero Unauthenticated", auth, err)
+			t.Errorf("authorization %q: %v, want Unauthenticated", auth, err)
 		}
 	}
 	if sink.SpanCount() != 0 {
-		t.Fatal("pedido recusado chegou ao pipeline")
+		t.Fatal("refused request reached the pipeline")
 	}
 	if err := exportGRPC(t, addr, "Bearer "+key); err != nil {
-		t.Fatalf("chave válida: %v", err)
+		t.Fatalf("valid key: %v", err)
 	}
 	checkStamped(t, sink)
 }

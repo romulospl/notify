@@ -1,6 +1,6 @@
 package main
 
-// Testes da #24: o gateway não grava cookie nem registra IP ou User-Agent.
+// Tests for #24: the gateway sets no cookie and logs neither IP nor User-Agent.
 
 import (
 	"bytes"
@@ -21,20 +21,20 @@ import (
 	"github.com/romulospl/stellytics/services/ingest-web/internal/relay"
 )
 
-// clientIP é o IP que o "Caddy" do teste informa no X-Forwarded-For.
+// clientIP is the IP that the test's "Caddy" reports in X-Forwarded-For.
 const clientIP = "203.0.113.77"
 
 type failingSites struct{}
 
 func (failingSites) Active(context.Context, string) (bool, error) {
-	return false, errors.New("banco fora do ar")
+	return false, errors.New("database down")
 }
 
 type panicSites struct{}
 
-func (panicSites) Active(context.Context, string) (bool, error) { panic("estado inesperado") }
+func (panicSites) Active(context.Context, string) (bool, error) { panic("unexpected state") }
 
-// syncBuffer deixa o log ser lido enquanto o servidor ainda escreve.
+// syncBuffer lets the log be read while the server is still writing.
 type syncBuffer struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
@@ -60,11 +60,11 @@ func TestLogsWithoutIPOrUserAgent(t *testing.T) {
 	base, _ := url.Parse(brokenUmami.URL)
 
 	cases := map[string]func(*gateway){
-		"umami falha": func(g *gateway) {
+		"umami fails": func(g *gateway) {
 			g.relay = relay.NewClient(base, "x-stellytics-client-ip", brokenUmami.Client())
 		},
-		"banco falha": func(g *gateway) { g.sites = failingSites{} },
-		"panic":       func(g *gateway) { g.sites = panicSites{} },
+		"database fails": func(g *gateway) { g.sites = failingSites{} },
+		"panic":          func(g *gateway) { g.sites = panicSites{} },
 	}
 	for name, opt := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -75,15 +75,15 @@ func TestLogsWithoutIPOrUserAgent(t *testing.T) {
 			})
 			resp := post(t, s, "text/plain", eventBody(activeSite), "X-Forwarded-For", clientIP)
 			if resp.StatusCode < 500 {
-				t.Fatalf("status = %d, quero erro do servidor", resp.StatusCode)
+				t.Fatalf("status = %d, want a server error", resp.StatusCode)
 			}
 			out := logs.String()
 			if out == "" {
-				t.Fatal("a falha não foi registrada")
+				t.Fatal("the failure was not logged")
 			}
 			for _, secret := range []string{clientIP, "203.0.113.0", "127.0.0.1", browserUA, "Mozilla"} {
 				if strings.Contains(out, secret) {
-					t.Errorf("log contém %q:\n%s", secret, out)
+					t.Errorf("log contains %q:\n%s", secret, out)
 				}
 			}
 		})
@@ -114,27 +114,27 @@ func TestNoCookies(t *testing.T) {
 		{http.MethodGet, "/s/v1.0.0/n.js", "", ""},
 		{http.MethodGet, "/s/v9.9.9/n.js", "", ""},
 		{http.MethodGet, "/healthz", "", ""},
-		{http.MethodGet, "/nada", "", ""},
+		{http.MethodGet, "/nothing", "", ""},
 	}
 	for _, r := range requests {
 		req, _ := http.NewRequest(r.method, s.server.URL+r.path, strings.NewReader(r.body))
 		if r.contentType != "" {
 			req.Header.Set("Content-Type", r.contentType)
 		}
-		// Um cookie que o navegador mandasse não pode voltar nem ser repassado.
-		req.Header.Set("Cookie", "sessao=abc")
+		// A cookie the browser might send must not come back or be relayed.
+		req.Header.Set("Cookie", "session=abc")
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
 		resp.Body.Close()
 		if c := resp.Header.Values("Set-Cookie"); len(c) > 0 {
-			t.Errorf("%s %s (%d) grava cookie: %q", r.method, r.path, resp.StatusCode, c)
+			t.Errorf("%s %s (%d) sets a cookie: %q", r.method, r.path, resp.StatusCode, c)
 		}
 	}
 	for _, rec := range s.umami.received() {
 		if c := rec.header.Get("Cookie"); c != "" {
-			t.Errorf("cookie repassado ao Umami: %q", c)
+			t.Errorf("cookie relayed to Umami: %q", c)
 		}
 	}
 }

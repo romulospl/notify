@@ -1,4 +1,4 @@
-// Garante que versão publicada não muda depois de publicada (#22).
+// Makes sure a published version does not change after it is published (#22).
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -9,23 +9,23 @@ const versions = readdirSync(publishedDir, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name.replace(/^v/, ""));
 
-describe("versões publicadas", () => {
-  it("cada pasta tem um SRI registrado e vice-versa", () => {
+describe("published versions", () => {
+  it("every folder has a recorded SRI and vice versa", () => {
     expect(versions.sort()).toEqual(Object.keys(manifest).sort());
   });
 
-  it.each(versions)("v%s confere com o SRI registrado", (version) => {
+  it.each(versions)("v%s matches the recorded SRI", (version) => {
     const content = readFileSync(join(publishedDir, `v${version}`, fileName));
     expect(sri(content)).toBe(manifest[version]);
   });
 
-  it("o código atual é o da versão do package.json", async () => {
+  it("the current code is that of the package.json version", async () => {
     const version = currentVersion();
     const file = join(publishedDir, `v${version}`, fileName);
-    expect(existsSync(file), `rode "pnpm --filter @stellytics/tracker release" para publicar a v${version}`).toBe(
+    expect(existsSync(file), `run "pnpm --filter @stellytics/tracker release" to publish v${version}`).toBe(
       true,
     );
-    // Mudou o código sem subir a versão? Suba a versão no package.json e rode o release.
+    // Changed the code without bumping the version? Bump the version in package.json and run the release.
     expect(sri(await bundle())).toBe(manifest[version]);
   });
 });

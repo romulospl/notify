@@ -15,7 +15,7 @@
 # - no Mailpit: SMTP comes from SMTP_URL;
 # - every password and key is required (no default).
 
-# Nome fixo do projeto: contêineres stellytics-<serviço>-1 e rede stellytics_internal.
+# Fixed project name: containers stellytics-<service>-1 and network stellytics_internal.
 name: stellytics
 
 x-logging: &logging
@@ -36,8 +36,8 @@ services:
       STELLYTICS_DB_PASSWORD: ${STELLYTICS_DB_PASSWORD:?}
       STELLYTICS_INGEST_DB_PASSWORD: ${STELLYTICS_INGEST_DB_PASSWORD:?}
       STELLYTICS_COLLECTOR_DB_PASSWORD: ${STELLYTICS_COLLECTOR_DB_PASSWORD:?}
-      # WAL-G (ADR 0004): WAL contínuo e backups base no Object Storage,
-      # cifrados no cliente antes de sair da VM.
+      # WAL-G (ADR 0004): continuous WAL and base backups in Object Storage,
+      # encrypted on the client before leaving the VM.
       WALG_S3_PREFIX: ${WALG_S3_PREFIX:?}
       AWS_ENDPOINT: ${WALG_S3_ENDPOINT:?}
       AWS_REGION: ${WALG_S3_REGION:?}
@@ -47,7 +47,7 @@ services:
       WALG_LIBSODIUM_KEY: ${WALG_LIBSODIUM_KEY:?}
       WALG_LIBSODIUM_KEY_TRANSFORM: hex
       WALG_COMPRESSION_METHOD: brotli
-      # Backups base mantidos pelo stellytics-backup (um por dia).
+      # Base backups kept by stellytics-backup (one per day).
       WALG_RETAIN_FULL: ${WALG_RETAIN_FULL:-7}
       PGHOST: /var/run/postgresql
       PGUSER: postgres
@@ -59,7 +59,7 @@ services:
       - archive_mode=on
       - -c
       - archive_command=wal-g wal-push %p
-      # No máximo 60 s de dados fora do backup quando há pouca escrita.
+      # At most 60 s of data outside the backup when there is little writing.
       - -c
       - archive_timeout=60
     volumes:
@@ -82,7 +82,7 @@ services:
     networks: [internal]
 
   umami:
-    # Mesma imagem do ambiente local; só sobe de versão por PR (CLAUDE.md).
+    # Same image as the local environment; upgraded only by PR (CLAUDE.md).
     image: ghcr.io/umami-software/umami:3.4.1@sha256:e69d1a7932e9dab0fc523edc7be1f3a53f3c261f57856fc2167ae74a8fc022e8
     environment:
       DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD:?}@postgres:5432/umami
@@ -92,7 +92,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    # Sem porta publicada e sem rota pública (#62, infra/README.md).
+    # No published port and no public route (#62, infra/README.md).
     init: true
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/heartbeat"]
@@ -104,8 +104,8 @@ services:
     logging: *logging
     networks:
       internal:
-        # IP fixo só para o túnel SSH de administração (infra/scripts/admin-tunnel.sh):
-        # a VM alcança a rede interna sem publicar porta.
+        # Fixed IP only for the SSH admin tunnel (infra/scripts/admin-tunnel.sh):
+        # the VM reaches the internal network without publishing a port.
         ipv4_address: 172.30.0.20
 
   portal:
@@ -119,13 +119,16 @@ services:
       BETTER_AUTH_URL: https://${PORTAL_HOST:?}
       RUN_MIGRATIONS: "true"
       UMAMI_URL: http://umami:3000
-      # Gerada depois da primeira subida (docs/deploy.md); sem ela o portal
-      # sobe, mas não cria sites.
+      # Generated after the first start (docs/deploy.md); without it the portal
+      # starts, but creates no sites.
       UMAMI_API_KEY: ${UMAMI_API_KEY:-}
       SMTP_URL: ${SMTP_URL:?}
       MAIL_FROM: ${MAIL_FROM:?}
-      # Cadastro com aprovação prévia (#49, ADR 0007); desligado por padrão.
+      # Sign-up with prior approval (#49, ADR 0007); off by default.
       SIGNUP_APPROVAL: ${SIGNUP_APPROVAL:-false}
+      # Public demo: slug of the one tenant shown without sign-in at
+      # /demo and /demo/operator. Empty: sample data.
+      DEMO_TENANT_SLUG: ${DEMO_TENANT_SLUG:-}
       # Gateway address in the installation tag shown on each site's page.
       INGEST_URL: https://${INGEST_HOST:?}
       # Collector OTLP address shown with each service's ingest keys.
@@ -152,14 +155,14 @@ services:
       DATABASE_URL: postgresql://stellytics_ingest:${STELLYTICS_INGEST_DB_PASSWORD:?}@postgres:5432/stellytics
       UMAMI_URL: http://umami:3000
       CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-x-stellytics-client-ip}
-      # Só confia no Caddy, que tem IP fixo na rede Docker.
+      # Trusts only Caddy, which has a fixed IP on the Docker network.
       TRUSTED_PROXIES: 172.30.0.10,fd30:6e6f:7466::10
       PROOF_SECRET: ${INGEST_PROOF_SECRET:?}
       RATE_LIMIT: ${INGEST_RATE_LIMIT:-20}
       RATE_BURST: ${INGEST_RATE_BURST:-40}
       FINGERPRINT_LIMIT: ${INGEST_FINGERPRINT_LIMIT:-50}
-      # Desligados por padrão (docs/deploy.md). Não ligue o limite de repasses
-      # antes de decidir o 503 sob saturação (ADR 0011).
+      # Off by default (docs/deploy.md). Do not turn on the relay limit
+      # before deciding on the 503 under saturation (ADR 0011).
       SITE_STALE_TTL: ${INGEST_SITE_STALE_TTL:-0}
       RELAY_MAX_INFLIGHT: ${INGEST_RELAY_MAX_INFLIGHT:-0}
       RELAY_QUEUE_WAIT: ${INGEST_RELAY_QUEUE_WAIT:-250ms}
@@ -168,7 +171,7 @@ services:
         condition: service_healthy
       umami:
         condition: service_healthy
-      # A visão ingest_site vem das migrações que o portal aplica ao subir.
+      # The ingest_site view comes from the migrations the portal applies on startup.
       portal:
         condition: service_healthy
     healthcheck:
@@ -187,17 +190,17 @@ services:
       dockerfile: services/collector/Dockerfile
     image: ${COLLECTOR_IMAGE:-stellytics-collector:prod}
     environment:
-      # Usuário que só lê a ingest_key_active e grava em api_metric_1m.
+      # User that only reads ingest_key_active and writes to api_metric_1m.
       DATABASE_URL: postgresql://stellytics_collector:${STELLYTICS_COLLECTOR_DB_PASSWORD:?}@postgres:5432/stellytics
       INGEST_KEY_CACHE_TTL: ${COLLECTOR_KEY_CACHE_TTL:-60s}
-    # O memory_limiter do coletor (80% do limite) só protege a VM se o
-    # contêiner tiver teto: sem ele, a conta é sobre a memória da VM inteira e o
-    # Postgres sofre antes de o coletor recusar dados.
+    # The collector's memory_limiter (80% of the limit) only protects the VM if the
+    # container has a ceiling: without it, the figure is taken over the whole VM's memory and
+    # Postgres suffers before the collector refuses data.
     mem_limit: ${COLLECTOR_MEM_LIMIT:-512m}
     depends_on:
       postgres:
         condition: service_healthy
-      # A visão ingest_key_active vem das migrações que o portal aplica ao subir.
+      # The ingest_key_active view comes from the migrations the portal applies on startup.
       portal:
         condition: service_healthy
     healthcheck:
@@ -210,27 +213,27 @@ services:
     logging: *logging
     networks: [internal]
 
-  # Consolidação 1m -> 1h -> 1d e retenção das métricas de API (#34) e dos
-  # eventos web no Umami (#154).
+  # Rollup 1m -> 1h -> 1d and retention of the API metrics (#34) and of the
+  # web events in Umami (#154).
   rollup:
     build:
       context: ../..
       dockerfile: services/rollup/Dockerfile
     image: ${ROLLUP_IMAGE:-stellytics-rollup:prod}
     environment:
-      # Dono das tabelas de métricas: cria e apaga partições.
+      # Owner of the metric tables: creates and drops partitions.
       DATABASE_URL: postgresql://stellytics:${STELLYTICS_DB_PASSWORD:?}@postgres:5432/stellytics
       ROLLUP_INTERVAL: ${ROLLUP_INTERVAL:-15m}
       ROLLUP_LOOKBACK: ${ROLLUP_LOOKBACK:-48h}
-      # Retenção dos eventos web no Umami (#154): o mesmo job apaga eventos e
-      # sessões mais antigos que UMAMI_RETENTION_DAYS (padrão, cerca de seis
-      # meses; docs/umami.md). O mesmo usuário do banco umami, dono das tabelas.
+      # Retention of the web events in Umami (#154): the same job deletes events and
+      # sessions older than UMAMI_RETENTION_DAYS (default, about six
+      # months; docs/umami.md). The same user of the umami database, owner of the tables.
       UMAMI_DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD:?}@postgres:5432/umami
       UMAMI_RETENTION_DAYS: ${UMAMI_RETENTION_DAYS:-183}
     depends_on:
       postgres:
         condition: service_healthy
-      # As funções api_metric_* vêm das migrações que o portal aplica ao subir.
+      # The api_metric_* functions come from the migrations the portal applies on startup.
       portal:
         condition: service_healthy
     healthcheck:
@@ -244,7 +247,7 @@ services:
     networks: [internal]
 
   caddy:
-    # Caddy com TLS automático. Só ele publica portas públicas.
+    # Caddy with automatic TLS. Only it publishes public ports.
     image: caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
     environment:
       PORTAL_HOST: ${PORTAL_HOST:?}
@@ -259,7 +262,7 @@ services:
     volumes:
       - ../caddy:/etc/caddy:ro
       - ${STELLYTICS_DATA_DIR:-/srv/stellytics}/caddy:/data
-      # Resultado da checagem da pilha (stellytics-check), servido em /healthz/stack.
+      # Result of the stack check (stellytics-check), served at /healthz/stack.
       - ${STELLYTICS_DATA_DIR:-/srv/stellytics}/status:/srv/status:ro
     depends_on:
       portal:
@@ -275,7 +278,7 @@ services:
         ipv4_address: 172.30.0.10
         ipv6_address: fd30:6e6f:7466::10
 
-# Rede isolada dos serviços internos; somente Caddy publica portas públicas.
+# Isolated network for the internal services; only Caddy publishes public ports.
 networks:
   internal:
     enable_ipv6: true

@@ -1,7 +1,7 @@
-# Módulos do blackbox exporter (#15).
+# Blackbox exporter modules (#15).
 modules:
-  # GET que precisa responder 2xx em até 10 s, sem seguir redirecionamento.
-  # Em produção os alvos são https://; o certificado precisa ser válido.
+  # GET that must answer 2xx within 10 s, without following redirects.
+  # In production the targets are https://; the certificate must be valid.
   http_2xx:
     prober: http
     timeout: 10s
@@ -10,8 +10,8 @@ modules:
       follow_redirects: false
       preferred_ip_protocol: ip4
       ip_protocol_fallback: true
-  # Ingestão de API (ADR 0012): POST sem chave no OTLP/HTTP. O 401 vem do
-  # coletor, então prova que o Caddy e o coletor estão de pé sem gravar nada.
+  # API ingestion (ADR 0012): POST without a key to OTLP/HTTP. The 401 comes from the
+  # collector, so it proves that Caddy and the collector are up without writing anything.
   otlp_401:
     prober: http
     timeout: 10s

@@ -1,9 +1,10 @@
-// Comando ingest-web: gateway entre o script de rastreamento e o Umami.
+// Command ingest-web: gateway between the tracking script and Umami.
 //
-// Recebe os eventos em POST /e, confere o websiteId na visão ingest_site,
-// trunca o IP e repassa ao /api/send do Umami pela rede interna. Também serve
-// o script em /s/vX.Y.Z/ e expõe /healthz (Postgres e Umami no ar). A configuração vem do ambiente
-// (ver internal/config e o README).
+// It receives the events on POST /e, checks the websiteId in the ingest_site
+// view, truncates the IP and relays to Umami's /api/send over the internal
+// network. It also serves the script at /s/vX.Y.Z/ and exposes /healthz
+// (Postgres and Umami up). The configuration comes from the environment (see
+// internal/config and the README).
 package main
 
 import (
@@ -32,7 +33,7 @@ import (
 )
 
 func main() {
-	healthcheck := flag.Bool("healthcheck", false, "consulta o /healthz local e sai (para o healthcheck do contêiner)")
+	healthcheck := flag.Bool("healthcheck", false, "queries the local /healthz and exits (for the container healthcheck)")
 	flag.Parse()
 
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
@@ -40,7 +41,7 @@ func main() {
 		os.Exit(checkHealth(os.Getenv("LISTEN_ADDR")))
 	}
 	if err := run(log); err != nil {
-		log.Error("gateway parou", "err", err)
+		log.Error("gateway stopped", "err", err)
 		os.Exit(1)
 	}
 }
@@ -72,7 +73,7 @@ func run(log *slog.Logger) error {
 	if secret == nil {
 		secret = make([]byte, 32)
 		_, _ = rand.Read(secret)
-		log.Warn("PROOF_SECRET vazio: chave sorteada, tokens não valem entre reinícios nem entre réplicas")
+		log.Warn("PROOF_SECRET empty: key generated, tokens are not valid across restarts or across replicas")
 	}
 
 	limits := limit.New(cfg.RateLimit, cfg.RateBurst, 10*time.Minute)
@@ -124,7 +125,7 @@ func run(log *slog.Logger) error {
 
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
-	log.Info("gateway no ar", "addr", cfg.ListenAddr, "scripts", cfg.ScriptDir != "")
+	log.Info("gateway up", "addr", cfg.ListenAddr, "scripts", cfg.ScriptDir != "")
 
 	select {
 	case err := <-errc:
@@ -139,9 +140,9 @@ func run(log *slog.Logger) error {
 	return nil
 }
 
-// logStale registra, no máximo uma vez por intervalo, quantas respostas
-// vencidas foram servidas por falha do banco. Só o total vai ao log: nada de
-// IP, User-Agent nem ID de site.
+// logStale logs, at most once per interval, how many stale answers were served
+// because of a database failure. Only the total goes to the log: no IP,
+// User-Agent or site ID.
 func logStale(ctx context.Context, log *slog.Logger, sites *site.Cached, every time.Duration) {
 	t := time.NewTicker(every)
 	defer t.Stop()
@@ -152,16 +153,16 @@ func logStale(ctx context.Context, log *slog.Logger, sites *site.Cached, every t
 			return
 		case <-t.C:
 			if n := sites.StaleServed(); n != last {
-				log.Warn("ingest_site vencida servida por falha do banco", "respostas", n-last, "total", n)
+				log.Warn("stale ingest_site served after a database failure", "responses", n-last, "total", n)
 				last = n
 			}
 		}
 	}
 }
 
-// logSaturated registra, no máximo uma vez por intervalo e só quando mudar,
-// quantos eventos foram descartados porque os repasses ao Umami estavam no
-// limite. Só totais: nada de IP, User-Agent nem ID de site.
+// logSaturated logs, at most once per interval and only when it changes, how
+// many events were dropped because the relays to Umami were at the limit.
+// Totals only: no IP, User-Agent or site ID.
 func logSaturated(ctx context.Context, log *slog.Logger, l *relay.Limited, every time.Duration) {
 	t := time.NewTicker(every)
 	defer t.Stop()
@@ -169,21 +170,21 @@ func logSaturated(ctx context.Context, log *slog.Logger, l *relay.Limited, every
 	for {
 		select {
 		case <-ctx.Done():
-			// Último minuto parcial antes de desligar.
+			// Last partial minute before shutting down.
 			if n := l.Dropped(); n != last {
-				log.Warn("eventos descartados por saturação do repasse ao umami", "descartados", n-last, "total", n, "em_voo", l.InFlight())
+				log.Warn("events dropped because the relay to umami is saturated", "dropped", n-last, "total", n, "in_flight", l.InFlight())
 			}
 			return
 		case <-t.C:
 			if n := l.Dropped(); n != last {
-				log.Warn("eventos descartados por saturação do repasse ao umami", "descartados", n-last, "total", n, "em_voo", l.InFlight())
+				log.Warn("events dropped because the relay to umami is saturated", "dropped", n-last, "total", n, "in_flight", l.InFlight())
 				last = n
 			}
 		}
 	}
 }
 
-// checkHealth faz o papel de curl/wget na imagem sem shell.
+// checkHealth plays the role of curl/wget in the shell-less image.
 func checkHealth(listen string) int {
 	if listen == "" {
 		listen = ":8080"

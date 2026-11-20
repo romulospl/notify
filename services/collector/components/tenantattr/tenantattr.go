@@ -1,10 +1,10 @@
-// Package tenantattr carimba o tenant e o serviço da chave de ingestão em cada
-// recurso que entra no coletor (#30, spec do E5, seção 1).
+// Package tenantattr stamps the ingest key's tenant and service on each
+// resource that enters the collector (#30, E5 spec, section 1).
 //
-// O valor vem de client.Info.Auth, preenchido pela extensão ingestkeyauth; o
-// que o cliente mandar nos atributos de recurso com esses nomes é apagado
-// antes. Por isso este processor precisa vir antes do batch, que perde o
-// contexto do pedido. Dado sem autenticação nunca passa daqui.
+// The value comes from client.Info.Auth, filled in by the ingestkeyauth
+// extension; whatever the client sends in the resource attributes with these
+// names is erased first. That is why this processor must come before batch,
+// which loses the request context. Unauthenticated data never gets past here.
 package tenantattr
 
 import (
@@ -25,27 +25,27 @@ import (
 	"github.com/romulospl/stellytics/services/collector/components/ingestkeyauth"
 )
 
-// Atributos de recurso que o processor define. Os componentes seguintes (o
-// exporter da #31) leem só estes.
+// Resource attributes the processor sets. The following components (the
+// exporter of #31) read only these.
 const (
 	AttrTenantID  = "stellytics.tenant.id"
 	AttrServiceID = "stellytics.api_service.id"
 )
 
-// spoofable são atributos de recurso que o cliente poderia mandar para se
-// passar por outro tenant ou serviço. Todos saem antes do carimbo.
+// spoofable are resource attributes the client could send to pass as another
+// tenant or service. All are removed before the stamp.
 var spoofable = []string{AttrTenantID, AttrServiceID, "tenant.id", "tenant_id"}
 
-// Type é o nome do processor na configuração do coletor.
+// Type is the processor's name in the collector configuration.
 var Type = component.MustNewType("tenantattr")
 
-// errNoAuth: o pipeline recebeu dado sem passar pela extensão de autenticação.
-var errNoAuth = errors.New("tenantattr: pedido sem tenant autenticado; o receiver precisa usar a extensão ingestkeyauth")
+// errNoAuth: the pipeline received data without going through the authentication extension.
+var errNoAuth = errors.New("tenantattr: request without an authenticated tenant; the receiver must use the ingestkeyauth extension")
 
-// Config não tem campos.
+// Config has no fields.
 type Config struct{}
 
-// NewFactory cria a fábrica do processor.
+// NewFactory creates the processor's factory.
 func NewFactory() processor.Factory {
 	return processor.NewFactory(Type, func() component.Config { return &Config{} },
 		processor.WithTraces(createTraces, component.StabilityLevelDevelopment),
@@ -77,7 +77,7 @@ func createLogs(ctx context.Context, set processor.Settings, cfg component.Confi
 	}, mutates)
 }
 
-// stamp troca os atributos de tenant e serviço de cada recurso pelos da chave.
+// stamp replaces each resource's tenant and service attributes with the key's.
 func stamp(ctx context.Context, n int, resource func(int) pcommon.Resource) error {
 	tenantID, serviceID, ok := fromAuth(ctx)
 	if !ok {

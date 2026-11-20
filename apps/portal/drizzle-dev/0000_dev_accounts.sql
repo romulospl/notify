@@ -1,11 +1,11 @@
--- Contas de desenvolvimento, só para o Compose de dev (SEED_DEV_DATA=true).
--- NUNCA entram em produção: as senhas são conhecidas e uma das contas é operador SCF.
--- Idempotente: se a conta já existe (criada à mão), fica como está.
---   admin@example.com  senha admin321admin   (usuário comum, ainda sem projeto)
---   scf@example.org    senha scf-admin-12345  (operador SCF)
+-- Development accounts, only for the dev Compose (SEED_DEV_DATA=true).
+-- They NEVER go to production: the passwords are known and one of the accounts is an SCF operator.
+-- Idempotent: if the account already exists (created by hand), it stays as it is.
+--   admin@example.com  password admin321admin   (regular user, no project yet)
+--   scf@example.org    password scf-admin-12345  (SCF operator)
 INSERT INTO "user" (id, name, email, email_verified, role)
 VALUES
-	('00000000-0000-4000-8000-0000000000a1', 'Admin Teste', 'admin@example.com', true, 'tenant'),
+	('00000000-0000-4000-8000-0000000000a1', 'Admin Test', 'admin@example.com', true, 'tenant'),
 	('00000000-0000-4000-8000-0000000000a2', 'SCF', 'scf@example.org', true, 'operator')
 ON CONFLICT (email) DO NOTHING;--> statement-breakpoint
 INSERT INTO account (id, account_id, provider_id, user_id, password)

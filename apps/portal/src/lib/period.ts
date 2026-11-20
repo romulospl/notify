@@ -1,8 +1,8 @@
-// Períodos do painel web (#28). Tudo em UTC, como as outras datas do portal.
-// O período termina agora e começa no início de um balde (hora, dia ou mês),
-// para os baldes do gráfico baterem com os que o Umami devolve. É a mesma
-// convenção dos períodos do próprio Umami: "Last 7 days" são os 6 dias
-// anteriores inteiros mais o dia de hoje até agora, não 168 horas exatas.
+// Periods of the web dashboard (#28). All in UTC, like the other dates in the
+// portal. The period ends now and starts at the beginning of a bucket (hour,
+// day or month), so the chart buckets match the ones Umami returns. It is the
+// same convention as Umami's own periods: "Last 7 days" is the 6 whole previous
+// days plus today up to now, not exactly 168 hours.
 
 export const PERIODS = {
   "24h": { label: "Last 24 hours", unit: "hour", count: 24 },
@@ -23,11 +23,11 @@ export type Period = {
   unit: PeriodUnit;
   startAt: Date;
   endAt: Date;
-  // Início de cada balde, do mais antigo ao mais novo; o último contém endAt.
+  // Start of each bucket, from oldest to newest; the last one contains endAt.
   buckets: Date[];
 };
 
-// Valor vindo da URL: qualquer coisa fora da lista vira o padrão.
+// Value coming from the URL: anything outside the list becomes the default.
 export function parsePeriodKey(raw: unknown): PeriodKey {
   return typeof raw === "string" && Object.hasOwn(PERIODS, raw) ? (raw as PeriodKey) : DEFAULT_PERIOD;
 }

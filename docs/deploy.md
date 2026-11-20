@@ -1,6 +1,6 @@
 # Production deployment
 
-Production is one Debian or Ubuntu VPS running Docker Compose ([ADR 0016](adr/0016-producao-em-vps.md)): Caddy, portal, web ingestion gateway, API collector, rollup job, Umami and Postgres with continuous encrypted backup, plus external monitoring on a second host. Files are in [`infra/`](../infra/README.md).
+Production is one Debian or Ubuntu VPS running Docker Compose ([ADR 0016](adr/0016-production-on-a-vps.md)): Caddy, portal, web ingestion gateway, API collector, rollup job, Umami and Postgres with continuous encrypted backup, plus external monitoring on a second host. Files are in [`infra/`](../infra/README.md).
 
 > **Status.** [#42](https://github.com/romulospl/stellytics/issues/42) is closed: the guide was followed end to end on 2026-11-19 with local stand-ins for DNS, certificates, SMTP and S3 (see "How this guide was checked"). Not yet done: a run on a real account by an operator from outside the team, and the backup of the current production ([#182](https://github.com/romulospl/stellytics/issues/182)).
 
@@ -14,7 +14,7 @@ Production is one Debian or Ubuntu VPS running Docker Compose ([ADR 0016](adr/00
 - `git` on both hosts, to clone the repository (minimal Debian images do not include it: `apt-get install -y git`).
 - On your own machine, for the first start: SSH, `git`, Node 24 and pnpm (`corepack enable` picks the version pinned in `package.json`).
 
-The VPS and bucket region is the data residency that must be declared ([`privacidade.md`](privacidade.md)).
+The VPS and bucket region is the data residency that must be declared ([`privacy.md`](privacy.md)).
 
 ## 1. Install
 
@@ -100,6 +100,16 @@ In a browser:
 
 Logs: `compose logs <service>` (caddy, portal, ingest-web, collector, rollup, umami, postgres).
 
+### Optional: public demo with real data
+
+`/demo` and `/demo/operator` work without sign-in. Out of the box they show **sample data** (made-up numbers; only the home page says so). To show a real project instead, use one you own: everything in it becomes public.
+
+1. Sign up and create the project (for example "Stellytics"). At `/sites`, add a website whose domain is exactly `<portal_host>`; at `/services`, create a service and an ingest key and point a backend at `https://<api_host>` (for example [`examples/api-backend`](../examples/api-backend/README.md), with `STELLYTICS_OTLP_ENDPOINT` and `STELLYTICS_INGEST_KEY`).
+2. Put the project's slug in `DEMO_TENANT_SLUG` in `.env.production` (the SCF operator sees the slug in `/operator`) and run `sudo ./deploy.sh`.
+3. Check: `curl -s https://<portal_host>/ | grep data-site` shows the tracker tag with the hash of the newest version in `packages/tracker/published/sri.json`, and `/demo` and `/demo/operator` open in a private window.
+
+Leave `DEMO_TENANT_SLUG` empty to go back to the sample data.
+
 ## Update the application
 
 1. Run a base backup first (`systemctl start stellytics-backup`): migrations only move forward.
@@ -108,7 +118,7 @@ Logs: `compose logs <service>` (caddy, portal, ingest-web, collector, rollup, um
 
 **Rollback.** Check out the previous version and run `deploy.sh` again. That reverts the code, **not the database**: if the new version brought a migration, restore the backup taken before the update (below) before starting the old version. Published tracking script versions stay available at `/s/`. The systemd units that a newer `deploy.sh` installed stay in place: when going back past the version that added `stellytics-check.timer` (#172), run `systemctl disable --now stellytics-check.timer`, or the monitor raises `StackUnhealthy` after 5 minutes; the next `deploy.sh` of a newer version enables it again.
 
-**Rotating a secret.** Database users are created once, on an empty volume, and keep their old password. In order: edit `.env.production`; run `deploy.sh` (services may stay unhealthy until the next step); update the password in the database (`compose exec -T postgres sh < infra/compose/postgres/init/02-ingest-roles.sh` for the ingest and collector users; `compose exec -T postgres psql -U postgres -c "ALTER ROLE <role> PASSWORD '<new>'"` for `stellytics`, `umami` and `postgres`); then `compose restart portal umami ingest-web`. Events received in between are dropped. Other secrets: `PORTAL_AUTH_SECRET` ends all portal sessions; `UMAMI_APP_SECRET` ends Umami sessions (create a new service account key if the portal gets 401); `INGEST_PROOF_SECRET` invalidates pending challenges for up to 5 minutes. `WALG_LIBSODIUM_KEY` cannot be changed. Details in [`runbooks/rotacao-de-segredos.md`](runbooks/rotacao-de-segredos.md).
+**Rotating a secret.** Database users are created once, on an empty volume, and keep their old password. In order: edit `.env.production`; run `deploy.sh` (services may stay unhealthy until the next step); update the password in the database (`compose exec -T postgres sh < infra/compose/postgres/init/02-ingest-roles.sh` for the ingest and collector users; `compose exec -T postgres psql -U postgres -c "ALTER ROLE <role> PASSWORD '<new>'"` for `stellytics`, `umami` and `postgres`); then `compose restart portal umami ingest-web`. Events received in between are dropped. Other secrets: `PORTAL_AUTH_SECRET` ends all portal sessions; `UMAMI_APP_SECRET` ends Umami sessions (create a new service account key if the portal gets 401); `INGEST_PROOF_SECRET` invalidates pending challenges for up to 5 minutes. `WALG_LIBSODIUM_KEY` cannot be changed. Details in [`runbooks/secret-rotation.md`](runbooks/secret-rotation.md).
 
 ## Backup
 
@@ -153,7 +163,7 @@ compose run --rm --no-deps \
 
 ## Monitoring
 
-A second host checks the portal and ingestion from outside every 15 seconds and sends email when something is down ([ADR 0005](adr/0005-monitoramento-externo.md)). Set it up after production and DNS, or it starts alerting.
+A second host checks the portal and ingestion from outside every 15 seconds and sends email when something is down ([ADR 0005](adr/0005-external-monitoring.md)). Set it up after production and DNS, or it starts alerting.
 
 What cannot be seen from outside is checked on the VPS: `deploy.sh` installs `stellytics-check.timer`, which runs [`infra/scripts/stack-check.py`](../infra/scripts/stack-check.py) every minute. It checks that every container is running and healthy (rollup turns unhealthy when the rollup stops), that Postgres is archiving WAL, that the newest base backup is at most 26 hours old and that the data disk is below 90% (`STACK_CHECK_DISK_MAX_PERCENT`). Caddy answers `https://<ingest_host>/healthz/stack` with 200 while the check passes and 503 otherwise (status code only); the monitor probes it. The reasons are in `journalctl -u stellytics-check -n 20`.
 
@@ -180,9 +190,9 @@ Prometheus and Alertmanager listen on loopback only: `ssh -N -L 9090:127.0.0.1:9
 
 ## Remove a deployment
 
-For a test deploy, or after a handover ([`transferencia.md`](transferencia.md)) once the new operator has confirmed their copy. Removing the VPS disk and the bucket deletes the data and every backup for good.
+For a test deploy, or after a handover ([`handover.md`](handover.md)) once the new operator has confirmed their copy. Removing the VPS disk and the bucket deletes the data and every backup for good.
 
-1. Decide what to keep. To keep the data, take a base backup (`systemctl start stellytics-backup`) and keep the bucket and `WALG_LIBSODIUM_KEY`, or export it as in `transferencia.md`.
+1. Decide what to keep. To keep the data, take a base backup (`systemctl start stellytics-backup`) and keep the bucket and `WALG_LIBSODIUM_KEY`, or export it as in `handover.md`.
 2. On the monitoring host first, so removing production does not raise alerts: `cd infra/monitoring && docker compose down -v`. Remove or pause the check at the heartbeat service (`DEADMAN_URL`), which would otherwise report the monitor as down.
 3. On the VPS: `systemctl disable --now stellytics-backup.timer stellytics-check.timer`, then `compose down`.
 4. At the providers: delete the VPS with its data disk (`/srv/stellytics`), the monitoring host, the DNS records, and, unless you kept it in step 1, the bucket. Revoke the bucket access key and the SMTP credentials used by the portal and by the monitor.
@@ -191,10 +201,10 @@ For a test deploy, or after a handover ([`transferencia.md`](transferencia.md)) 
 
 - **High availability:** one VPS; if it fails, the service is down until a new VPS is restored (ADR 0016).
 - **Provisioning:** the VPS, firewall, DNS and bucket are created by hand.
-- **Rate limits:** Caddy does not limit by IP and the collector does not limit by key; the collector's memory cap is `COLLECTOR_MEM_LIMIT` (default `512m`). The SCF read API limit is in the portal's memory ([ADR 0006](adr/0006-api-de-leitura-do-scf.md)).
+- **Rate limits:** Caddy does not limit by IP and the collector does not limit by key; the collector's memory cap is `COLLECTOR_MEM_LIMIT` (default `512m`). The SCF read API limit is in the portal's memory ([ADR 0006](adr/0006-scf-read-api.md)).
 - **Restore in production:** tested in CI with a local S3, not against the real bucket. Rehearse on a throwaway VPS before you need it.
 - **Umami and Postgres upgrades:** by PR only (images pinned by digest); there is no major Postgres upgrade guide.
-- **Handover:** plan and tested data migration in [`transferencia.md`](transferencia.md) ([#54](https://github.com/romulospl/stellytics/issues/54)).
+- **Handover:** plan and tested data migration in [`handover.md`](handover.md) ([#54](https://github.com/romulospl/stellytics/issues/54)).
 
 ## How this guide was checked
 

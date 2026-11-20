@@ -6,10 +6,10 @@ import { db } from "../db";
 import { env } from "../env";
 import { auditLog, tenant, tenantMember } from "../db/schema";
 
-// Criação do projeto no cadastro self-service (#17, spec do E2, seção 7):
-// o tenant nasce `active` e quem o criou vira `owner`, na mesma transação.
-// Com SIGNUP_APPROVAL ligado (#49, ADR 0007) ele nasce `pending` até um
-// operador aprovar.
+// Project creation in the self-service sign-up (#17, E2 spec, section 7):
+// the tenant starts as `active` and whoever created it becomes `owner`, in the
+// same transaction. With SIGNUP_APPROVAL on (#49, ADR 0007) it starts as
+// `pending` until an operator approves it.
 
 export class ProjectError extends Error {
   constructor(
@@ -21,7 +21,7 @@ export class ProjectError extends Error {
   }
 }
 
-// "Soroban Explorer!" -> "soroban-explorer". Só ASCII, até 40 caracteres.
+// "Soroban Explorer!" -> "soroban-explorer". ASCII only, up to 40 characters.
 export function slugify(name: string): string {
   const slug = name
     .normalize("NFKD")
@@ -35,7 +35,7 @@ export function slugify(name: string): string {
 }
 
 function constraintOf(error: unknown): string | undefined {
-  // O Drizzle embrulha o erro do Postgres em `cause`.
+  // Drizzle wraps the Postgres error in `cause`.
   return (error as { cause?: { constraint_name?: string } }).cause?.constraint_name;
 }
 
@@ -50,7 +50,7 @@ export async function createProject(
   const base = slugify(name);
   const status = env.signupApproval ? "pending" : "active";
 
-  // Slug repetido: tenta de novo com um sufixo aleatório.
+  // Repeated slug: tries again with a random suffix.
   for (let attempt = 0; attempt < 5; attempt++) {
     const slug = attempt === 0 ? base : `${base.slice(0, 33)}-${randomBytes(3).toString("hex")}`;
     try {
@@ -71,7 +71,7 @@ export async function createProject(
     } catch (error) {
       const constraint = constraintOf(error);
       if (constraint === "tenant_slug_unique") continue;
-      // D1: dois pedidos ao mesmo tempo do mesmo usuário; vale o índice único.
+      // D1: two requests at the same time from the same user; the unique index decides.
       if (constraint === "tenant_member_user_id_key") {
         throw new ProjectError("already_member", "You already have a project.");
       }
@@ -81,7 +81,7 @@ export async function createProject(
   throw new Error("Could not find a free project slug");
 }
 
-// Projeto do tenant do contexto, para o painel.
+// Project of the context's tenant, for the dashboard.
 export async function getProject(ctx: TenantContext) {
   const [found] = await db
     .select({ name: tenant.name, slug: tenant.slug, status: tenant.status, statusReason: tenant.statusReason })

@@ -1,13 +1,13 @@
-// Confere as licencas das dependencias de producao contra scripts/licenses/allowed.json.
+// Checks the licenses of the production dependencies against scripts/licenses/allowed.json.
 //
-// Uso:
-//   node scripts/deps/check-licenses.mjs [--allowlist <arquivo>] [--now AAAA-MM-DD]
-//        [--npm <saida de "pnpm licenses list --json --prod">]
-//        [--go <saida TSV de "go-licenses report": pacote, versao, licenca>]
+// Usage:
+//   node scripts/deps/check-licenses.mjs [--allowlist <file>] [--now YYYY-MM-DD]
+//        [--npm <output of "pnpm licenses list --json --prod">]
+//        [--go <TSV output of "go-licenses report": package, version, license>]
 //
-// Sai com 0 se tudo estiver permitido, 1 se houver pacote fora da lista (a lista
-// sai na saida padrao) e 2 se a entrada estiver vazia ou ilegivel. Entrada vazia
-// nunca vale como "sem problema": significaria que a consulta falhou.
+// Exits with 0 if everything is allowed, 1 if a package is not on the list (the
+// list goes to standard output) and 2 if the input is empty or unreadable. Empty
+// input never counts as "no problem": it would mean that the query failed.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -17,9 +17,9 @@ function tokenize(expr) {
   return expr.match(/\(|\)|[^\s()]+/g) ?? [];
 }
 
-// Avalia uma expressao SPDX simples. AND tem precedencia sobre OR. "X WITH Y"
-// vale como X (a excecao so acrescenta permissao ao texto da licenca X).
-// Devolve { ok, ids } ou lanca Error se a expressao for invalida.
+// Evaluates a simple SPDX expression. AND takes precedence over OR. "X WITH Y"
+// counts as X (the exception only adds permission to the text of license X).
+// Returns { ok, ids } or throws Error if the expression is invalid.
 export function evaluate(expr, isAllowed) {
   const tokens = tokenize(expr);
   let pos = 0;
@@ -47,22 +47,22 @@ export function evaluate(expr, isAllowed) {
   }
   function parseAtom() {
     const t = peek();
-    if (t === undefined) throw new Error("expressao incompleta");
+    if (t === undefined) throw new Error("incomplete expression");
     if (t === "(") {
       pos++;
       const v = parseOr();
-      if (peek() !== ")") throw new Error("parentese sem fechar");
+      if (peek() !== ")") throw new Error("unclosed parenthesis");
       pos++;
       return v;
     }
-    if (t === ")" || isOp(t)) throw new Error(`token inesperado "${t}"`);
+    if (t === ")" || isOp(t)) throw new Error(`unexpected token "${t}"`);
     pos++;
     ids.add(t);
     let v = isAllowed(t);
     if (peek() === "WITH") {
       pos++;
       if (peek() === undefined || isOp(peek()) || peek() === "(" || peek() === ")") {
-        throw new Error("WITH sem excecao");
+        throw new Error("WITH without an exception");
       }
       pos++;
     }
@@ -70,18 +70,18 @@ export function evaluate(expr, isAllowed) {
   }
 
   const ok = parseOr();
-  if (pos !== tokens.length) throw new Error(`token inesperado "${tokens[pos]}"`);
+  if (pos !== tokens.length) throw new Error(`unexpected token "${tokens[pos]}"`);
   return { ok, ids: [...ids] };
 }
 
-// Ids que nao sao licenca: sem licenca, privada ou so indicada em arquivo.
+// Ids that are not a license: no license, private or only pointed to in a file.
 const NOT_A_LICENSE = /^(unknown|unlicensed|none|n\/a)$|^see license|^custom|^\(?\s*$/i;
 
-// --- verificacao ----------------------------------------------------------
+// --- check ----------------------------------------------------------------
 
-// npm: nome exato, ou prefixo quando "package" termina em "*" (ex.: "@img/sharp-libvips-*",
-// um binario por plataforma). go: modulo exato ou subpacote dele ("modulo/..."); o
-// prefixo por "/" nao vale para npm, onde "@escopo" nao pode casar com "@escopo/x".
+// npm: exact name, or prefix when "package" ends in "*" (e.g. "@img/sharp-libvips-*",
+// one binary per platform). go: exact module or a subpackage of it ("module/..."); the
+// "/" prefix does not apply to npm, where "@scope" must not match "@scope/x".
 function exceptionFor(exceptions, ecosystem, name, license) {
   return exceptions.find((e) => {
     if (e.ecosystem !== ecosystem || e.license !== license) return false;
@@ -91,28 +91,28 @@ function exceptionFor(exceptions, ecosystem, name, license) {
   });
 }
 
-const MAX_EXCEPTION_DAYS = 183; // "no maximo 183 dias" (CONTRIBUTING.md)
+const MAX_EXCEPTION_DAYS = 183; // "at most 183 days" (CONTRIBUTING.md)
 
-// Devolve o motivo se date/expires forem invalidos, ou null. Data invalida
-// nunca pode "vencer" (Invalid Date < now e falso), por isso e checada antes.
+// Returns the reason if date/expires are invalid, or null. An invalid date
+// can never "expire" (Invalid Date < now is false), so it is checked first.
 function exceptionProblem(ex) {
   const parse = (v) => {
     if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
     const d = new Date(`${v}T00:00:00Z`);
     return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v ? null : d;
   };
-  if (typeof ex.reason !== "string" || ex.reason.trim() === "") return "falta reason";
+  if (typeof ex.reason !== "string" || ex.reason.trim() === "") return "missing reason";
   const from = parse(ex.date);
   const to = parse(ex.expires);
-  if (!from) return `date invalida ("${ex.date}", use AAAA-MM-DD)`;
-  if (!to) return `expires invalido ("${ex.expires}", use AAAA-MM-DD)`;
-  if ((to - from) / 86400000 > MAX_EXCEPTION_DAYS) return `prazo maior que ${MAX_EXCEPTION_DAYS} dias (date ${ex.date}, expires ${ex.expires})`;
-  if (to < from) return "expires anterior a date";
+  if (!from) return `invalid date ("${ex.date}", use YYYY-MM-DD)`;
+  if (!to) return `invalid expires ("${ex.expires}", use YYYY-MM-DD)`;
+  if ((to - from) / 86400000 > MAX_EXCEPTION_DAYS) return `period longer than ${MAX_EXCEPTION_DAYS} days (date ${ex.date}, expires ${ex.expires})`;
+  if (to < from) return "expires before date";
   return null;
 }
 
 // deps: [{ ecosystem, name, version, license }]
-// Devolve { violations: [{ecosystem,name,version,license,reason}], used: Map }
+// Returns { violations: [{ecosystem,name,version,license,reason}], used: Map }
 export function check(deps, allowlist, now = new Date()) {
   const allowed = new Set(allowlist.allowed);
   const exceptions = allowlist.exceptions ?? [];
@@ -122,14 +122,14 @@ export function check(deps, allowlist, now = new Date()) {
     const license = (d.license ?? "").trim();
     let reason = null;
     if (NOT_A_LICENSE.test(license)) {
-      reason = license === "" ? "sem licenca declarada" : `sem licenca valida ("${license}")`;
+      reason = license === "" ? "no license declared" : `no valid license ("${license}")`;
     } else {
       try {
         if (!evaluate(license, (id) => allowed.has(id)).ok) {
-          reason = "fora da allowlist";
+          reason = "not on the allowlist";
         }
       } catch (err) {
-        reason = `expressao de licenca nao reconhecida (${err.message})`;
+        reason = `license expression not recognized (${err.message})`;
       }
     }
     if (reason === null) continue;
@@ -138,9 +138,9 @@ export function check(deps, allowlist, now = new Date()) {
     if (ex) {
       const problem = exceptionProblem(ex);
       if (problem) {
-        violations.push({ ...d, license, reason: `excecao incompleta ou invalida (${problem}): ${reason}` });
+        violations.push({ ...d, license, reason: `incomplete or invalid exception (${problem}): ${reason}` });
       } else if (new Date(`${ex.expires}T23:59:59Z`) < now) {
-        violations.push({ ...d, license, reason: `excecao vencida em ${ex.expires}: ${reason}` });
+        violations.push({ ...d, license, reason: `exception expired on ${ex.expires}: ${reason}` });
       } else {
         used.add(ex);
       }
@@ -151,7 +151,7 @@ export function check(deps, allowlist, now = new Date()) {
   return { violations, used, unusedExceptions: exceptions.filter((e) => !used.has(e)) };
 }
 
-// --- entradas -------------------------------------------------------------
+// --- inputs ---------------------------------------------------------------
 
 export function parseNpm(text) {
   const data = JSON.parse(text);
@@ -168,7 +168,7 @@ export function parseGo(text) {
   const deps = [];
   for (const line of text.split("\n")) {
     const cols = line.split("\t");
-    if (cols.length < 3) continue; // ruido do go (ex.: "go: downloading")
+    if (cols.length < 3) continue; // go noise (e.g. "go: downloading")
     deps.push({ ecosystem: "go", name: cols[0], version: cols[1], license: cols[2] });
   }
   return deps;
@@ -190,39 +190,39 @@ function main() {
     if (opt("--npm")) deps.push(...parseNpm(readFileSync(opt("--npm"), "utf8")));
     if (opt("--go")) deps.push(...parseGo(readFileSync(opt("--go"), "utf8")));
   } catch (err) {
-    console.error(`Nao consegui ler a lista de dependencias: ${err.message}`);
+    console.error(`Could not read the dependency list: ${err.message}`);
     process.exit(2);
   }
   for (const eco of [opt("--npm") && "npm", opt("--go") && "go"].filter(Boolean)) {
     const n = deps.filter((d) => d.ecosystem === eco).length;
     if (n === 0) {
-      console.error(`A lista de ${eco} veio vazia: a consulta falhou, nao ha "zero dependencias".`);
+      console.error(`The ${eco} list came back empty: the query failed, there is no "zero dependencies".`);
       process.exit(2);
     }
-    console.log(`${eco}: ${n} pacotes conferidos`);
+    console.log(`${eco}: ${n} packages checked`);
   }
   if (deps.length === 0) {
-    console.error("Nada para conferir: passe --npm e/ou --go.");
+    console.error("Nothing to check: pass --npm and/or --go.");
     process.exit(2);
   }
 
   const { violations, used, unusedExceptions } = check(deps, allowlist, now);
   for (const e of used) {
-    console.log(`excecao em uso: ${e.ecosystem} ${e.package} (${e.license}), de ${e.date}, vence em ${e.expires}`);
+    console.log(`exception in use: ${e.ecosystem} ${e.package} (${e.license}), from ${e.date}, expires on ${e.expires}`);
   }
   for (const e of unusedExceptions) {
-    console.log(`aviso: excecao sem uso (pode ser removida): ${e.ecosystem} ${e.package} (${e.license})`);
+    console.log(`warning: unused exception (can be removed): ${e.ecosystem} ${e.package} (${e.license})`);
   }
   if (violations.length === 0) {
-    console.log("Licencas: todas permitidas.");
+    console.log("Licenses: all allowed.");
     return;
   }
-  console.log(`\n${violations.length} pacote(s) com licenca fora da allowlist:\n`);
+  console.log(`\n${violations.length} package(s) with a license not on the allowlist:\n`);
   for (const v of violations) {
-    console.log(`  ${v.ecosystem}  ${v.name}@${v.version}  licenca: ${v.license || "(nenhuma)"}  -> ${v.reason}`);
+    console.log(`  ${v.ecosystem}  ${v.name}@${v.version}  license: ${v.license || "(none)"}  -> ${v.reason}`);
   }
   console.log(
-    "\nOpcoes: trocar a dependencia; ou, se a licenca for aprovada pela OSI, acrescentar o id SPDX em 'allowed'; ou, se for um caso pontual, registrar uma excecao com reason, date e expires em scripts/licenses/allowed.json (ver CONTRIBUTING.md).",
+    "\nOptions: replace the dependency; or, if the license is OSI-approved, add the SPDX id to 'allowed'; or, if it is a one-off case, record an exception with reason, date and expires in scripts/licenses/allowed.json (see CONTRIBUTING.md).",
   );
   process.exit(1);
 }

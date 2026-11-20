@@ -21,17 +21,17 @@ func TestParseProfile(t *testing.T) {
 	}
 	for _, bad := range []string{"", "10", "0x1m", "10x", "-1x1m", "10xabc"} {
 		if _, err := parseProfile(bad); err == nil {
-			t.Errorf("%q devia falhar", bad)
+			t.Errorf("%q should fail", bad)
 		}
 	}
 }
 
-// solve precisa produzir o que internal/proof.Solved aceita: SHA-256(token+":"+nonce)
-// com n bits zero no começo. Os vetores abaixo vêm da mesma regra, conferida aqui à mão.
+// solve must produce what internal/proof.Solved accepts: SHA-256(token+":"+nonce)
+// with n leading zero bits. The vectors below come from the same rule, checked here by hand.
 func TestSolveMeetsDifficulty(t *testing.T) {
 	for _, n := range []int{0, 8, 12, 16} {
-		nonce := solve("token-de-teste", n)
-		sum := sha256.Sum256([]byte("token-de-teste:" + nonce))
+		nonce := solve("test-token", n)
+		sum := sha256.Sum256([]byte("test-token:" + nonce))
 		z := 0
 		for _, c := range sum {
 			if c != 0 {
@@ -41,14 +41,14 @@ func TestSolveMeetsDifficulty(t *testing.T) {
 			z += 8
 		}
 		if z < n {
-			t.Errorf("n=%d: nonce %s tem só %d bits zero", n, nonce, z)
+			t.Errorf("n=%d: nonce %s has only %d zero bits", n, nonce, z)
 		}
 	}
 }
 
 func TestVisitorsHaveDistinctTruncatedIPs(t *testing.T) {
 	seen := map[string]int{}
-	for i := 0; i < 20000; i++ { // até 65.536 visitantes têm /24 próprio
+	for i := 0; i < 20000; i++ { // up to 65,536 visitors have their own /24
 		v := newVisitor(i)
 		var a, b, c, d int
 		if _, err := sscan(v.ip, &a, &b, &c, &d); err != nil {
@@ -57,7 +57,7 @@ func TestVisitorsHaveDistinctTruncatedIPs(t *testing.T) {
 		seen[v.ip[:len(v.ip)-len(itoa(d))-1]]++
 	}
 	if len(seen) != 20000 {
-		t.Errorf("%d blocos /24 distintos para 20000 visitantes", len(seen))
+		t.Errorf("%d distinct /24 blocks for 20000 visitors", len(seen))
 	}
 }
 
@@ -66,7 +66,7 @@ func TestMarshalOTLPRoundTrip(t *testing.T) {
 	h[histKey{"/a/{id}", "GET", 200}].counts[httpmetrics.BucketIndex(0.04)] = 3
 	md, err := (&pmetric.ProtoUnmarshaler{}).UnmarshalMetrics(marshalMetrics(h, 10*time.Second))
 	if err != nil || md.DataPointCount() != 1 {
-		t.Fatalf("métricas: %v, %d pontos", err, md.DataPointCount())
+		t.Fatalf("metrics: %v, %d points", err, md.DataPointCount())
 	}
 	spans := []spanRec{{route: "/a/{id}", path: "/a/1", method: "GET", status: 200, dur: 0.01, end: time.Now(), useRoute: true}}
 	td, err := (&ptrace.ProtoUnmarshaler{}).UnmarshalTraces(marshalSpans(spans))
@@ -85,20 +85,20 @@ func TestCheckTargetsRefusesRemote(t *testing.T) {
 	}
 	for name, u := range local {
 		if err := checkTargets(false, map[string]string{name: u}); err != nil {
-			t.Errorf("%s (%s) devia passar: %v", name, u, err)
+			t.Errorf("%s (%s) should pass: %v", name, u, err)
 		}
 	}
 	remote := []string{"postgresql://u:p@db.example.com:5432/stellytics", "http://10.0.0.5:3001", "https://umami.example.org", "http://127.0.0.1.evil.example"}
 	for _, u := range remote {
 		if err := checkTargets(false, map[string]string{"x": u}); err == nil {
-			t.Errorf("%s devia ser recusado sem -allow-remote", u)
+			t.Errorf("%s should be refused without -allow-remote", u)
 		}
 		if err := checkTargets(true, map[string]string{"x": u}); err != nil {
-			t.Errorf("%s devia passar com -allow-remote: %v", u, err)
+			t.Errorf("%s should pass with -allow-remote: %v", u, err)
 		}
 	}
 	if err := checkTargets(true, map[string]string{"x": "::nope"}); err == nil {
-		t.Error("URL inválida devia falhar")
+		t.Error("invalid URL should fail")
 	}
 }
 
@@ -108,7 +108,7 @@ func TestValidateState(t *testing.T) {
 	}
 	for _, id := range []string{"", "loadtest-", "admin", "loadtest-%", "other-loadtest-x"} {
 		if err := validateState(State{UserID: id}); err == nil {
-			t.Errorf("user_id %q devia ser recusado", id)
+			t.Errorf("user_id %q should be refused", id)
 		}
 	}
 }

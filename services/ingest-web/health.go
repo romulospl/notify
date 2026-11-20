@@ -7,13 +7,13 @@ import (
 	"time"
 )
 
-// healthTimeout limita cada checagem das dependências; o -healthcheck do
-// contêiner espera 3 s.
+// healthTimeout bounds each dependency check; the container's -healthcheck
+// waits 3 s.
 const healthTimeout = 2 * time.Second
 
-// cachedHealth guarda o resultado da checagem por ttl. O /healthz é público:
-// sem o cache, cada pedido viraria uma consulta ao Postgres e ao Umami. Quem
-// chega durante uma checagem espera por ela em vez de disparar outra.
+// cachedHealth keeps the check result for ttl. /healthz is public: without the
+// cache, each request would become a query to Postgres and Umami. Whoever
+// arrives during a check waits for it instead of starting another.
 type cachedHealth struct {
 	check func(context.Context) error
 	ttl   time.Duration
@@ -41,15 +41,15 @@ func (h *cachedHealth) Check(ctx context.Context) error {
 	return h.err
 }
 
-// healthz responde 200 só quando o gateway consegue entregar eventos: o
-// Postgres (ingest_site, e onde o Umami grava) e o Umami respondem. É o que o
-// monitoramento externo mede como disponibilidade da ingestão web.
+// healthz answers 200 only when the gateway can deliver events: Postgres
+// (ingest_site, and where Umami writes) and Umami respond. It is what external
+// monitoring measures as web ingestion availability.
 func (g *gateway) healthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	if g.health != nil {
 		if err := g.health(r.Context()); err != nil {
-			g.log.Warn("healthz: dependência fora do ar", "err", err)
+			g.log.Warn("healthz: dependency down", "err", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = w.Write([]byte("unavailable\n"))
 			return

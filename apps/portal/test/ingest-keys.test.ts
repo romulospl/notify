@@ -1,4 +1,4 @@
-// Chaves de ingestão (#59, spec do E2, seção 5) contra o Postgres de DATABASE_URL.
+// Ingest keys (#59, E2 spec, section 5) against the DATABASE_URL Postgres.
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, like } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -32,7 +32,7 @@ async function createMember(status: "active" | "removed" = "active"): Promise<Te
   return (await loadTenantContext(userId))!;
 }
 
-// Lê a visão do coletor como o usuário stellytics_collector, numa transação desfeita.
+// Reads the collector's view as the stellytics_collector user, in a rolled-back transaction.
 class Rollback extends Error {}
 async function activeForCollector(prefix: string) {
   let rows: { prefix: string; tenant_id: string }[] = [];
@@ -71,8 +71,8 @@ afterAll(async () => {
   await sql.end();
 });
 
-describe("formato da chave", () => {
-  it("segue ntf_<prefixo>_<segredo> com 256 bits de segredo", () => {
+describe("key format", () => {
+  it("follows ntf_<prefix>_<secret> with 256 bits of secret", () => {
     const { key, prefix, keyHash } = generateIngestKey();
     const match = key.match(KEY_PATTERN);
     expect(match?.[1]).toBe(prefix);
@@ -81,17 +81,17 @@ describe("formato da chave", () => {
     expect(hashIngestKey(key).equals(keyHash)).toBe(true);
   });
 
-  it("não repete chaves nem prefixos", () => {
+  it("does not repeat keys or prefixes", () => {
     const keys = Array.from({ length: 2000 }, () => generateIngestKey());
     expect(new Set(keys.map((k) => k.key)).size).toBe(keys.length);
     expect(new Set(keys.map((k) => k.prefix)).size).toBe(keys.length);
-    // Os 32 símbolos do base32 aparecem: o prefixo usa os 40 bits.
+    // All 32 base32 symbols show up: the prefix uses the 40 bits.
     expect(new Set(keys.flatMap((k) => [...k.prefix])).size).toBe(32);
   });
 });
 
-describe("serviços e chaves", () => {
-  it("cria o serviço com a primeira chave e guarda só prefixo e hash", async () => {
+describe("services and keys", () => {
+  it("creates the service with the first key and stores only prefix and hash", async () => {
     const ctx = await createMember();
     const { service, firstKey } = await createApiService(ctx, { name: " horizon-proxy " });
 
@@ -106,7 +106,7 @@ describe("serviços e chaves", () => {
     expect(JSON.stringify(row)).not.toContain(secret);
   });
 
-  it("lista as chaves sem hash, da mais nova para a mais antiga", async () => {
+  it("lists the keys without hash, newest to oldest", async () => {
     const ctx = await createMember();
     const { service, firstKey } = await createApiService(ctx, { name: "api" });
     const second = await createIngestKey(ctx, service.id);
@@ -117,7 +117,7 @@ describe("serviços e chaves", () => {
     expect(await listApiServices(ctx)).toEqual([service]);
   });
 
-  it("recusa nome repetido no mesmo tenant, inclusive em pedidos simultâneos", async () => {
+  it("rejects a repeated name in the same tenant, including in simultaneous requests", async () => {
     const ctx = await createMember();
     await createApiService(ctx, { name: "dup" });
     await expect(createApiService(ctx, { name: "dup" })).rejects.toMatchObject({ code: "duplicate_name" });
@@ -131,19 +131,19 @@ describe("serviços e chaves", () => {
     expect(rejected.reason).toMatchObject({ code: "duplicate_name" });
   });
 
-  it(`aceita até ${MAX_ACTIVE_KEYS} chaves ativas por serviço`, async () => {
+  it(`accepts up to ${MAX_ACTIVE_KEYS} active keys per service`, async () => {
     const ctx = await createMember();
     const { service, firstKey } = await createApiService(ctx, { name: "limited" });
     for (let i = 1; i < MAX_ACTIVE_KEYS; i++) await createIngestKey(ctx, service.id);
     await expect(createIngestKey(ctx, service.id)).rejects.toMatchObject({ code: "key_limit" });
 
-    // Revogar libera uma vaga.
+    // Revoking frees a slot.
     expect(await revokeIngestKey(ctx, firstKey.summary.id)).toBe(true);
     await expect(createIngestKey(ctx, service.id)).resolves.toBeTruthy();
     await expect(createIngestKey(ctx, service.id)).rejects.toBeInstanceOf(ApiServiceError);
   });
 
-  it("o limite vale com pedidos simultâneos", async () => {
+  it("the limit holds with simultaneous requests", async () => {
     const ctx = await createMember();
     const { service } = await createApiService(ctx, { name: "concurrent" });
     for (let i = 2; i < MAX_ACTIVE_KEYS; i++) await createIngestKey(ctx, service.id);
@@ -157,7 +157,7 @@ describe("serviços e chaves", () => {
     expect(active.filter((k) => !k.revokedAt)).toHaveLength(MAX_ACTIVE_KEYS);
   });
 
-  it("revogar tira a chave da visão do coletor e registra no audit_log", async () => {
+  it("revoking takes the key out of the collector's view and records it in the audit_log", async () => {
     const ctx = await createMember();
     const { service, firstKey } = await createApiService(ctx, { name: "revoke" });
     const { prefix } = firstKey.summary;
@@ -165,7 +165,7 @@ describe("serviços e chaves", () => {
 
     expect(await revokeIngestKey(ctx, firstKey.summary.id)).toBe(true);
     expect(await activeForCollector(prefix)).toEqual([]);
-    // Revogar de novo não faz nada.
+    // Revoking again does nothing.
     expect(await revokeIngestKey(ctx, firstKey.summary.id)).toBe(false);
 
     const audit = await db
@@ -180,8 +180,8 @@ describe("serviços e chaves", () => {
   });
 });
 
-describe("isolamento e status do tenant", () => {
-  it("não lê, cria nem revoga chaves de outro tenant", async () => {
+describe("isolation and tenant status", () => {
+  it("does not read, create or revoke another tenant's keys", async () => {
     const a = await createMember();
     const b = await createMember();
     const ofB = await createApiService(b, { name: "b-service" });
@@ -199,7 +199,7 @@ describe("isolamento e status do tenant", () => {
     expect(keysOfB![0]!.revokedAt).toBeNull();
   });
 
-  it("tenant removido não cria serviço nem chave, mas pode revogar", async () => {
+  it("a removed tenant creates no service or key, but can revoke", async () => {
     const ctx = await createMember();
     const { service, firstKey } = await createApiService(ctx, { name: "before-removal" });
     await db.update(tenant).set({ status: "removed" }).where(eq(tenant.id, ctx.tenantId));
@@ -210,7 +210,7 @@ describe("isolamento e status do tenant", () => {
     expect(await revokeIngestKey(removed, firstKey.summary.id)).toBe(true);
   });
 
-  it("serviço arquivado não recebe chave nova", async () => {
+  it("an archived service gets no new key", async () => {
     const ctx = await createMember();
     const { service } = await createApiService(ctx, { name: "archived" });
     await db.update(apiService).set({ archivedAt: new Date() }).where(eq(apiService.id, service.id));
@@ -218,9 +218,9 @@ describe("isolamento e status do tenant", () => {
   });
 });
 
-describe("último uso pelo coletor", () => {
-  // Roda como stellytics_collector numa transação desfeita; `check` roda de novo
-  // como dono, ainda dentro da transação, para ler o efeito.
+describe("last use by the collector", () => {
+  // Runs as stellytics_collector in a rolled-back transaction; `check` runs again
+  // as the owner, still inside the transaction, to read the effect.
   async function asCollector<T>(
     run: (tx: typeof sql) => Promise<unknown>,
     check?: (tx: typeof sql) => Promise<T>,
@@ -249,7 +249,7 @@ describe("último uso pelo coletor", () => {
   const lastUsed = (prefix: string) => (tx: typeof sql) =>
     tx`select last_used_on::text as d from ingest_key where prefix = ${prefix}`.then((r) => r[0]!.d as string | null);
 
-  it("grava o dia (UTC) de uma chave ativa e não escreve de novo no mesmo dia", async () => {
+  it("records the day (UTC) of an active key and does not write again on the same day", async () => {
     const ctx = await createMember();
     const { firstKey } = await createApiService(ctx, { name: "touched" });
     const prefix = firstKey.summary.prefix;
@@ -260,14 +260,14 @@ describe("último uso pelo coletor", () => {
     expect((first.result as { updated: boolean }[])[0]!.updated).toBe(true);
     expect(first.checked).toBe(today);
 
-    // Segunda chamada no mesmo dia: nada a escrever.
+    // Second call on the same day: nothing to write.
     await sql`update ingest_key set last_used_on = (now() at time zone 'utc')::date where prefix = ${prefix}`;
     const second = await asCollector((tx) => tx`select ingest_key_touch(${prefix}) as updated`);
     expect((second.result as { updated: boolean }[])[0]!.updated).toBe(false);
     await sql`update ingest_key set last_used_on = null where prefix = ${prefix}`;
   });
 
-  it("não atualiza chave revogada, de tenant removido nem prefixo inexistente", async () => {
+  it("does not update a revoked key, one of a removed tenant or a nonexistent prefix", async () => {
     const ctx = await createMember();
     const { firstKey } = await createApiService(ctx, { name: "revoked" });
     await revokeIngestKey(ctx, firstKey.summary.id);
@@ -283,7 +283,7 @@ describe("último uso pelo coletor", () => {
     expect((unknown.result as { updated: boolean }[])[0]!.updated).toBe(false);
   });
 
-  it("o coletor não lê nem altera a tabela ingest_key, só chama a função", async () => {
+  it("the collector neither reads nor changes the ingest_key table, it only calls the function", async () => {
     const ctx = await createMember();
     const { firstKey } = await createApiService(ctx, { name: "privileges" });
     const prefix = firstKey.summary.prefix;
@@ -299,7 +299,7 @@ describe("último uso pelo coletor", () => {
       const r = await asCollector((tx) => tx.unsafe(statement));
       expect(r.error?.message, statement).toMatch(/permission denied/);
     }
-    // O gateway web não tem acesso à função.
+    // The web gateway has no access to the function.
     let denied: Error | undefined;
     await sql
       .begin(async (tx) => {
@@ -319,7 +319,7 @@ describe("último uso pelo coletor", () => {
 });
 
 describe("logs", () => {
-  it("nenhum fluxo escreve a chave no console", async () => {
+  it("no flow writes the key to the console", async () => {
     const spies = (["log", "info", "warn", "error", "debug"] as const).map((m) =>
       vi.spyOn(console, m).mockImplementation(() => {}),
     );

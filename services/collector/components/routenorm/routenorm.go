@@ -1,10 +1,10 @@
-// Package routenorm normaliza rotas HTTP com as regras fixas do RFP (#32).
+// Package routenorm normalizes HTTP routes with the fixed rules of the RFP (#32).
 //
-// Contrato no spec do E5 (docs/specs/e5-pipeline-de-api.md, seção 3): o
-// http.route enviado pelo cliente tem prioridade; sem ele, cada segmento do
-// caminho que for UUID, endereço Stellar, hash hexadecimal ou número vira um
-// marcador, para que /accounts/GABC.../payments/ e /accounts/GXYZ.../payments
-// contem como a mesma rota.
+// Contract in the E5 spec (docs/specs/e5-api-pipeline.md, section 3): the
+// http.route sent by the client takes priority; without it, each path segment
+// that is a UUID, Stellar address, hexadecimal hash or number becomes a
+// placeholder, so that /accounts/GABC.../payments/ and
+// /accounts/GXYZ.../payments count as the same route.
 package routenorm
 
 import (
@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// Marcadores que substituem os segmentos variáveis.
+// Placeholders that replace the variable segments.
 const (
 	UUID    = "{uuid}"
 	Address = "{address}"
@@ -20,16 +20,16 @@ const (
 	ID      = "{id}"
 )
 
-// MaxLen é o tamanho máximo, em bytes, de uma rota gravada.
+// MaxLen is the maximum size, in bytes, of a stored route.
 const MaxLen = 256
 
-// minHashLen é o mínimo de dígitos hexadecimais de um {hash} (D8 do spec),
-// para não trocar palavras como "cafe" ou "add".
+// minHashLen is the minimum number of hexadecimal digits of a {hash} (D8 of
+// the spec), so as not to replace words like "cafe" or "add".
 const minHashLen = 16
 
-// Route devolve a rota de uma requisição. clientRoute é o http.route enviado
-// pelo cliente (o template do framework) e tem prioridade; path é o url.path
-// ou o http.target, que pode trazer query string ou ser uma URL completa.
+// Route returns the route of a request. clientRoute is the http.route sent by
+// the client (the framework's template) and takes priority; path is the
+// url.path or the http.target, which may carry a query string or be a full URL.
 func Route(clientRoute, path string) string {
 	if clientRoute != "" {
 		return truncate(clientRoute)
@@ -37,14 +37,14 @@ func Route(clientRoute, path string) string {
 	return Path(path)
 }
 
-// Path normaliza um caminho: tira query string e fragmento, troca os
-// segmentos variáveis por marcadores, junta barras repetidas e tira a barra
-// final.
+// Path normalizes a path: it strips query string and fragment, replaces the
+// variable segments with placeholders, merges repeated slashes and strips the
+// trailing slash.
 func Path(path string) string {
 	if i := strings.IndexAny(path, "?#"); i >= 0 {
 		path = path[:i]
 	}
-	// URL completa (http.target antigo ou cliente mal configurado): só o caminho.
+	// Full URL (old http.target or misconfigured client): only the path.
 	if strings.Contains(path, "://") {
 		if u, err := url.Parse(path); err == nil {
 			path = u.EscapedPath()
@@ -63,8 +63,8 @@ func Path(path string) string {
 		return "/"
 	}
 	out := b.String()
-	// Rota longa demais: corta no fim do último segmento inteiro que cabe, para
-	// não deixar um pedaço de segmento que pareça outro marcador.
+	// Route too long: cut at the end of the last whole segment that fits, so as
+	// not to leave a piece of a segment that looks like another placeholder.
 	if len(out) > MaxLen {
 		if i := strings.LastIndexByte(out[:MaxLen+1], '/'); i > 0 {
 			return out[:i]
@@ -73,7 +73,7 @@ func Path(path string) string {
 	return truncate(out)
 }
 
-// segment troca o segmento pelo primeiro marcador que casar, na ordem do spec.
+// segment replaces the segment with the first placeholder that matches, in the spec's order.
 func segment(s string) string {
 	switch {
 	case isUUID(s):
@@ -107,9 +107,9 @@ func isUUID(s string) bool {
 	return true
 }
 
-// isStellarAddress confere o formato StrKey: G (conta) ou C (contrato) com 56
-// caracteres, ou M (conta muxed) com 69, em base32 maiúsculo. O checksum não é
-// conferido (spec, seção 3).
+// isStellarAddress checks the StrKey format: G (account) or C (contract) with
+// 56 characters, or M (muxed account) with 69, in uppercase base32. The
+// checksum is not checked (spec, section 3).
 func isStellarAddress(s string) bool {
 	switch {
 	case len(s) == 56 && (s[0] == 'G' || s[0] == 'C'):
@@ -154,7 +154,7 @@ func isHex(c byte) bool {
 	return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'
 }
 
-// truncate corta a rota em MaxLen bytes sem partir um caractere UTF-8.
+// truncate cuts the route at MaxLen bytes without splitting a UTF-8 character.
 func truncate(s string) string {
 	if len(s) <= MaxLen {
 		return s

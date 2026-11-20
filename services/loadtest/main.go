@@ -1,16 +1,16 @@
-// Comando loadtest: gerador de carga do pipeline web e do pipeline de API (#51).
+// Command loadtest: load generator for the web pipeline and the API pipeline (#51).
 //
-// Subcomandos:
+// Subcommands:
 //
-//	setup     cria no Umami e no banco stellytics os sites, tenants, serviços e chaves do teste
-//	web       manda page views ao gateway (GET /c, prova de JS, POST /e)
-//	api       manda OTLP/HTTP (métricas ou spans) ao coletor com chave de ingestão
-//	teardown  apaga tudo o que o setup criou
+//	setup     creates in Umami and in the stellytics database the test's sites, tenants, services and keys
+//	web       sends page views to the gateway (GET /c, JS proof, POST /e)
+//	api       sends OTLP/HTTP (metrics or spans) to the collector with an ingest key
+//	teardown  deletes everything setup created
 //
-// A carga é de chegada aberta (Poisson): o ritmo não espera as respostas, então
-// um servidor lento mostra latência e erro em vez de frear o gerador. O perfil
-// de taxa é uma lista de degraus "taxa x duração", por exemplo
-// "11.6x2m,116x3m,11.6x1m". Ver docs/relatorios/carga-1m-dia.md.
+// The load is open arrival (Poisson): the pace does not wait for the responses,
+// so a slow server shows latency and errors instead of slowing the generator
+// down. The rate profile is a list of "rate x duration" steps, for example
+// "11.6x2m,116x3m,11.6x1m". See docs/reports/load-1m-per-day.md.
 package main
 
 import (
@@ -44,7 +44,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "uso: loadtest setup|web|api|teardown [flags]  (-h em cada subcomando)")
+	fmt.Fprintln(os.Stderr, "usage: loadtest setup|web|api|teardown [flags]  (-h on each subcommand)")
 }
 
 func envOr(k, def string) string {

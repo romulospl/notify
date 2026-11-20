@@ -1,11 +1,11 @@
-# Manifesto do OCB (OpenTelemetry Collector Builder) da distribuição do coletor.
-# Gera collector/cmd/stellytics-collector dentro do módulo services/ (um módulo Go
-# só, ADR 0002). Para regenerar, de dentro de services/:
+# OCB (OpenTelemetry Collector Builder) manifest of the collector distribution.
+# Generates collector/cmd/stellytics-collector inside the services/ module (a
+# single Go module, ADR 0002). To regenerate, from inside services/:
 #   collector/generate.sh
-# Versões do core do Collector com pelo menos 14 dias, como as outras dependências.
+# Collector core versions at least 14 days old, like the other dependencies.
 dist:
   name: stellytics-collector
-  description: Coletor de métricas de API do stellytics
+  description: stellytics API metrics collector
   output_path: ./collector/cmd/stellytics-collector
   version: 0.1.0
 
@@ -25,11 +25,11 @@ processors:
     name: tenantattr
 
 exporters:
-  # Contadores e histogramas para o Postgres (#31).
+  # Counters and histograms to Postgres (#31).
   - gomod: github.com/romulospl/stellytics/services v0.0.0
     import: github.com/romulospl/stellytics/services/collector/components/pgexporter
     name: pgexporter
-  # Logs são descartados (spec do E5, seção 2).
+  # Logs are dropped (E5 spec, section 2).
   - gomod: go.opentelemetry.io/collector/exporter/nopexporter v0.164.0
 
 providers:

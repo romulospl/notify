@@ -12,7 +12,7 @@ export default defineConfig({
     environment: "node",
     include: ["test/**/*.test.ts"],
     setupFiles: ["test/setup-env.ts"],
-    // Os testes de integração compartilham o mesmo banco.
+    // The integration tests share the same database.
     fileParallelism: false,
   },
 });

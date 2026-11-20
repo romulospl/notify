@@ -1,4 +1,4 @@
-// Compila o script e calcula o SRI. Usado pelo build, pelo release e pelo teste de imutabilidade.
+// Bundles the script and computes the SRI. Used by the build, the release and the immutability test.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -9,7 +9,7 @@ export const publishedDir = join(root, "published");
 export const sriFile = join(publishedDir, "sri.json");
 export const fileName = "n.js";
 
-// Mapa versão → hash SRI de cada versão publicada.
+// Map of version → SRI hash for each published version.
 export type SriManifest = Record<string, string>;
 
 export function currentVersion(): string {

@@ -12,30 +12,30 @@ import (
 	"go.opentelemetry.io/collector/extension/extensionauth"
 )
 
-// Type é o nome da extensão na configuração do coletor.
+// Type is the extension's name in the collector configuration.
 var Type = component.MustNewType("ingestkeyauth")
 
-// Config da extensão.
+// Config of the extension.
 type Config struct {
-	// DatabaseURL aponta para o banco stellytics com o usuário stellytics_collector.
+	// DatabaseURL points to the stellytics database with the stellytics_collector user.
 	DatabaseURL string `mapstructure:"database_url"`
-	// CacheTTL é quanto tempo uma resposta (positiva ou negativa) fica em
-	// memória. No máximo 60 s, para uma revogação valer em até 1 minuto (#59).
+	// CacheTTL is how long an answer (positive or negative) stays in memory. At
+	// most 60 s, so that a revocation takes effect within 1 minute (#59).
 	CacheTTL time.Duration `mapstructure:"cache_ttl"`
 }
 
-// Validate implementa component.ConfigValidator.
+// Validate implements component.ConfigValidator.
 func (c *Config) Validate() error {
 	if c.DatabaseURL == "" {
-		return errors.New("database_url é obrigatória")
+		return errors.New("database_url is required")
 	}
 	if c.CacheTTL < 0 || c.CacheTTL > time.Minute {
-		return fmt.Errorf("cache_ttl precisa ficar entre 0 e 1m, veio %s", c.CacheTTL)
+		return fmt.Errorf("cache_ttl must be between 0 and 1m, got %s", c.CacheTTL)
 	}
 	return nil
 }
 
-// NewFactory cria a fábrica da extensão.
+// NewFactory creates the extension's factory.
 func NewFactory() extension.Factory {
 	return extension.NewFactory(Type, createDefaultConfig, create, component.StabilityLevelDevelopment)
 }
@@ -48,8 +48,8 @@ func create(_ context.Context, set extension.Settings, cfg component.Config) (ex
 	return &ext{cfg: cfg.(*Config), set: set}, nil
 }
 
-// ext liga o authenticator ao ciclo de vida do coletor: abre o pool do banco
-// no Start e o fecha no Shutdown.
+// ext ties the authenticator to the collector's lifecycle: it opens the
+// database pool on Start and closes it on Shutdown.
 type ext struct {
 	cfg  *Config
 	set  extension.Settings

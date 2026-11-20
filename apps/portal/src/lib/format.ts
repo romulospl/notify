@@ -4,12 +4,12 @@ import type { PeriodUnit } from "./period";
 const full = new Intl.NumberFormat("en");
 const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 
-// 1,284 até 9.999; 12.9K a partir de 10.000.
+// 1,284 up to 9,999; 12.9K from 10,000.
 export function formatCount(n: number): string {
   return Math.abs(n) < 10_000 ? full.format(n) : compact.format(n);
 }
 
-// Segundos -> "45s", "1m 05s", "2h 03m".
+// Seconds -> "45s", "1m 05s", "2h 03m".
 export function formatDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.round(totalSeconds));
   if (s < 60) return `${s}s`;
@@ -22,8 +22,8 @@ export function formatPercent(ratio: number): string {
   return `${Math.round(ratio * 100)}%`;
 }
 
-// Duração média da visita e taxa de rejeição, como o próprio Umami calcula
-// (tempo total e rejeições divididos pelas visitas).
+// Average visit duration and bounce rate, as Umami itself computes them
+// (total time and bounces divided by the visits).
 export function averageVisitSeconds(t: { totaltime: number; visits: number }): number {
   return t.visits > 0 ? t.totaltime / t.visits : 0;
 }
@@ -34,7 +34,7 @@ export function bounceRate(t: { bounces: number; visits: number }): number {
 
 const regions = new Intl.DisplayNames(["en"], { type: "region" });
 
-// O Umami grava o país como código ISO de duas letras.
+// Umami stores the country as a two-letter ISO code.
 export function countryName(code: string): string {
   if (!/^[A-Z]{2}$/.test(code)) return "Unknown";
   try {
@@ -44,7 +44,7 @@ export function countryName(code: string): string {
   }
 }
 
-// Identificadores de navegador do Umami (detect-browser) -> nome de exibição.
+// Umami browser identifiers (detect-browser) -> display name.
 const BROWSERS: Record<string, string> = {
   chrome: "Chrome",
   crios: "Chrome (iOS)",
@@ -126,14 +126,14 @@ const BUCKET_LONG: Record<PeriodUnit, Intl.DateTimeFormat> = {
   month: new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "UTC" }),
 };
 
-// Rótulo curto (eixo) e longo (tooltip e tabela) de um balde.
+// Short (axis) and long (tooltip and table) label of a bucket.
 export function bucketLabel(unit: PeriodUnit, at: Date, long = false): string {
   return (long ? BUCKET_LONG : BUCKET_FORMATS)[unit].format(at) + (long && unit === "hour" ? " UTC" : "");
 }
 
 export type Delta = { direction: "up" | "down" | "flat"; text: string } | null;
 
-// Variação relativa; nula quando o período anterior não tem base.
+// Relative change; null when the previous period has no base.
 export function relativeDelta(current: number, before: number, base = before): Delta {
   if (base <= 0 || before <= 0) return null;
   const change = (current - before) / before;
@@ -141,7 +141,7 @@ export function relativeDelta(current: number, before: number, base = before): D
   return { direction: change > 0 ? "up" : "down", text: formatPercent(Math.abs(change)) };
 }
 
-// Variação em pontos percentuais, para a taxa de rejeição.
+// Change in percentage points, for the bounce rate.
 export function pointsDelta(current: number, before: number, visits: number, previousVisits: number): Delta {
   if (visits <= 0 || previousVisits <= 0) return null;
   const pts = Math.round((current - before) * 100);
@@ -149,9 +149,9 @@ export function pointsDelta(current: number, before: number, visits: number, pre
   return { direction: pts > 0 ? "up" : "down", text: `${Math.abs(pts)} pts` };
 }
 
-// Painel de API (#37). Latência em segundos -> "8.2 ms", "340 ms", "1.25 s".
-// O percentil para em 10 s, o último limite do histograma (spec do E5, D2):
-// acima disso o valor real é desconhecido, então aparece "≥ 10 s".
+// API dashboard (#37). Latency in seconds -> "8.2 ms", "340 ms", "1.25 s".
+// The percentile stops at 10 s, the last histogram bound (E5 spec, D2):
+// above that the real value is unknown, so "≥ 10 s" is shown.
 export function formatLatency(seconds: number | null): string {
   if (seconds === null) return "—";
   if (seconds >= 10) return "≥ 10 s";
@@ -160,9 +160,9 @@ export function formatLatency(seconds: number | null): string {
   return ms < 10 ? `${ms.toFixed(1)} ms` : `${Math.round(ms)} ms`;
 }
 
-// Fração de requisições com erro, com uma casa decimal abaixo de 10%: 0.4% de
-// erros de servidor é bem diferente de 0%. Nunca arredonda para 0% ou 100%
-// quando não é exato, porque "100% de erros" diz que nada funcionou.
+// Share of requests with an error, with one decimal place below 10%: 0.4% of
+// server errors is quite different from 0%. Never rounds to 0% or 100% when
+// it is not exact, because "100% errors" says that nothing worked.
 export function formatShare(part: number, total: number): string {
   if (total <= 0) return "—";
   const pct = (part / total) * 100;
@@ -195,7 +195,7 @@ const STATUS_TEXT: Record<number, string> = {
   504: "Gateway Timeout",
 };
 
-// O coletor grava 0 quando o status não veio.
+// The collector stores 0 when the status did not come.
 export function statusLabel(code: number): string {
   if (code === 0) return "Unknown";
   const text = STATUS_TEXT[code];

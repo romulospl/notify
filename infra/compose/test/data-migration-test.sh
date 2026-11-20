@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# Teste da migração de dados entre operadores (#54, docs/transferencia.md).
+# Test of the data migration between operators (#54, docs/handover.md).
 #
-# Sobe uma pilha de ORIGEM (Postgres 17 com WAL-G, Umami e portal, com as
-# imagens e o Compose de produção), grava dados de verdade nos dois bancos
-# (inclusive uma sessão do portal e eventos no Umami), e migra para pilhas de
-# DESTINO vazias, com senhas e chave de backup diferentes, de dois jeitos:
+# Starts an ORIGIN stack (Postgres 17 with WAL-G, Umami and portal, with the
+# production images and Compose), writes real data to both databases
+# (including a portal session and events in Umami), and migrates to empty
+# DESTINATION stacks, with different passwords and backup key, in two ways:
 #
-#   A. lógico: infra/scripts/db-export.sh e db-import.sh (pg_dump/pg_restore);
-#   B. físico: backup base e WAL do WAL-G copiados para o bucket de outro
-#      operador e restaurados com stellytics-restore.
+#   A. logical: infra/scripts/db-export.sh and db-import.sh (pg_dump/pg_restore);
+#   B. physical: WAL-G base backup and WAL copied to another operator's
+#      bucket and restored with stellytics-restore.
 #
-# Em cada um, prova por consulta que o destino é idêntico (db-fingerprint.sh) e
-# que o sistema funciona nele: login com a senha antiga, sessão antiga válida,
-# Umami com as mesmas estatísticas, chaves de ingestão aceitas pelas visões e
-# audit_log ainda só de inserção. Mostra o tempo de cada passo.
+# In each one, proves by query that the destination is identical (db-fingerprint.sh) and
+# that the system works on it: login with the old password, old session still valid,
+# Umami with the same statistics, ingest keys accepted by the views and
+# audit_log still insert-only. Shows the time of each step.
 #
-# Uso, da raiz do repositório, com a imagem do portal já construída:
+# Usage, from the repository root, with the portal image already built:
 #   PORTAL_IMAGE=stellytics-portal:dev infra/compose/test/data-migration-test.sh
-# MODE=logical ou MODE=physical roda só um dos dois. KEEP=1 não derruba nada.
-# Portas no loopback: 13541-13543 (portal) e 18333-18335 (S3 local); troque com
-# PORT_BASE e S3_BASE.
+# MODE=logical or MODE=physical runs only one of the two. KEEP=1 tears nothing down.
+# Loopback ports: 13541-13543 (portal) and 18333-18335 (local S3); change them with
+# PORT_BASE and S3_BASE.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -33,13 +33,13 @@ rand() { openssl rand -hex "${1:-24}"; }
 ALPINE='alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f'
 RCLONE='rclone/rclone:1.73.0'
 
-fail() { echo "FALHOU: $*" >&2; exit 1; }
+fail() { echo "FAILED: $*" >&2; exit 1; }
 ok() { echo "ok: $*"; }
 t0=$(date +%s)
-lap() { echo "tempo: $1 em $(( $(date +%s) - t0 ))s"; t0=$(date +%s); }
+lap() { echo "time: $1 in $(( $(date +%s) - t0 ))s"; t0=$(date +%s); }
 
-# --- uma pilha = projeto Compose + arquivo .env + pasta de dados -------------
-# stack <nome> <índice> [libsodium] [auth_secret] [umami_secret]
+# --- one stack = Compose project + .env file + data folder -------------------
+# stack <name> <index> [libsodium] [auth_secret] [umami_secret]
 mkenv() {
   local name=$1 idx=$2 libsodium=$3 auth=$4 umami=$5
   mkdir -p "$work/$name-data"
@@ -81,10 +81,10 @@ compose() { docker compose -p "$P" --env-file "$ENVF" -f prod.yaml -f test/prod-
 envval() { grep "^$1=" "$ENVF" | cut -d= -f2-; }
 pgsql() { compose exec -T -u postgres postgres psql -X -At -v ON_ERROR_STOP=1 -d "$1" "${@:2}"; }
 portal_url() { echo "http://127.0.0.1:$(envval PORTAL_PORT)"; }
-# Conecta como um papel PELA REDE do Compose, com senha. Por dentro do contêiner
-# do Postgres o socket e o 127.0.0.1 são `trust` (imagem oficial) e não provam a
-# senha; por isso o teste sobe um contêiner à parte (mesma imagem, só o psql).
-pg_net() { # papel senha banco sql
+# Connects as a role OVER THE Compose NETWORK, with a password. From inside the Postgres
+# container the socket and 127.0.0.1 are `trust` (official image) and do not prove the
+# password; so the test starts a separate container (same image, only psql).
+pg_net() { # role password database sql
   compose run --rm --no-deps -T -e PGHOST=postgres -e PGUSER="$1" -e PGPASSWORD="$2" --entrypoint psql postgres -X -At -d "$3" -c "$4"
 }
 umami_curl() { compose exec -T umami curl -fsS "$@"; }
@@ -96,37 +96,37 @@ cleanup() {
   fi
   if [ "${KEEP:-0}" != 1 ]; then
     for s in "${stacks[@]}"; do use "$s"; compose down -v --remove-orphans >/dev/null 2>&1 || true; done
-    docker run --rm -v "$work:/w" "$ALPINE" sh -c 'rm -rf /w/*-data /w/migracao*' >/dev/null 2>&1 || true
+    docker run --rm -v "$work:/w" "$ALPINE" sh -c 'rm -rf /w/*-data /w/migration*' >/dev/null 2>&1 || true
     rm -rf "$work"
   else
-    echo "KEEP=1: pilhas e $work mantidos."
+    echo "KEEP=1: stacks and $work kept."
   fi
   exit "$status"
 }
 trap cleanup EXIT
 
-new_stack() { # nome índice libsodium auth umami
+new_stack() { # name index libsodium auth umami
   mkenv "$@"; stacks+=("$1"); use "$1"
   compose up -d s3 --wait
   compose exec -T s3 sh -c "echo 's3.bucket.create -name stellytics-backup-$1' | weed shell -master=localhost:9333" >/dev/null
   compose up -d postgres umami portal --wait
 }
 
-# 1. ORIGEM -------------------------------------------------------------------
+# 1. ORIGIN -------------------------------------------------------------------
 auth_secret=$(rand 32); umami_secret=$(rand 32); libsodium_origin=$(rand 32)
-echo "== origem"
-new_stack origem 0 "$libsodium_origin" "$auth_secret" "$umami_secret"
-lap "origem no ar (portal aplicou as migrações; Umami criou o esquema dele)"
+echo "== origin"
+new_stack origin 0 "$libsodium_origin" "$auth_secret" "$umami_secret"
+lap "origin up (portal applied the migrations; Umami created its schema)"
 o_url=$(portal_url)
 
-# Dois usuários pela API real do portal (a senha vira o hash do Better Auth).
-password="senha-de-teste-$(rand 4)"
+# Two users through the portal's real API (the password becomes the Better Auth hash).
+password="test-password-$(rand 4)"
 signup() {
   curl -s -o /dev/null -X POST "$o_url/api/auth/sign-up/email" -H 'Content-Type: application/json' \
     -H 'Origin: https://portal.localhost' -d "{\"email\":\"$1\",\"password\":\"$password\",\"name\":\"$2\"}"
 }
-signup alice@example.org Alice; signup operator@example.org Operador
-# Sem SMTP no teste, a confirmação do e-mail é feita direto no banco.
+signup alice@example.org Alice; signup operator@example.org Operator
+# With no SMTP in the test, the email confirmation is done directly in the database.
 pgsql stellytics -c "update \"user\" set email_verified = true where email in ('alice@example.org','operator@example.org')"
 login() { # url email -> cookie
   curl -s -D - -o /dev/null -X POST "$1/api/auth/sign-in/email" -H 'Content-Type: application/json' \
@@ -134,161 +134,161 @@ login() { # url email -> cookie
     tr -d '\r' | sed -n 's/^[Ss]et-[Cc]ookie: \(__Secure-better-auth.session_token=[^;]*\).*/\1/p' | head -1
 }
 cookie=$(login "$o_url" alice@example.org)
-[ -n "$cookie" ] || fail "login na origem não devolveu cookie de sessão"
+[ -n "$cookie" ] || fail "login on the origin returned no session cookie"
 session_email() { # url cookie
   curl -s "$1/api/auth/get-session" -H "Cookie: $2" -H 'Origin: https://portal.localhost' |
     sed -n 's/.*"email":"\([^"]*\)".*/\1/p' | head -1
 }
-[ "$(session_email "$o_url" "$cookie")" = alice@example.org ] || fail "a sessão não vale na origem"
-ok "usuários criados pelo portal; sessão da Alice válida na origem"
+[ "$(session_email "$o_url" "$cookie")" = alice@example.org ] || fail "the session is not valid on the origin"
+ok "users created by the portal; Alice's session valid on the origin"
 
-# Umami: um site e eventos de verdade, pelo mesmo /api/send que o gateway usa.
+# Umami: a site and real events, through the same /api/send the gateway uses.
 token=$(umami_curl -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"umami"}' | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
 umami_site=$(umami_curl -X POST http://localhost:3000/api/websites -H "Authorization: Bearer $token" \
   -H 'Content-Type: application/json' -d '{"name":"Alpha site","domain":"alpha.example"}' |
   sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -1)
-[ -n "$umami_site" ] || fail "o Umami não criou o site"
+[ -n "$umami_site" ] || fail "Umami did not create the site"
 for i in $(seq 1 60); do
   ua="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 v$((i % 6))"
   umami_curl -o /dev/null -X POST http://localhost:3000/api/send -H 'Content-Type: application/json' \
     -H "User-Agent: $ua" -H "x-stellytics-client-ip: 203.0.113.$((i % 9)).0" \
     -d "{\"type\":\"event\",\"payload\":{\"website\":\"$umami_site\",\"hostname\":\"alpha.example\",\"url\":\"/p$((i % 7))\",\"title\":\"p\",\"language\":\"en-US\",\"screen\":\"1920x1080\"}}" ||
-    fail "o Umami recusou o evento $i"
+    fail "Umami refused event $i"
 done
 events=$(pgsql umami -c "select count(*) from website_event")
-[ "$events" -ge 50 ] || fail "poucos eventos no Umami: $events"
-umami_stats() { # compose já em uso; token -> JSON de /stats
+[ "$events" -ge 50 ] || fail "too few events in Umami: $events"
+umami_stats() { # compose already in use; token -> JSON from /stats
   umami_curl "http://localhost:3000/api/websites/$umami_site/stats?startAt=0&endAt=4102444800000" -H "Authorization: Bearer $1"
 }
 stats_origin=$(umami_stats "$token")
-ok "Umami com $events eventos: $stats_origin"
+ok "Umami with $events events: $stats_origin"
 
 rk() { echo "ntf_$(openssl rand -hex 5 | xxd -r -p | base32 | tr '[:upper:]' '[:lower:]' | tr -d '=' | cut -c1-8)_$(openssl rand -base64 33 | tr '+/' '-_' | tr -d '=\n' | cut -c1-43)"; }
 key_active=$(rk); key_revoked=$(rk); key_archived=$(rk); key_removed=$(rk)
 pgsql stellytics -v alice_email=alice@example.org -v operator_email=operator@example.org -v umami_site="$umami_site" \
   -v key_active="$key_active" -v key_revoked="$key_revoked" -v key_archived="$key_archived" -v key_removed="$key_removed" \
   < test/migration-seed.sql > /dev/null
-[ "$(pgsql stellytics -c 'select count(*) from ingest_key_active')" = 1 ] || fail "esperava 1 chave ativa na origem"
-ok "dados de exemplo: $(pgsql stellytics -c "select (select count(*) from tenant) || ' tenants, ' || (select count(*) from api_metric_1m) || ' linhas em 1m, ' || (select count(*) from api_metric_1h) || ' em 1h, ' || (select count(*) from api_metric_1d) || ' em 1d, ' || (select count(*) from audit_log) || ' no audit_log'")"
-lap "dados gravados"
+[ "$(pgsql stellytics -c 'select count(*) from ingest_key_active')" = 1 ] || fail "expected 1 active key on the origin"
+ok "sample data: $(pgsql stellytics -c "select (select count(*) from tenant) || ' tenants, ' || (select count(*) from api_metric_1m) || ' rows in 1m, ' || (select count(*) from api_metric_1h) || ' in 1h, ' || (select count(*) from api_metric_1d) || ' in 1d, ' || (select count(*) from audit_log) || ' in audit_log'")"
+lap "data written"
 
-# Backup base na origem antes da janela (o caminho físico parte dele).
-if [ "$MODE" != logical ]; then compose exec -T -u postgres postgres stellytics-backup >/dev/null; lap "backup base da origem"; fi
+# Base backup on the origin before the window (the physical path starts from it).
+if [ "$MODE" != logical ]; then compose exec -T -u postgres postgres stellytics-backup >/dev/null; lap "origin base backup"; fi
 
-# --- janela de manutenção: aplicação parada, só o Postgres no ar -------------
+# --- maintenance window: application stopped, only Postgres up ---------------
 compose stop portal umami >/dev/null
-lap "janela de manutenção aberta (portal e Umami parados)"
-fp_origin="$work/fp-origem.txt"
+lap "maintenance window open (portal and Umami stopped)"
+fp_origin="$work/fp-origin.txt"
 COMPOSE="docker compose -p $P --env-file $ENVF -f prod.yaml -f test/prod-test.yaml -f test/migration-test.yaml" \
   "$repo/infra/scripts/db-fingerprint.sh" > "$fp_origin"
-# A impressão digital precisa cobrir TODAS as tabelas (um bug já a fez parar na primeira).
+# The fingerprint must cover ALL tables (a bug once made it stop at the first one).
 for db in stellytics umami; do
   expected=$(pgsql "$db" -c "select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where c.relkind in ('r', 'p') and n.nspname not in ('pg_catalog', 'information_schema') and n.nspname not like 'pg_toast%'")
-  got=$(awk -v db="$db" '$0 == "== banco " db {f = 1; next} /^== / {f = 0} f' "$fp_origin" | grep -c -E ' [0-9]+ [0-9a-f]{32}$| 0 vazia$' || true)
-  [ "$expected" = "$got" ] || fail "a impressão digital cobre $got de $expected tabelas do banco $db"
-  ok "impressão digital cobre as $got tabelas do banco $db"
+  got=$(awk -v db="$db" '$0 == "== database " db {f = 1; next} /^== / {f = 0} f' "$fp_origin" | grep -c -E ' [0-9]+ [0-9a-f]{32}$| 0 empty$' || true)
+  [ "$expected" = "$got" ] || fail "the fingerprint covers $got of $expected tables of the $db database"
+  ok "fingerprint covers the $got tables of the $db database"
 done
-lap "impressão digital da origem ($(wc -l < "$fp_origin") linhas)"
-cp "$ENVF" "$work/origem.env.bak"
+lap "origin fingerprint ($(wc -l < "$fp_origin") lines)"
+cp "$ENVF" "$work/origin.env.bak"
 
-verify_destination() { # nome: o sistema funciona no destino
+verify_destination() { # name: the system works on the destination
   local url token2 stats_dest
   url=$(portal_url)
-  [ "$(login "$url" alice@example.org)" != "" ] || fail "[$NAME] login com a senha antiga falhou"
-  ok "[$NAME] login com a senha da origem funciona"
-  [ "$(session_email "$url" "$cookie")" = alice@example.org ] || fail "[$NAME] a sessão da origem não vale"
-  ok "[$NAME] a sessão criada na origem continua válida"
+  [ "$(login "$url" alice@example.org)" != "" ] || fail "[$NAME] login with the old password failed"
+  ok "[$NAME] login with the origin's password works"
+  [ "$(session_email "$url" "$cookie")" = alice@example.org ] || fail "[$NAME] the origin's session is not valid"
+  ok "[$NAME] the session created on the origin is still valid"
   token2=$(umami_curl -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
     -d '{"username":"admin","password":"umami"}' | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
   stats_dest=$(umami_stats "$token2")
-  [ "$stats_dest" = "$stats_origin" ] || fail "[$NAME] stats do Umami diferem: $stats_dest"
-  ok "[$NAME] Umami (sem fork) abriu o banco migrado e dá as mesmas estatísticas"
-  [ "$(pgsql stellytics -c 'select count(*) from ingest_key_active')" = 1 ] || fail "[$NAME] chaves ativas"
+  [ "$stats_dest" = "$stats_origin" ] || fail "[$NAME] Umami stats differ: $stats_dest"
+  ok "[$NAME] Umami (no fork) opened the migrated database and gives the same statistics"
+  [ "$(pgsql stellytics -c 'select count(*) from ingest_key_active')" = 1 ] || fail "[$NAME] active keys"
   [ "$(pgsql stellytics -c "select count(*) from ingest_key_active where prefix = '$(echo "$key_active" | cut -c5-12)' and key_hash = sha256(convert_to('$key_active', 'UTF8'))")" = 1 ] ||
-    fail "[$NAME] o hash da chave ativa não bate com a chave original"
-  ok "[$NAME] a chave de ingestão original continua válida (prefixo e SHA-256)"
+    fail "[$NAME] the active key's hash does not match the original key"
+  ok "[$NAME] the original ingest key is still valid (prefix and SHA-256)"
   for stmt in "update audit_log set action = 'x'" "delete from audit_log" "truncate audit_log"; do
-    if pgsql stellytics -c "$stmt" 2>/dev/null; then fail "[$NAME] audit_log aceitou: $stmt"; fi
+    if pgsql stellytics -c "$stmt" 2>/dev/null; then fail "[$NAME] audit_log accepted: $stmt"; fi
   done
-  pgsql stellytics -c "insert into audit_log (action) values ('teste.pos-migracao')" >/dev/null
-  ok "[$NAME] audit_log recusa UPDATE, DELETE e TRUNCATE e aceita INSERT (gatilhos ativos)"
+  pgsql stellytics -c "insert into audit_log (action) values ('test.post-migration')" >/dev/null
+  ok "[$NAME] audit_log refuses UPDATE, DELETE and TRUNCATE and accepts INSERT (triggers active)"
   [ "$(pg_net stellytics_ingest "$(envval STELLYTICS_INGEST_DB_PASSWORD)" stellytics "select accepts_ingest from ingest_site where umami_website_id = '$umami_site'")" = t ] ||
-    fail "[$NAME] stellytics_ingest não lê ingest_site com a senha nova"
+    fail "[$NAME] stellytics_ingest cannot read ingest_site with the new password"
   [ "$(pg_net stellytics_collector "$(envval STELLYTICS_COLLECTOR_DB_PASSWORD)" stellytics "select count(*) from ingest_key_active")" = 1 ] ||
-    fail "[$NAME] stellytics_collector não lê ingest_key_active com a senha nova"
+    fail "[$NAME] stellytics_collector cannot read ingest_key_active with the new password"
   if pg_net stellytics_ingest "$(envval STELLYTICS_INGEST_DB_PASSWORD)" stellytics "select count(*) from tenant" >/dev/null 2>&1; then
-    fail "[$NAME] stellytics_ingest leu a tabela tenant (GRANT a mais)"
+    fail "[$NAME] stellytics_ingest read the tenant table (extra GRANT)"
   fi
-  ok "[$NAME] stellytics_ingest e stellytics_collector entram com as senhas do destino e leem as visões"
+  ok "[$NAME] stellytics_ingest and stellytics_collector log in with the destination's passwords and read the views"
   pgsql stellytics -c "select api_metric_ensure_partitions(2)" >/dev/null
-  [ "$(pgsql stellytics -c "select count(*) from api_metric_1m where route = '/future' and tableoid::regclass::text like 'api_metric_1m_p%'")" = 1 ] || fail "[$NAME] partições"
-  ok "[$NAME] api_metric_ensure_partitions roda e as partições existem"
-  # Escreve como o coletor, para provar o GRANT de INSERT/UPDATE em api_metric_1m.
+  [ "$(pgsql stellytics -c "select count(*) from api_metric_1m where route = '/future' and tableoid::regclass::text like 'api_metric_1m_p%'")" = 1 ] || fail "[$NAME] partitions"
+  ok "[$NAME] api_metric_ensure_partitions runs and the partitions exist"
+  # Writes as the collector, to prove the INSERT/UPDATE GRANT on api_metric_1m.
   pg_net stellytics_collector "$(envval STELLYTICS_COLLECTOR_DB_PASSWORD)" stellytics \
-    "insert into api_metric_1m values (date_trunc('minute', now()), 'aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001', '/pos', 'GET', 200, 1, 0.1, array[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0]::bigint[])" >/dev/null ||
-    fail "[$NAME] stellytics_collector não grava em api_metric_1m"
-  pgsql stellytics -c "delete from api_metric_1m where route = '/pos'" >/dev/null
-  ok "[$NAME] stellytics_collector grava em api_metric_1m"
-  # Desfaz as duas escritas de teste (a do audit_log não dá para apagar: fica 1 linha a mais).
+    "insert into api_metric_1m values (date_trunc('minute', now()), 'aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001', '/after', 'GET', 200, 1, 0.1, array[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0]::bigint[])" >/dev/null ||
+    fail "[$NAME] stellytics_collector cannot write to api_metric_1m"
+  pgsql stellytics -c "delete from api_metric_1m where route = '/after'" >/dev/null
+  ok "[$NAME] stellytics_collector writes to api_metric_1m"
+  # Undoes the two test writes (the audit_log one cannot be deleted: 1 extra row remains).
 }
 
-# 2A. LÓGICO ------------------------------------------------------------------
+# 2A. LOGICAL -----------------------------------------------------------------
 if [ "$MODE" != physical ]; then
-  echo "== A. migração lógica (pg_dump)"
-  use origem
-  dump="$work/migracao"
+  echo "== A. logical migration (pg_dump)"
+  use origin
+  dump="$work/migration"
   COMPOSE="docker compose -p $P --env-file $ENVF -f prod.yaml -f test/prod-test.yaml -f test/migration-test.yaml" \
     "$repo/infra/scripts/db-export.sh" "$dump" >/dev/null
-  lap "exportação (pg_dump -Fc dos dois bancos + impressão digital)"
+  lap "export (pg_dump -Fc of both databases + fingerprint)"
   cfiles="-f prod.yaml -f test/prod-test.yaml -f test/migration-test.yaml"
   imp() { COMPOSE="docker compose -p $P --env-file $ENVF $cfiles" "$repo/infra/scripts/db-import.sh" "$@"; }
   dboids() { pgsql postgres -c "select string_agg(datname || ':' || oid, ',' order by datname) from pg_database where datname in ('stellytics','umami')"; }
-  # Importar na própria ORIGEM (que tem tenants) tem de ser recusado sem --force-nonempty.
+  # Importing into the ORIGIN itself (which has tenants) must be refused without --force-nonempty.
   oids=$(dboids)
-  if imp --yes "$dump" >/dev/null 2>&1; then fail "db-import rodou numa pilha com tenants"; fi
-  [ "$(dboids)" = "$oids" ] || fail "a recusa por destino não vazio mexeu nos bancos"
-  ok "[A] db-import recusa um destino com tenants (a origem) sem --force-nonempty"
+  if imp --yes "$dump" >/dev/null 2>&1; then fail "db-import ran on a stack with tenants"; fi
+  [ "$(dboids)" = "$oids" ] || fail "the refusal for a non-empty destination touched the databases"
+  ok "[A] db-import refuses a destination with tenants (the origin) without --force-nonempty"
 
   du -h "$dump"/*.dump | sed 's/^/     /'
 
-  # Destino: o `site.yml` já rodou (pilha completa, vazia, com portal e Umami
-  # migrando os bancos vazios), com as MESMAS chaves de sessão e outras senhas.
-  new_stack destino-logico 1 "$(rand 32)" "$auth_secret" "$umami_secret"
-  lap "destino lógico no ar e vazio"
-  [ "$(pgsql stellytics -c 'select count(*) from tenant')" = 0 ] || fail "destino não está vazio"
-  # Proteções do import, todas ANTES de qualquer DROP: os bancos do destino
-  # (OIDs) têm de continuar os mesmos depois de cada recusa.
+  # Destination: `site.yml` has already run (full stack, empty, with portal and Umami
+  # migrating the empty databases), with the SAME session keys and other passwords.
+  new_stack dest-logical 1 "$(rand 32)" "$auth_secret" "$umami_secret"
+  lap "logical destination up and empty"
+  [ "$(pgsql stellytics -c 'select count(*) from tenant')" = 0 ] || fail "destination is not empty"
+  # Import protections, all BEFORE any DROP: the destination databases
+  # (OIDs) must stay the same after each refusal.
   oids=$(dboids)
-  refuse() { # descrição, pasta
-    if imp --yes "$2" >/dev/null 2>&1; then fail "[A] db-import aceitou: $1"; fi
-    [ "$(dboids)" = "$oids" ] || fail "[A] a recusa de '$1' mexeu nos bancos do destino"
-    ok "[A] db-import recusa $1 e deixa o destino intacto"
+  refuse() { # description, folder
+    if imp --yes "$2" >/dev/null 2>&1; then fail "[A] db-import accepted: $1"; fi
+    [ "$(dboids)" = "$oids" ] || fail "[A] the refusal of '$1' touched the destination databases"
+    ok "[A] db-import refuses $1 and leaves the destination intact"
   }
-  refuse "com a aplicação rodando" "$dump"
+  refuse "with the application running" "$dump"
   compose stop portal umami >/dev/null
-  cp -r "$dump" "$work/migracao-adulterado" && printf x >> "$work/migracao-adulterado/stellytics.dump"
-  refuse "um dump adulterado (sha256sums não confere)" "$work/migracao-adulterado"
-  cp -r "$dump" "$work/migracao-truncado" && head -c 1000 "$dump/stellytics.dump" > "$work/migracao-truncado/stellytics.dump"
-  (cd "$work/migracao-truncado" && sha256sum stellytics.dump umami.dump fingerprint.txt > sha256sums)
-  refuse "um dump truncado com sha256sums regenerado (pg_restore -l falha)" "$work/migracao-truncado"
-  cp -r "$dump" "$work/migracao-semsoma" && (cd "$work/migracao-semsoma" && sha256sum fingerprint.txt > sha256sums)
-  refuse "um sha256sums que não lista os dumps" "$work/migracao-semsoma"
+  cp -r "$dump" "$work/migration-tampered" && printf x >> "$work/migration-tampered/stellytics.dump"
+  refuse "a tampered dump (sha256sums does not match)" "$work/migration-tampered"
+  cp -r "$dump" "$work/migration-truncated" && head -c 1000 "$dump/stellytics.dump" > "$work/migration-truncated/stellytics.dump"
+  (cd "$work/migration-truncated" && sha256sum stellytics.dump umami.dump fingerprint.txt > sha256sums)
+  refuse "a truncated dump with regenerated sha256sums (pg_restore -l fails)" "$work/migration-truncated"
+  cp -r "$dump" "$work/migration-nosum" && (cd "$work/migration-nosum" && sha256sum fingerprint.txt > sha256sums)
+  refuse "a sha256sums that does not list the dumps" "$work/migration-nosum"
   imp --yes "$dump" | tail -4
-  lap "importação + conferência (db-import.sh)"
-  diff -u "$fp_origin" "$dump/fingerprint-destino.txt" > /dev/null || fail "impressão digital do destino difere"
-  ok "[A] impressão digital idêntica (linhas e checksum por tabela, sequências, esquema, papéis, ACLs)"
+  lap "import + verification (db-import.sh)"
+  diff -u "$fp_origin" "$dump/fingerprint-destination.txt" > /dev/null || fail "destination fingerprint differs"
+  ok "[A] identical fingerprint (rows and checksum per table, sequences, schema, roles, ACLs)"
   compose up -d --wait portal umami >/dev/null
-  lap "aplicação do destino no ar sobre os dados migrados"
+  lap "destination application up on the migrated data"
   verify_destination
 
 fi
 
-# 2B. FÍSICO (WAL-G) ----------------------------------------------------------
+# 2B. PHYSICAL (WAL-G) --------------------------------------------------------
 if [ "$MODE" != logical ]; then
-  echo "== B. migração física (WAL-G)"
-  use origem
-  # Fecha o WAL da origem e confirma o arquivamento; backup base final.
+  echo "== B. physical migration (WAL-G)"
+  use origin
+  # Closes the origin's WAL and confirms archiving; final base backup.
   compose exec -T -u postgres postgres stellytics-backup >/dev/null
   wal=$(pgsql stellytics -c "select pg_walfile_name(pg_switch_wal())")
   for _ in $(seq 1 60); do
@@ -296,57 +296,57 @@ if [ "$MODE" != logical ]; then
     [[ "$archived" > "$wal" || "$archived" == "$wal" ]] && break
     sleep 1
   done
-  [[ "$archived" > "$wal" || "$archived" == "$wal" ]] || fail "WAL $wal não arquivado"
-  lap "backup base final e WAL $wal arquivados na origem"
-  src_key=$(envval WALG_S3_ACCESS_KEY); src_secret=$(envval WALG_S3_SECRET_KEY); src_bucket=stellytics-backup-origem
+  [[ "$archived" > "$wal" || "$archived" == "$wal" ]] || fail "WAL $wal not archived"
+  lap "final base backup and WAL $wal archived on the origin"
+  src_key=$(envval WALG_S3_ACCESS_KEY); src_secret=$(envval WALG_S3_SECRET_KEY); src_bucket=stellytics-backup-origin
 
-  # Destino: bucket próprio (credenciais próprias), MESMA walg_libsodium_key, Postgres ainda não iniciado.
-  mkenv destino-fisico 2 "$libsodium_origin" "$auth_secret" "$umami_secret"
-  stacks+=(destino-fisico); use destino-fisico
+  # Destination: own bucket (own credentials), SAME walg_libsodium_key, Postgres not started yet.
+  mkenv dest-physical 2 "$libsodium_origin" "$auth_secret" "$umami_secret"
+  stacks+=(dest-physical); use dest-physical
   compose up -d s3 --wait
-  compose exec -T s3 sh -c "echo 's3.bucket.create -name stellytics-backup-destino-fisico' | weed shell -master=localhost:9333" >/dev/null
+  compose exec -T s3 sh -c "echo 's3.bucket.create -name stellytics-backup-dest-physical' | weed shell -master=localhost:9333" >/dev/null
   dst_key=$(envval WALG_S3_ACCESS_KEY); dst_secret=$(envval WALG_S3_SECRET_KEY)
-  # Cópia do bucket entre operadores (rclone entre dois endpoints S3).
+  # Bucket copy between operators (rclone between two S3 endpoints).
   docker run --rm --network host \
     -e RCLONE_CONFIG_SRC_TYPE=s3 -e RCLONE_CONFIG_SRC_PROVIDER=Other -e RCLONE_CONFIG_SRC_ENDPOINT="http://127.0.0.1:$((S3_BASE + 0))" \
     -e RCLONE_CONFIG_SRC_ACCESS_KEY_ID="$src_key" -e RCLONE_CONFIG_SRC_SECRET_ACCESS_KEY="$src_secret" -e RCLONE_CONFIG_SRC_REGION=us-east-1 \
     -e RCLONE_CONFIG_DST_TYPE=s3 -e RCLONE_CONFIG_DST_PROVIDER=Other -e RCLONE_CONFIG_DST_ENDPOINT="http://127.0.0.1:$((S3_BASE + 2))" \
     -e RCLONE_CONFIG_DST_ACCESS_KEY_ID="$dst_key" -e RCLONE_CONFIG_DST_SECRET_ACCESS_KEY="$dst_secret" -e RCLONE_CONFIG_DST_REGION=us-east-1 \
-    "$RCLONE" sync --checksum --s3-no-check-bucket "SRC:$src_bucket/pg" "DST:stellytics-backup-destino-fisico/pg" -v 2>&1 | tail -4
+    "$RCLONE" sync --checksum --s3-no-check-bucket "SRC:$src_bucket/pg" "DST:stellytics-backup-dest-physical/pg" -v 2>&1 | tail -4
   objs_src=$(docker run --rm --network host -e RCLONE_CONFIG_S_TYPE=s3 -e RCLONE_CONFIG_S_PROVIDER=Other -e RCLONE_CONFIG_S_ENDPOINT="http://127.0.0.1:$S3_BASE" -e RCLONE_CONFIG_S_ACCESS_KEY_ID="$src_key" -e RCLONE_CONFIG_S_SECRET_ACCESS_KEY="$src_secret" "$RCLONE" size S:$src_bucket/pg --json)
-  objs_dst=$(docker run --rm --network host -e RCLONE_CONFIG_S_TYPE=s3 -e RCLONE_CONFIG_S_PROVIDER=Other -e RCLONE_CONFIG_S_ENDPOINT="http://127.0.0.1:$((S3_BASE + 2))" -e RCLONE_CONFIG_S_ACCESS_KEY_ID="$dst_key" -e RCLONE_CONFIG_S_SECRET_ACCESS_KEY="$dst_secret" "$RCLONE" size S:stellytics-backup-destino-fisico/pg --json)
-  [ "$objs_src" = "$objs_dst" ] || fail "o bucket copiado difere: $objs_src x $objs_dst"
-  ok "[B] bucket copiado: $objs_dst"
-  lap "bucket de backup copiado entre operadores"
+  objs_dst=$(docker run --rm --network host -e RCLONE_CONFIG_S_TYPE=s3 -e RCLONE_CONFIG_S_PROVIDER=Other -e RCLONE_CONFIG_S_ENDPOINT="http://127.0.0.1:$((S3_BASE + 2))" -e RCLONE_CONFIG_S_ACCESS_KEY_ID="$dst_key" -e RCLONE_CONFIG_S_SECRET_ACCESS_KEY="$dst_secret" "$RCLONE" size S:stellytics-backup-dest-physical/pg --json)
+  [ "$objs_src" = "$objs_dst" ] || fail "the copied bucket differs: $objs_src x $objs_dst"
+  ok "[B] bucket copied: $objs_dst"
+  lap "backup bucket copied between operators"
 
-  # Restauração, como em docs/deploy.md ("Restaurar o banco"), numa pasta vazia.
-  mkdir -p "$work/destino-fisico-data/postgres"
-  # shellcheck disable=SC2016 # as variáveis são do contêiner, não deste shell
+  # Restore, as in docs/deploy.md ("Restore the database"), into an empty folder.
+  mkdir -p "$work/dest-physical-data/postgres"
+  # shellcheck disable=SC2016 # the variables belong to the container, not this shell
   compose run --rm --no-deps --entrypoint sh postgres -c \
     'chown postgres:postgres "$PGDATA" && chmod 700 "$PGDATA" && su postgres -c "stellytics-restore LATEST"' >/dev/null
   lap "stellytics-restore LATEST"
   compose up -d postgres --wait >/dev/null
-  [ "$(pgsql stellytics -c 'select pg_is_in_recovery()')" = f ] || fail "banco restaurado em recuperação"
-  lap "Postgres aplicou o WAL e abriu"
-  # O físico traz também os papéis, com as senhas da ORIGEM: o .env do destino não bate.
+  [ "$(pgsql stellytics -c 'select pg_is_in_recovery()')" = f ] || fail "restored database in recovery"
+  lap "Postgres applied the WAL and opened"
+  # The physical path also brings the roles, with the ORIGIN's passwords: the destination's .env does not match.
   if pg_net stellytics "$(envval STELLYTICS_DB_PASSWORD)" stellytics 'select 1' >/dev/null 2>&1; then
-    fail "[B] esperava que a senha do destino NÃO entrasse depois do restore físico"
+    fail "[B] expected the destination's password NOT to log in after the physical restore"
   else
-    ok "[B] ACHADO: depois do restore físico, a senha STELLYTICS_DB_PASSWORD do destino NÃO entra (as senhas dos papéis vieram da origem)"
+    ok "[B] FINDING: after the physical restore, the destination's STELLYTICS_DB_PASSWORD password does NOT log in (the role passwords came from the origin)"
   fi
-  # Correção do procedimento: alinhar as senhas dos papéis ao .env do destino.
+  # Procedure fix: align the role passwords with the destination's .env.
   for r in postgres:POSTGRES_PASSWORD stellytics:STELLYTICS_DB_PASSWORD umami:UMAMI_DB_PASSWORD; do
     printf "ALTER ROLE %s PASSWORD '%s'\n" "${r%%:*}" "$(envval "${r##*:}")" | compose exec -T -u postgres postgres psql -X -v ON_ERROR_STOP=1 -d postgres >/dev/null
   done
   compose exec -T postgres sh < "$repo/infra/compose/postgres/init/02-ingest-roles.sh" >/dev/null
-  ok "[B] ALTER ROLE (postgres, stellytics, umami) e 02-ingest-roles.sh alinharam as senhas ao .env do destino"
-  fp_phys="$work/fp-fisico.txt"
+  ok "[B] ALTER ROLE (postgres, stellytics, umami) and 02-ingest-roles.sh aligned the passwords with the destination's .env"
+  fp_phys="$work/fp-physical.txt"
   COMPOSE="docker compose -p $P --env-file $ENVF -f prod.yaml -f test/prod-test.yaml -f test/migration-test.yaml" \
     "$repo/infra/scripts/db-fingerprint.sh" > "$fp_phys"
-  diff -u "$fp_origin" "$fp_phys" > /dev/null || { diff -u "$fp_origin" "$fp_phys" | head -30; fail "impressão digital do destino físico difere"; }
-  ok "[B] impressão digital idêntica"
+  diff -u "$fp_origin" "$fp_phys" > /dev/null || { diff -u "$fp_origin" "$fp_phys" | head -30; fail "physical destination fingerprint differs"; }
+  ok "[B] identical fingerprint"
   compose up -d --wait portal umami >/dev/null
-  lap "aplicação do destino físico no ar"
+  lap "physical destination application up"
   verify_destination
 fi
-echo "migração de dados: tudo certo"
+echo "data migration: all good"

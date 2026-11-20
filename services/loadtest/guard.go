@@ -7,19 +7,19 @@ import (
 	"strings"
 )
 
-// checkTargets recusa alvos que não sejam loopback, a menos que allowRemote
-// seja true: o setup, o teardown e as cargas escrevem e apagam dados, e não
-// podem apontar por engano para um banco ou serviço de produção. Imprime host
-// e banco de cada alvo antes de qualquer ação.
+// checkTargets refuses targets that are not loopback, unless allowRemote is
+// true: setup, teardown and the loads write and delete data, and must not
+// point by mistake at a production database or service. It prints host and
+// database of each target before any action.
 func checkTargets(allowRemote bool, targets map[string]string) error {
 	for name, raw := range targets {
 		u, err := url.Parse(raw)
 		if err != nil || u.Hostname() == "" {
-			return fmt.Errorf("%s: URL inválida %q", name, redact(raw))
+			return fmt.Errorf("%s: invalid URL %q", name, redact(raw))
 		}
-		fmt.Printf("alvo %-12s host=%s banco=%s\n", name, u.Host, strings.TrimPrefix(u.Path, "/"))
+		fmt.Printf("target %-12s host=%s database=%s\n", name, u.Host, strings.TrimPrefix(u.Path, "/"))
 		if !isLoopback(u.Hostname()) && !allowRemote {
-			return fmt.Errorf("%s aponta para %q, que não é loopback; use -allow-remote se for de propósito", name, u.Hostname())
+			return fmt.Errorf("%s points at %q, which is not loopback; use -allow-remote if it is on purpose", name, u.Hostname())
 		}
 	}
 	return nil

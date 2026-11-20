@@ -1,14 +1,15 @@
--- Escrita à mão (drizzle-kit generate --custom). Registra o último uso de uma
--- chave de ingestão (ingest_key.last_used_on).
+-- Written by hand (drizzle-kit generate --custom). Records the last use of an
+-- ingest key (ingest_key.last_used_on).
 --
--- Quem autentica a chave é o coletor (stellytics_collector), que só lê a visão
--- ingest_key_active e não tem acesso à tabela. Em vez de dar UPDATE por coluna
--- na tabela (o que exigiria também SELECT em prefix, revoked_at e demais
--- colunas para o WHERE, abrindo a leitura de chaves revogadas e de key_hash),
--- o coletor ganha só EXECUTE nesta função. Ela roda como dono (stellytics), grava
--- uma única coluna, e só para uma chave que a visão ingest_key_active considera
--- ativa (não revogada, serviço não arquivado, tenant ativo). O dia é o dia UTC
--- do banco, e a função não escreve de novo se a data já é a de hoje.
+-- The collector (stellytics_collector) authenticates the key; it only reads the
+-- ingest_key_active view and has no access to the table. Instead of granting
+-- per-column UPDATE on the table (which would also require SELECT on prefix,
+-- revoked_at and the other columns for the WHERE, opening up the reading of
+-- revoked keys and of key_hash), the collector gets only EXECUTE on this
+-- function. It runs as the owner (stellytics), writes a single column, and only
+-- for a key that the ingest_key_active view considers active (not revoked,
+-- service not archived, tenant active). The day is the database's UTC day, and
+-- the function does not write again if the date is already today's.
 CREATE OR REPLACE FUNCTION public.ingest_key_touch(p_prefix text) RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER

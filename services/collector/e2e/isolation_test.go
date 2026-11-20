@@ -1,19 +1,19 @@
 //go:build e2e
 
-// Isolamento entre tenants na ingestão de API (#20 e #21; spec do E2, seções
-// 6 e 8): mudanças feitas DEPOIS que a chave já foi aceita valem em até o
-// cache do coletor (INGEST_KEY_CACHE_TTL: no máximo 60 s, 5 s no Compose).
+// Isolation between tenants in API ingestion (#20 and #21; E2 spec, sections
+// 6 and 8): changes made AFTER the key was already accepted take effect within
+// the collector's cache (INGEST_KEY_CACHE_TTL: at most 60 s, 5 s in Compose).
 //
-//   - chave revogada: passa a ser recusada;
-//   - tenant removido pelo operador: a chave dele passa a ser recusada, e volta
-//     a valer quando o tenant é reativado (D6).
+//   - revoked key: it starts being refused;
+//   - tenant removed by the operator: its key starts being refused, and works
+//     again when the tenant is reactivated (D6).
 //
-// E o caso que depende do exporter (#31): chave de A mandando dados que dizem
-// ser de B é gravada como A.
+// And the case that depends on the exporter (#31): a key of A sending data that
+// claims to be B's is stored as A.
 //
-// O status muda direto no banco, como fazem as funções do portal (testadas em
-// apps/portal/test/isolation.test.ts). A recusa é 401 (HTTP) e Unauthenticated
-// (gRPC), a mesma de uma chave inexistente.
+// The status changes directly in the database, as the portal's functions do
+// (tested in apps/portal/test/isolation.test.ts). The refusal is 401 (HTTP) and
+// Unauthenticated (gRPC), the same as for a nonexistent key.
 package e2e
 
 import (
@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// keyCacheTTL é o INGEST_KEY_CACHE_TTL do coletor no Compose.
+// keyCacheTTL is the collector's INGEST_KEY_CACHE_TTL in Compose.
 var keyCacheTTL = func() time.Duration {
 	d, err := time.ParseDuration(env("COLLECTOR_KEY_CACHE_TTL", "5s"))
 	if err != nil {
@@ -56,7 +56,7 @@ func TestRemovedTenantIsRefusedWithinCacheTTL(t *testing.T) {
 	setTenantStatus(t, db, key, "removed")
 	time.Sleep(keyCacheTTL + time.Second)
 	expectRefused(t, key)
-	// Os outros tenants continuam.
+	// The other tenants carry on.
 	expectAccepted(t, other)
 
 	setTenantStatus(t, db, key, "active")
@@ -64,30 +64,30 @@ func TestRemovedTenantIsRefusedWithinCacheTTL(t *testing.T) {
 	expectAccepted(t, key)
 }
 
-// Chave de A mandando dados que dizem ser de B (spec do E2, seção 8): tudo é
-// gravado como A, e B fica sem nenhuma linha. A alegação vai em todos os
-// níveis que o OTLP permite (recurso, escopo e ponto ou span), com os IDs
-// reais de B, em dois recursos no mesmo pedido, por HTTP (métricas) e por gRPC
-// (spans, que o coletor transforma em métrica).
+// A key of A sending data that claims to be B's (E2 spec, section 8): everything
+// is stored as A, and B is left without any row. The claim goes at every level
+// OTLP allows (resource, scope and point or span), with B's real IDs, in two
+// resources in the same request, over HTTP (metrics) and over gRPC (spans,
+// which the collector turns into a metric).
 func TestKeyOfAClaimingBIsStoredAsA(t *testing.T) {
 	db, user := isolationDB(t)
 	keyA, tenantA, serviceA := createKey(t, db, user, "active")
 	keyC, tenantC, serviceC := createKey(t, db, user, "active")
 	_, tenantB, serviceB := createKey(t, db, user, "active")
 
-	md := metrics() // 1 requisição em /ledgers/{id}, ver e2e_test.go
+	md := metrics() // 1 request on /ledgers/{id}, see e2e_test.go
 	rm := md.ResourceMetrics().At(0)
 	claim(rm.Resource().Attributes(), tenantB, serviceB)
 	claim(rm.ScopeMetrics().At(0).Scope().Attributes(), tenantB, serviceB)
 	claim(rm.ScopeMetrics().At(0).Metrics().At(0).Histogram().DataPoints().At(0).Attributes(), tenantB, serviceB)
 	rm.CopyTo(md.ResourceMetrics().AppendEmpty())
 	if code := postHTTPWith(t, "Bearer "+keyA, md); code != http.StatusOK {
-		t.Fatalf("métricas de A: status %d", code)
+		t.Fatalf("A's metrics: status %d", code)
 	}
 
-	// Outro tenant (C), só com spans: um serviço que manda métricas tem os
-	// spans ignorados (D9 do spec do E5), então o caminho dos spans precisa de
-	// um serviço próprio.
+	// Another tenant (C), with spans only: a service that sends metrics has its
+	// spans ignored (D9 of the E5 spec), so the span path needs a service of
+	// its own.
 	td := spans("/ledgers/7", 3)
 	rs := td.ResourceSpans().At(0)
 	claim(rs.Resource().Attributes(), tenantB, serviceB)
@@ -96,12 +96,12 @@ func TestKeyOfAClaimingBIsStoredAsA(t *testing.T) {
 		claim(rs.ScopeSpans().At(0).Spans().At(i).Attributes(), tenantB, serviceB)
 	}
 	if err := exportSpansGRPC(t, "Bearer "+keyC, td); err != nil {
-		t.Fatalf("spans de C: %v", err)
+		t.Fatalf("C's spans: %v", err)
 	}
 
 	wantRows(t, db, tenantA, serviceA, []row{{"/ledgers/{id}", "GET", 200, 2}})
 	wantRows(t, db, tenantC, serviceC, []row{{"/ledgers/{id}", "GET", 200, 3}})
-	// O batch grava em até 200 ms; tudo que viria para B já teria chegado.
+	// The batch writes within 200 ms; anything headed for B would have arrived already.
 	time.Sleep(time.Second)
 	var ofB int
 	if err := db.QueryRow(context.Background(),
@@ -110,12 +110,12 @@ func TestKeyOfAClaimingBIsStoredAsA(t *testing.T) {
 		t.Fatal(err)
 	}
 	if ofB != 0 {
-		t.Errorf("%d linhas gravadas no tenant ou no serviço de B", ofB)
+		t.Errorf("%d rows written to B's tenant or service", ofB)
 	}
 }
 
-// claim põe nos atributos os nomes que um cliente usaria para dizer que é
-// outro tenant e outro serviço.
+// claim puts in the attributes the names a client would use to say it is
+// another tenant and another service.
 func claim(attrs pcommon.Map, tenantID, serviceID string) {
 	for _, k := range []string{"stellytics.tenant.id", "tenant.id", "tenant_id"} {
 		attrs.PutStr(k, tenantID)
@@ -134,13 +134,13 @@ func isolationDB(t *testing.T) (*pgx.Conn, string) {
 	t.Cleanup(func() { db.Close(context.Background()) })
 	user := randomText(t, 16)
 	exec(t, db, `INSERT INTO "user" (id, name, email, email_verified) VALUES ($1, 'e2e', $1 || '@collector.invalid', true)`, user)
-	// Depois das chaves e dos tenants (createKey registra a limpeza deles depois,
-	// então ela roda antes desta).
+	// After the keys and the tenants (createKey registers their cleanup later,
+	// so it runs before this one).
 	t.Cleanup(func() { _, _ = db.Exec(context.Background(), `DELETE FROM "user" WHERE id = $1`, user) })
 	return db, user
 }
 
-// prefixOf tira o prefixo público de ntf_<prefixo>_<segredo>.
+// prefixOf takes the public prefix out of ntf_<prefix>_<secret>.
 func prefixOf(key string) string { return key[4:12] }
 
 func setTenantStatus(t *testing.T, db *pgx.Conn, key, status string) {
@@ -152,26 +152,26 @@ func setTenantStatus(t *testing.T, db *pgx.Conn, key, status string) {
 		t.Fatal(err)
 	}
 	if tag.RowsAffected() != 1 {
-		t.Fatalf("tenant da chave %s não encontrado", prefixOf(key))
+		t.Fatalf("tenant of key %s not found", prefixOf(key))
 	}
 }
 
 func expectAccepted(t *testing.T, key string) {
 	t.Helper()
 	if code := postHTTP(t, "Bearer "+key); code != http.StatusOK {
-		t.Fatalf("HTTP: status = %d, quero 200", code)
+		t.Fatalf("HTTP: status = %d, want 200", code)
 	}
 	if err := exportGRPC(t, "Bearer "+key); err != nil {
-		t.Fatalf("gRPC: chave recusada: %v", err)
+		t.Fatalf("gRPC: key refused: %v", err)
 	}
 }
 
 func expectRefused(t *testing.T, key string) {
 	t.Helper()
 	if code := postHTTP(t, "Bearer "+key); code != http.StatusUnauthorized {
-		t.Fatalf("HTTP: status = %d, quero 401", code)
+		t.Fatalf("HTTP: status = %d, want 401", code)
 	}
 	if err := exportGRPC(t, "Bearer "+key); status.Code(err) != codes.Unauthenticated {
-		t.Fatalf("gRPC: err = %v, quero Unauthenticated", err)
+		t.Fatalf("gRPC: err = %v, want Unauthenticated", err)
 	}
 }

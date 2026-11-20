@@ -17,15 +17,15 @@ import (
 )
 
 const (
-	// metricPrecedence é a janela da D9: com a métrica nesse período, os spans
-	// do serviço são ignorados.
+	// metricPrecedence is the D9 window: with the metric in this period, the
+	// service's spans are ignored.
 	metricPrecedence = 15 * time.Minute
-	// freshProcess é até quando, desde o StartTimestamp, uma série cumulativa
-	// nova conta inteira (spec, seção 2).
+	// freshProcess is how long, since the StartTimestamp, a new cumulative
+	// series counts in full (spec, section 2).
 	freshProcess = 5 * time.Minute
-	// seriesIdle tira da memória as séries cumulativas paradas.
+	// seriesIdle removes idle cumulative series from memory.
 	seriesIdle = time.Hour
-	// maxSeries limita a memória das séries cumulativas.
+	// maxSeries limits the memory of the cumulative series.
 	maxSeries = 200_000
 )
 
@@ -36,7 +36,7 @@ type routeDay struct {
 	routes map[string]struct{}
 }
 
-// cumulative é o último ponto visto de uma série cumulativa.
+// cumulative is the last point seen of a cumulative series.
 type cumulative struct {
 	start   pcommon.Timestamp
 	count   uint64
@@ -45,9 +45,9 @@ type cumulative struct {
 	seen    time.Time
 }
 
-// Aggregator guarda o estado entre lotes: a última métrica de cada serviço
-// (D9), as rotas do dia (D4) e as séries cumulativas. Tudo em memória, por
-// instância do coletor.
+// Aggregator keeps the state between batches: the last metric of each service
+// (D9), the routes of the day (D4) and the cumulative series. All in memory,
+// per collector instance.
 type Aggregator struct {
 	now func() time.Time
 
@@ -57,7 +57,7 @@ type Aggregator struct {
 	series     map[uint64]*cumulative
 }
 
-// New cria um Aggregator.
+// New creates an Aggregator.
 func New() *Aggregator {
 	return &Aggregator{
 		now:        time.Now,
@@ -67,7 +67,7 @@ func New() *Aggregator {
 	}
 }
 
-// WithClock troca o relógio (para testes) e devolve o próprio Aggregator.
+// WithClock replaces the clock (for tests) and returns the Aggregator itself.
 func (a *Aggregator) WithClock(now func() time.Time) *Aggregator {
 	a.now = now
 	return a
@@ -83,8 +83,8 @@ func serviceOf(res pcommon.Resource) (service, bool) {
 	return service{t.Str(), s.Str()}, true
 }
 
-// Traces extrai os spans de servidor HTTP. Serviços com a métrica recente (D9)
-// e spans que não são de servidor HTTP são ignorados.
+// Traces extracts the HTTP server spans. Services with a recent metric (D9)
+// and spans that are not HTTP server spans are ignored.
 func (a *Aggregator) Traces(td ptrace.Traces) Batch {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -129,7 +129,7 @@ func (a *Aggregator) Traces(td ptrace.Traces) Batch {
 	return out
 }
 
-// Metrics extrai os histogramas de duração de requisição HTTP de servidor.
+// Metrics extracts the HTTP server request duration histograms.
 func (a *Aggregator) Metrics(md pmetric.Metrics) Batch {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -177,8 +177,8 @@ func (a *Aggregator) Metrics(md pmetric.Metrics) Batch {
 	return out
 }
 
-// durationScale diz se a métrica é a duração de requisição HTTP de servidor e
-// o fator para segundos.
+// durationScale tells whether the metric is the HTTP server request duration
+// and the factor to seconds.
 func durationScale(m pmetric.Metric) (float64, bool) {
 	unit := m.Unit()
 	switch m.Name() {
@@ -196,9 +196,9 @@ func durationScale(m pmetric.Metric) (float64, bool) {
 	return 0, false
 }
 
-// remap leva os buckets de origem para os nossos: cada bucket de origem cai no
-// nosso bucket que contém o limite superior dele (spec, seção 2). Sem buckets
-// de origem, a média decide o bucket.
+// remap maps the source buckets to ours: each source bucket falls into our
+// bucket that contains its upper bound (spec, section 2). Without source
+// buckets, the mean decides the bucket.
 func remap(bounds []float64, counts []uint64, scale float64, count uint64, sum float64) [NumBuckets]int64 {
 	var out [NumBuckets]int64
 	if len(counts) == 0 || len(counts) != len(bounds)+1 {
@@ -215,14 +215,14 @@ func remap(bounds []float64, counts []uint64, scale float64, count uint64, sum f
 	return out
 }
 
-// delta transforma um ponto cumulativo em delta, com a regra da seção 2 do spec.
+// delta turns a cumulative point into a delta, with the rule of section 2 of the spec.
 func (a *Aggregator) delta(id uint64, dp pmetric.HistogramDataPoint, now time.Time) (uint64, float64, []uint64, bool) {
 	cur := &cumulative{start: dp.StartTimestamp(), count: dp.Count(), sum: dp.Sum(), buckets: dp.BucketCounts().AsRaw(), seen: now}
 	prev, known := a.series[id]
 	if len(a.series) >= maxSeries && !known {
 		a.sweepSeries(now)
 		if len(a.series) >= maxSeries {
-			// Sem espaço: conta só se o processo é novo, sem guardar a série.
+			// No room: it counts only if the process is new, without storing the series.
 			return fresh(dp, cur)
 		}
 	}
@@ -244,8 +244,8 @@ func (a *Aggregator) delta(id uint64, dp pmetric.HistogramDataPoint, now time.Ti
 	return cur.count - prev.count, cur.sum - prev.sum, d, true
 }
 
-// fresh conta a primeira observação de uma série só se o processo começou há
-// pouco; senão, ela vira só a base.
+// fresh counts the first observation of a series only if the process started
+// recently; otherwise it only becomes the baseline.
 func fresh(dp pmetric.HistogramDataPoint, cur *cumulative) (uint64, float64, []uint64, bool) {
 	if dp.StartTimestamp() != 0 && dp.Timestamp().AsTime().Sub(dp.StartTimestamp().AsTime()) <= freshProcess {
 		return cur.count, cur.sum, cur.buckets, true
@@ -253,13 +253,13 @@ func fresh(dp pmetric.HistogramDataPoint, cur *cumulative) (uint64, float64, []u
 	return 0, 0, nil, false
 }
 
-// capRoute aplica o teto de rotas por serviço e dia do balde (D4).
+// capRoute applies the route cap per service and day of the bucket (D4).
 func (a *Aggregator) capRoute(svc service, bucket time.Time, r string) string {
 	day := bucket.Format(time.DateOnly)
 	rd := a.routes[svc]
 	if rd == nil || rd.day != day {
 		if rd != nil && rd.day > day {
-			// Ponto atrasado de um dia anterior: não reabre o dia velho.
+			// Late point from an earlier day: it does not reopen the old day.
 			return r
 		}
 		rd = &routeDay{day: day, routes: make(map[string]struct{})}
@@ -275,8 +275,8 @@ func (a *Aggregator) capRoute(svc service, bucket time.Time, r string) string {
 	return r
 }
 
-// Sweep tira da memória o que não vale mais: séries paradas, serviços sem
-// métrica recente e dias de rota passados.
+// Sweep removes from memory what is no longer valid: idle series, services
+// without a recent metric and past route days.
 func (a *Aggregator) Sweep() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -312,7 +312,7 @@ func str(attrs pcommon.Map, keys ...string) string {
 	return ""
 }
 
-// path acha o caminho da requisição: url.path, http.target ou o caminho de url.full.
+// path finds the request path: url.path, http.target or the path of url.full.
 func path(attrs pcommon.Map) string {
 	if p := str(attrs, "url.path", "http.target"); p != "" {
 		return p
@@ -345,7 +345,7 @@ func status(attrs pcommon.Map) int16 {
 	return 0
 }
 
-// seriesID identifica uma série cumulativa: recurso, nome e atributos do ponto.
+// seriesID identifies a cumulative series: resource, name and point attributes.
 func seriesID(resHash uint64, name string, attrs pcommon.Map) uint64 {
 	h := fnv.New64a()
 	var buf [8]byte

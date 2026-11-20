@@ -1,22 +1,22 @@
--- Escrita à mão (drizzle-kit generate --custom). Spec do E2, seções 3 e 4 (D4).
+-- Written by hand (drizzle-kit generate --custom). E2 spec, sections 3 and 4 (D4).
 --
--- Visões lidas pelo gateway web e pelo coletor, com permissão mínima para os
--- usuários stellytics_ingest e stellytics_collector. Os dois usuários são criados fora
--- das migrações, por quem administra o servidor (infra/compose/postgres/init/
--- 02-ingest-roles.sh no ambiente local), porque criar papel exige superusuário.
+-- Views read by the web gateway and the collector, with minimum privileges for
+-- the stellytics_ingest and stellytics_collector users. Both users are created outside
+-- the migrations, by whoever administers the server (infra/compose/postgres/init/
+-- 02-ingest-roles.sh in the local environment), because creating a role requires superuser.
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'stellytics_ingest')
      OR NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'stellytics_collector') THEN
-    RAISE EXCEPTION 'Os papéis stellytics_ingest e stellytics_collector precisam existir antes desta migração. Rode infra/compose/postgres/init/02-ingest-roles.sh.';
+    RAISE EXCEPTION 'The stellytics_ingest and stellytics_collector roles must exist before this migration. Run infra/compose/postgres/init/02-ingest-roles.sh.';
   END IF;
 END
 $$;
 --> statement-breakpoint
 
--- Gateway web (#61): o ID do site no Umami e se ele aceita ingestão agora.
--- A visão roda com as permissões do dono, então o leitor não precisa de acesso
--- às tabelas.
+-- Web gateway (#61): the site's ID in Umami and whether it accepts ingestion now.
+-- The view runs with the owner's privileges, so the reader does not need access
+-- to the tables.
 CREATE VIEW "ingest_site" AS
 SELECT
   s.umami_website_id,
@@ -25,8 +25,8 @@ FROM site s
 JOIN tenant t ON t.id = s.tenant_id;
 --> statement-breakpoint
 
--- Coletor (#30): só as chaves válidas agora (não revogadas, serviço não
--- arquivado, tenant ativo). O coletor busca pelo prefixo e compara o hash.
+-- Collector (#30): only the keys valid now (not revoked, service not
+-- archived, tenant active). The collector looks up by prefix and compares the hash.
 CREATE VIEW "ingest_key_active" AS
 SELECT
   k.prefix,
@@ -46,15 +46,15 @@ REVOKE ALL ON "ingest_site", "ingest_key_active" FROM PUBLIC;
 --> statement-breakpoint
 GRANT SELECT ON "ingest_site" TO stellytics_ingest;
 --> statement-breakpoint
--- O INSERT nas tabelas de métricas entra no E5, junto com as tabelas.
+-- The INSERT on the metric tables comes in E5, together with the tables.
 GRANT SELECT ON "ingest_key_active" TO stellytics_collector;
 --> statement-breakpoint
 
--- audit_log só recebe inserções.
+-- audit_log is insert-only.
 CREATE FUNCTION audit_log_append_only() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
-  RAISE EXCEPTION 'audit_log só recebe inserções';
+  RAISE EXCEPTION 'audit_log is insert-only';
 END
 $$;
 --> statement-breakpoint

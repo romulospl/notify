@@ -3,9 +3,9 @@ import { handleRead, periodBody } from "@/lib/read-api";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/v1/web?period=7d: métricas web de cada projeto ativo, as mesmas do
-// painel /operator/web. `totals` e `previous` são nulos quando o Umami não
-// respondeu para algum site do projeto.
+// GET /api/v1/web?period=7d: web metrics of each active project, the same as
+// the /operator/web dashboard. `totals` and `previous` are null when Umami did
+// not answer for one of the project's sites.
 export function GET(request: Request) {
   return handleRead(request, async (ctx, period) => {
     const { projects, unavailable } = await getWebOverview(ctx, period);

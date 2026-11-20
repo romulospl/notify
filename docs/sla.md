@@ -1,106 +1,104 @@
-# Metas e compromissos de disponibilidade e de correção de vulnerabilidades
+# Availability and vulnerability fix targets and commitments
 
-Issue [#52](https://github.com/romulospl/stellytics/issues/52). Decisão de arquitetura em [ADR 0016](adr/0016-producao-em-vps.md) (produção numa VPS só, sem alta disponibilidade).
+Issue [#52](https://github.com/romulospl/stellytics/issues/52). Architecture decision in [ADR 0016](adr/0016-production-on-a-vps.md) (production on a single VPS, without high availability).
 
-> **Leitura obrigatória.** A arquitetura de produção **de hoje não sustenta 99,99% na ingestão** (e não garante 99,90% nos painéis): é uma VPS só, com Postgres único e sem réplica ([ADR 0016](adr/0016-producao-em-vps.md)). A alta disponibilidade foi retirada do escopo porque o RFP não a exige: 99,99% e 99,90% são metas que a proponente assume, não requisitos de arquitetura. Este documento separa o que é **meta** do RFP do que é **compromisso** do projeto, e não promete o primeiro como se fosse o segundo. A produção também ainda não foi implantada numa conta real (`docs/deploy.md`), então não há nenhuma medição.
+> **Required reading.** The production architecture **does not sustain the RFP targets** (99.99% for ingestion and 99.90% for dashboards): it is a single VPS, with a single Postgres and no replica ([ADR 0016](adr/0016-production-on-a-vps.md)). High availability was taken out of scope because the RFP does not demand it as an architecture requirement. This document separates what is an RFP **target** from what is a project **commitment**: the commitment is **99.5% per month for ingestion and for dashboards**, and vulnerability fixes within **24 hours (critical) and 7 calendar days (high)**. Today there is a proof of concept live (`stellytics.xyz`, `e.stellytics.xyz` and `otlp.stellytics.xyz`), hosted in Brazil and without pilots; production moves to an EU region in Tranche 1. No availability measurement has been published yet.
 
-## 1. As metas do RFP
+## 1. The RFP targets
 
-Fonte: RFP `scf-web-api-analytics` ("Web and API Analytics for Stellar Ecosystem Projects"), Stellar Light, via MCP stellar-raven (`scout.getRfps`), consultado em **15/11/2026** (trimestre q4-2026, situação `open`; URL `https://stellarlight.xyz/ideas/scf-web-api-analytics`). Texto, seção "Hosting and Handover": a proponente hospeda e dá suporte por 12 meses após a última tranche, com "targets: 99.99% ingestion and 99.90% dashboard availability, critical and high vulnerabilities patched within 24 hours". Não confirmei se o regulamento oficial do SCF (fora do Stellar Light) usa os mesmos valores nem se são metas contratuais; trate o texto acima como a fonte.
+Source: RFP `scf-web-api-analytics` ("Web and API Analytics for Stellar Ecosystem Projects"), Stellar Light, via the stellar-raven MCP (`scout.getRfps`), consulted on **15 November 2026** (quarter q4-2026, status `open`; URL `https://stellarlight.xyz/ideas/scf-web-api-analytics`). Text, section "Hosting and Handover": the proposer hosts and supports for 12 months after the last tranche, with "targets: 99.99% ingestion and 99.90% dashboard availability, critical and high vulnerabilities patched within 24 hours". I did not confirm whether the official SCF rules (outside Stellar Light) use the same values or whether they are contractual targets; treat the text above as the source.
 
-| Item | Meta do RFP | Orçamento de erro (30 dias) |
+| Item | RFP target | Error budget (30 days) |
 |---|---|---|
-| Ingestão (web e API) | 99,99% | 4,32 min |
-| Painéis | 99,90% | 43,2 min |
-| Vulnerabilidades críticas e altas | corrigidas em 24 h | n/a |
-| Chamados de suporte | resposta em 5 dias úteis, resolução em 10 | n/a |
+| Ingestion (web and API) | 99.99% | 4.32 min |
+| Dashboards | 99.90% | 43.2 min |
+| Critical and high vulnerabilities | fixed within 24 h | n/a |
+| Support tickets | response within 5 business days, resolution within 10 | n/a |
 
-## 2. Meta, compromisso e o que a arquitetura sustenta
+## 2. Target, commitment and what the architecture sustains
 
-| Item | Meta do RFP | Compromisso do projeto hoje | O que a arquitetura de hoje sustenta | O que exigiria (fora do escopo, ADR 0016) |
+| Item | RFP target | Project commitment today | What today's architecture sustains | What it would take (out of scope, ADR 0016) |
 |---|---|---|---|---|
-| Ingestão web | 99,99% | **Nenhum número comprometido.** Melhor esforço, medido e relatado (seção 3) | Uma VPS e um banco únicos: não sustenta 99,99%, e a 99,9% só depois de medir | Ingestão replicada para 99,9%; 99,99% exige banco com failover (três nós), deploy sem interrupção, medição e ensaios; nada disso existe nem é prometido |
-| Ingestão de API | 99,99% | Coletor e `rollup` no `prod.yaml`, na mesma VPS, atrás do Caddy (ADR 0012); nunca aplicado numa conta real | Teste externo do host OTLP (`API_URL` do monitoramento) | Réplica do coletor e medição numa produção real |
-| Painéis (portal e API de leitura) | 99,90% | **Nenhum número comprometido**, relato de medição | Uma VPS: orçamento de 43 min/mês é consumido por um deploy ruim ou uma queda da VPS | Réplica e failover do banco, portal replicado |
-| Vulnerabilidades críticas e altas | 24 h | **Avaliação em 48 h; correção em 7 dias corridos (crítica) e 14 (alta)** desde o recebimento ou identificação interna (`SECURITY.md`). Contenção de críticas em 72 h e as 24 h do RFP são metas, não compromissos; ver seção 5 | O processo técnico (release assinada, deploy por digest) pode ser rápido; prazos menores dependem de plantão | Plantão contínuo e ensaios antes de encurtar o compromisso |
-| Chamados de suporte | 5 e 10 dias úteis | **Os mesmos 5 e 10 dias úteis**, pelas issues públicas ([`suporte.md`](suporte.md)) | Dois responsáveis (Dione e Rômulo) | n/a |
+| Web ingestion | 99.99% | **99.5% per calendar month**, measured and reported (section 3) | A single VPS and a single database: does not sustain 99.99%; 99.5% leaves 3 h 36 min per month for deploys and VPS outages | Replicated ingestion for 99.9%; 99.99% requires a database with failover (three nodes), deploys without interruption, measurement and rehearsals; none of this exists or is promised |
+| API ingestion | 99.99% | **99.5% per calendar month**. Collector and `rollup` in `prod.yaml`, on the same VPS, behind Caddy (ADR 0012) | External test of the OTLP host (the monitoring `API_URL`) | Collector replica and end-to-end measurement |
+| Dashboards (portal and read API) | 99.90% | **99.5% per calendar month**, measured and reported | One VPS: the 43 min/month budget of the RFP target is consumed by one bad deploy or one VPS outage; the 99.5% one (3 h 36 min) fits both | Database replica and failover, replicated portal |
+| Critical and high vulnerabilities | 24 h | **Assessment within 48 h; fix within 24 hours (critical) and 7 calendar days (high)** from receipt or internal identification (`SECURITY.md`); see section 5 | The technical process (signed release, deploy by digest) can be fast; there is no continuous on-call | Continuous on-call and rehearsals to extend the 24 h to high ones |
+| Support tickets | 5 and 10 business days | **The same 5 and 10 business days**, through public issues ([`support.md`](support.md)) | Two people responsible (Dione and Rômulo) | n/a |
 
-**Decisão:** com dois mantenedores e sem plantão contínuo, assumir avaliação de relatos possivelmente críticos ou altos em até 48 horas e correção em até 7 dias corridos (crítica) e 14 (alta), contados do recebimento ou da identificação interna. Contenção de críticas em 72 h é meta. A meta do RFP de 24 h não é garantida; encurtar o compromisso exige definir e ensaiar um plantão.
+**Decision:** commit to 99.5% availability per calendar month for ingestion (web and API) and for dashboards, and, with two maintainers and no continuous on-call, assessment of possibly critical or high reports within 48 hours and a fix within 24 hours (critical) and 7 calendar days (high), counted from receipt or internal identification. The RFP targets of 99.99% and 99.90% are not guaranteed: they would require the high availability that ADR 0016 took out of scope.
 
-## 3. O que se mede e como
+## 3. What is measured and how
 
-### 3.1 Indicador (SLI)
+### 3.1 Indicator (SLI)
 
-Disponibilidade de um endpoint = fração das sondagens, na janela, que passaram no módulo configurado: 2xx para web e painel, 401 para a sondagem OTLP autenticada sem credencial.
+Availability of an endpoint = fraction of the probes, in the window, that passed the configured module: 2xx for web and dashboard, 401 for the authenticated OTLP probe without credentials.
 
-| Componente | Sondagem (`infra/monitoring`) | Status |
+| Component | Probe (`infra/monitoring`) | Status |
 |---|---|---|
-| Portal / painéis | `GET /api/auth/ok` no host do portal, módulo `http_2xx` do blackbox, a cada 15 s | Existe |
-| Ingestão web | `GET /healthz` no host da ingestão: 2xx só com o Postgres e o Umami respondendo | Existe |
-| Ingestão de API | `POST` sem chave em `API_URL` (opcional em `infra/monitoring/configure.sh`), espera o 401 do coletor | Existe se `API_URL` for definido; não prova que uma métrica é gravada |
+| Portal / dashboards | `GET /api/auth/ok` on the portal host, blackbox `http_2xx` module, every 15 s | Exists |
+| Web ingestion | `GET /healthz` on the ingestion host: 2xx only with Postgres and Umami responding | Exists |
+| API ingestion | `POST` without a key to `API_URL` (optional in `infra/monitoring/configure.sh`), expects the collector's 401 | Exists if `API_URL` is set; does not prove that a metric is stored |
 
-Limites honestos do indicador atual:
+Honest limits of the current indicator:
 
-- `/healthz` prova que o gateway responde e que o Postgres e o Umami respondem a ele (resultado em cache por 5 s), **não** que um evento é aceito de ponta a ponta (prova de JS, `ingest_site`, gravação no Umami). Uma sondagem sintética de `POST /e` com site de teste **não existe**.
-- A sondagem `component="stack"` (`/healthz/stack`, checagem interna da VPS: contêineres, WAL, backup, disco) gera o alerta `StackUnhealthy` e **não** entra no cálculo de disponibilidade.
-- A sondagem parte de **um** ponto de vista (um host de monitoramento, separado da VPS). Uma falha de rede do monitor pareceria queda da produção, e o contrário também.
-- A resolução é de 15 s; quedas menores podem passar.
+- `/healthz` proves that the gateway responds and that Postgres and Umami respond to it (result cached for 5 s), **not** that an event is accepted end to end (JS proof, `ingest_site`, write to Umami). A synthetic probe of `POST /e` with a test site **does not exist**.
+- The `component="stack"` probe (`/healthz/stack`, internal check on the VPS: containers, WAL, backup, disk) raises the `StackUnhealthy` alert and does **not** enter the availability calculation.
+- The probe runs from **one** vantage point (one monitoring host, separate from the VPS). A network failure of the monitor would look like a production outage, and the other way round too.
+- The resolution is 15 s; shorter outages can go unnoticed.
 
-### 3.2 Cálculo (proposto, não executado)
+### 3.2 Calculation (proposed, not executed)
 
-Com os dados do Prometheus do monitor (retenção de **30 dias**, `--storage.tsdb.retention.time=30d` em `infra/monitoring/compose.yaml`), por componente:
+With the data from the monitor's Prometheus (**30-day** retention, `--storage.tsdb.retention.time=30d` in `infra/monitoring/compose.yaml`), per component:
 
 ```promql
-avg_over_time(probe_success{job="endpoints", component="<componente>"}[30d])
+avg_over_time(probe_success{job="endpoints", component="<component>"}[30d])
 ```
 
-Esta expressão e o rótulo `component` (usado em `alerts.yml`) **não foram executados** contra dados reais. Como a retenção é de 30 dias, um mês de 31 dias perde o primeiro dia: gere o relato no último dia do mês, ou aumente a retenção antes de assumir qualquer número. Os valores guardados no relato mensal são a evidência de longo prazo.
+This expression and the `component` label (used in `alerts.yml`) **were not executed** against real data. Since retention is 30 days, a 31-day month loses its first day: generate the report on the last day of the month, or increase retention before committing to any number. The values kept in the monthly report are the long-term evidence.
 
-### 3.3 Janela e exclusões
+### 3.3 Window and exclusions
 
-- **Janela:** mês-calendário em UTC.
-- **Exclusões propostas** (precisam ser registradas no relato, com horário e motivo): manutenção avisada com pelo menos 72 h de antecedência no portal ou em issue pública, limitada a um total de 60 min por mês; falha do cliente ou da rede do tenant; indisponibilidade comprovada do provedor de hospedagem (registro da página de status do provedor); queda causada por abuso (ataque de volume) enquanto o Caddy não tem limite por IP (ADR 0006). Falha de deploy, de migração ou de renovação de certificado **não** é exclusão.
-- Queda do próprio host de monitoramento: o período sem dados é contado como desconhecido e declarado no relato, não como disponível.
+- **Window:** calendar month in UTC.
+- **Proposed exclusions** (they must be recorded in the report, with time and reason): maintenance announced at least 72 h in advance in the portal or in a public issue, limited to a total of 60 min per month; failure of the tenant's client or network; proven unavailability of the hosting provider (record from the provider's status page); outage caused by abuse (volume attack) while Caddy has no per-IP limit (ADR 0006). A failed deploy, migration or certificate renewal is **not** an exclusion.
+- Outage of the monitoring host itself: the period without data is counted as unknown and declared in the report, not as available.
 
-### 3.4 Relato mensal
+### 3.4 Monthly report
 
-Até o 5º dia útil do mês seguinte, uma nota pública em `docs/` ou issue, com: disponibilidade por componente, minutos de indisponibilidade, cada incidente (início, fim, causa, correção), exclusões aplicadas, e as vulnerabilidades críticas e altas do mês com o tempo até a correção. Ainda **não existe** automação nem modelo; o primeiro relato exige criar ambos.
+By the 5th business day of the following month, a public note in `docs/` or an issue, with: availability per component, minutes of unavailability, each incident (start, end, cause, fix), exclusions applied, and the month's critical and high vulnerabilities with the time to fix. There is **no** automation or template yet; the first report requires creating both.
 
-## 4. O que é preciso para cada meta
+## 4. What each target needs
 
-A produção é uma VPS só, com Docker Compose ([ADR 0016](adr/0016-producao-em-vps.md)). Réplica de ingestão, réplica do Postgres, failover e balanceador **não existem** no repositório: foram retirados por estarem fora do que o RFP exige. Para referência, o que cada meta exigiria:
+Production is a single VPS, with Docker Compose ([ADR 0016](adr/0016-production-on-a-vps.md)). Ingestion replica, Postgres replica, failover and load balancer **do not exist** in the repository: they were removed for being outside what the RFP requires. For reference, what each target would take:
 
-- **99,9% na ingestão:** duas ou mais instâncias de ingestão atrás de balanceador ou IP flutuante, deploy rotativo, pager além do e-mail.
-- **99,9% nos painéis:** réplica do Postgres com promoção ensaiada, portal replicado com uma só instância migrando.
-- **99,99%:** os dois itens acima mais banco com três nós, failover medido em segundos, ponto de vista de monitoramento múltiplo, 12 meses de experiência de medição. **Não é prometido.**
+- **99.9% for ingestion:** two or more ingestion instances behind a load balancer or floating IP, rolling deploy, a pager in addition to email.
+- **99.9% for dashboards:** a Postgres replica with rehearsed promotion, a replicated portal with only one instance running migrations.
+- **99.99%:** the two items above plus a three-node database, failover measured in seconds, multiple monitoring vantage points, 12 months of measurement experience. **Not promised.**
 
-O gateway já pode servir a `ingest_site` vencida quando o banco falha (`SITE_STALE_TTL`, desligado por padrão). Isso **não** muda o compromisso: nenhum número é prometido.
+The gateway can already serve the expired `ingest_site` when the database fails (`SITE_STALE_TTL`, off by default). This does **not** change the commitment, which stays at 99.5%.
 
-## 5. Resposta a vulnerabilidades críticas e altas
+## 5. Response to critical and high vulnerabilities
 
-Processo existente, a reaproveitar: [`SECURITY.md`](../SECURITY.md) (relato privado pela aba Security do GitHub), [`docs/runbooks/vulnerabilidades.md`](runbooks/vulnerabilidades.md) (contenção, correção, release, verificação), release assinada com cosign e atestado de SBOM (`.github/workflows/release.yml`), e o deploy pelo `deploy.sh` (`docs/deploy.md`), que por padrão constrói as imagens do checkout; imagens de release podem ser usadas por digest, mas nada confere a assinatura automaticamente.
+Existing process, to reuse: [`SECURITY.md`](../SECURITY.md) (private report through GitHub's Security tab), [`docs/runbooks/vulnerabilities.md`](runbooks/vulnerabilities.md) (containment, fix, release, verification), a release signed with cosign and an SBOM attestation (`.github/workflows/release.yml`), and the deploy through `deploy.sh` (`docs/deploy.md`), which by default builds the images from the checkout; release images can be used by digest, but nothing checks the signature automatically.
 
-Roteiro para crítica, contado do recebimento ou da identificação interna, não da classificação (para alta, o fim é o 14º dia; a contenção deve ocorrer em até 72 h sempre que possível):
+Script for a critical one, counted from receipt or internal identification, not from classification. For a high one, the same steps apply with the end on the 7th calendar day.
 
-| Tempo | Passo |
+| Time | Step |
 |---|---|
-| 0 a 48 h | Confirmar o recebimento, reproduzir e classificar (CVSS 3.1). Aplicar **contenção** do runbook (revogar chave, bloquear projeto, rebaixar operador, parar o serviço) |
-| 48 h a 5 dias | Corrigir em branch privada ou advisory privado, com teste que falha antes; CI verde |
-| até 6 dias | Release (`vX.Y.Z`) e imagens assinadas |
-| até 7 dias | Deploy (`deploy.sh`), verificação do passo 3 ("Check production") de `docs/deploy.md` e nova checagem |
-| depois | Divulgação (advisory) |
+| immediately | Confirm receipt, reproduce and classify (CVSS 3.1). Apply the runbook's **containment** (revoke key, block project, demote operator, stop the service) |
+| within 24 h | Fix in a private branch or private advisory, with a test that fails before the fix; green CI; release (`vX.Y.Z`) and signed images; deploy (`deploy.sh`), the verification of step 3 ("Check production") of `docs/deploy.md` and a new check |
+| afterwards | Disclosure (advisory) |
 
-**Dependência externa.** Se não houver correção upstream, contenha o impacto e comunique o risco de não cumprir o prazo; contenção não conta como correção. Correções críticas ou altas podem dispensar a espera de 14 dias de forma específica e documentada, conforme o [runbook](runbooks/vulnerabilidades.md). O Renovate pode oferecer atualizações de segurança antes do prazo quando os alertas do GitHub estiverem ativos, mas não está instalado; o pnpm possui sua própria regra e exige exceção específica.
-**Lacunas conhecidas:**
-- Dois mantenedores, sem plantão definido; os prazos incluem noites, fins de semana e feriados.
-- A release assinada nunca rodou de verdade (não há release publicada), e o deploy não confere assinatura; o runbook diz o mesmo.
-- Deploy numa VPS só interrompe o serviço; não há deploy rotativo.
-- Retirar uma versão vulnerável do script de rastreamento não é trivial (ver o runbook).
+**External dependency.** If there is no upstream fix, contain the impact and communicate the risk of missing the deadline; containment does not count as a fix. Critical or high fixes may skip the 14-day wait in a specific and documented way, as described in the [runbook](runbooks/vulnerabilities.md). Renovate can offer security updates before the wait ends when GitHub alerts are enabled, but it is not installed; pnpm has its own rule and requires a specific exception.
+**Known gaps:**
+- Two maintainers, with no defined on-call; the deadlines include nights, weekends and holidays. The 24 hours for critical ones have not been rehearsed yet.
+- The signed release has never actually run (there is no published release), and the deploy does not check the signature; the runbook says the same.
+- A deploy on a single VPS interrupts the service; there is no rolling deploy.
+- Withdrawing a vulnerable version of the tracking script is not trivial (see the runbook).
 
-## 6. Pendências e decisões em aberto
+## 6. Pending items and open decisions
 
-- Plantão, sondagem de ponta a ponta, relato mensal. Alta disponibilidade está fora do escopo (ADR 0016); voltar a ela exigiria uma decisão nova.
+- On-call, end-to-end probe, monthly report. High availability is out of scope (ADR 0016); going back to it would require a new decision.
 
-## 7. O que este documento ainda não faz
+## 7. What this document does not do yet
 
-Nenhuma medição existe; nada aqui foi exercitado numa produção real. Não há sondagem sintética de ponta a ponta, relato mensal automatizado nem pager. O canal privado de vulnerabilidades foi ativado em 19/11/2026.
+No availability measurement has been published: the proof of concept is live, but the first monthly report does not exist yet, and the vulnerability script has not been exercised on a real case. There is no synthetic end-to-end probe, automated monthly report or pager. The private vulnerability channel was enabled on 19 November 2026.

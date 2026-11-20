@@ -5,18 +5,18 @@ import { db } from "../../db";
 import { auditLog, operatorApiKey } from "../../db/schema";
 import { generateReadKey } from "../../read-key";
 
-// Chaves de API do SCF para ler as métricas (#48, ADR 0006). Só o operador
-// chama (OperatorContext). A autenticação da própria chave, que cria o
-// contexto, fica em src/lib/access.ts, como a do login.
+// SCF API keys to read the metrics (#48, ADR 0006). Only the operator calls
+// this (OperatorContext). The authentication of the key itself, which creates
+// the context, lives in src/lib/access.ts, like the login one.
 //
-// Qualquer operador vê e revoga as chaves de todos: é uma equipe só, e cada
-// ação vai para o audit_log com quem a fez.
+// Any operator sees and revokes everyone's keys: it is a single team, and
+// each action goes to the audit_log with who did it.
 
 export const MAX_ACTIVE_READ_KEYS = 20;
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// O que a tela mostra de uma chave: nunca o hash nem a chave.
+// What the screen shows of a key: never the hash or the key.
 export type ReadKeySummary = {
   id: string;
   name: string;
@@ -27,7 +27,7 @@ export type ReadKeySummary = {
   createdByMe: boolean;
 };
 
-// A chave completa só existe neste valor, devolvido uma vez na criação.
+// The full key exists only in this value, returned once on creation.
 export type CreatedReadKey = { key: string; summary: ReadKeySummary };
 
 export class ReadKeyError extends Error {
@@ -67,7 +67,7 @@ export async function createReadKey(ctx: OperatorContext, input: { name: string 
     throw new ReadKeyError("invalid_name", "Name must have between 1 and 100 characters.");
   }
   return db.transaction(async (tx) => {
-    // Trava a criação (vale até o fim da transação): dois pedidos ao mesmo tempo não passam do limite.
+    // Locks creation (held until the end of the transaction): two requests at the same time do not go over the limit.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('operator_api_key'))`);
     const [{ active }] = (await tx
       .select({ active: count() })
@@ -93,7 +93,7 @@ export async function createReadKey(ctx: OperatorContext, input: { name: string 
   });
 }
 
-// Verdadeiro: revogou agora. Falso: já estava revogada. Nulo: não existe.
+// True: revoked now. False: it was already revoked. Null: it does not exist.
 export async function revokeReadKey(ctx: OperatorContext, keyId: string): Promise<boolean | null> {
   if (!UUID_REGEX.test(keyId)) return null;
   return db.transaction(async (tx) => {

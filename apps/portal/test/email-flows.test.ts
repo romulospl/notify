@@ -1,6 +1,6 @@
-// Cadastro com confirmação de e-mail, redefinição de senha e limite de
-// tentativas (#60), pelo handler do Better Auth contra o Postgres de
-// DATABASE_URL. O envio de e-mail é simulado: as mensagens ficam em `sent`.
+// Sign-up with e-mail confirmation, password reset and attempt limit (#60),
+// through the Better Auth handler against the DATABASE_URL Postgres.
+// E-mail sending is mocked: the messages are kept in `sent`.
 import { eq, like } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { auth } from "@/lib/auth";
@@ -25,7 +25,7 @@ const PASSWORD = "first-password-123";
 const NEW_PASSWORD = "second-password-456";
 const BASE = "http://localhost:3000/api/auth";
 
-// Cada teste usa IPs próprios, para os limites de tentativa não se misturarem.
+// Each test uses its own IPs, so the attempt limits do not mix.
 let ipCounter = 0;
 function nextIp() {
   ipCounter++;
@@ -62,13 +62,13 @@ function cookieOf(response: Response) {
 
 function linkIn(message: { text: string }) {
   const url = message.text.split("\n").find((line) => line.startsWith("http"));
-  if (!url) throw new Error("e-mail sem link");
+  if (!url) throw new Error("e-mail without a link");
   return url;
 }
 
 function lastMailTo(email: string) {
   const found = sent.filter((m) => m.to === email).at(-1);
-  if (!found) throw new Error(`nenhum e-mail para ${email}`);
+  if (!found) throw new Error(`no e-mail to ${email}`);
   return found;
 }
 
@@ -84,7 +84,7 @@ async function getSession(cookie: string) {
   return auth.api.getSession({ headers: new Headers({ cookie }) });
 }
 
-// Cria a conta e confirma o e-mail pelo link.
+// Creates the account and confirms the e-mail through the link.
 async function verifiedUser(email: string) {
   await signUp(email);
   const response = await call(linkIn(lastMailTo(email)), { method: "GET" });
@@ -110,8 +110,8 @@ afterAll(async () => {
   await sql.end();
 });
 
-describe("cadastro com confirmação de e-mail", () => {
-  it("cria a conta sem confirmar, sem sessão, e envia o link", async () => {
+describe("sign-up with e-mail confirmation", () => {
+  it("creates the account unconfirmed, without a session, and sends the link", async () => {
     const email = `new${DOMAIN}`;
     const response = await signUp(email);
     expect(response.status).toBe(200);
@@ -127,7 +127,7 @@ describe("cadastro com confirmação de e-mail", () => {
     expect(linkIn(mail)).toMatch(/\/api\/auth\/verify-email\?token=.+&callbackURL=%2Femail-verified$/);
   });
 
-  it("não entra antes de confirmar e reenvia o link", async () => {
+  it("does not sign in before confirming and resends the link", async () => {
     const email = `unverified${DOMAIN}`;
     await signUp(email);
     sent.length = 0;
@@ -139,7 +139,7 @@ describe("cadastro com confirmação de e-mail", () => {
     expect(lastMailTo(email).subject).toMatch(/confirm/i);
   });
 
-  it("o link confirma o e-mail, abre a sessão e leva a /email-verified", async () => {
+  it("the link confirms the e-mail, opens the session and leads to /email-verified", async () => {
     const email = `confirm${DOMAIN}`;
     await signUp(email);
 
@@ -152,7 +152,7 @@ describe("cadastro com confirmação de e-mail", () => {
     expect((await signIn(email, PASSWORD)).status).toBe(200);
   });
 
-  it("link adulterado volta com erro", async () => {
+  it("a tampered link comes back with an error", async () => {
     const email = `tampered${DOMAIN}`;
     await signUp(email);
     const link = linkIn(lastMailTo(email)).replace(/token=([^&]+)/, (_, t: string) => `token=${t.slice(0, -4)}AAAA`);
@@ -163,7 +163,7 @@ describe("cadastro com confirmação de e-mail", () => {
     expect(row!.emailVerified).toBe(false);
   });
 
-  it("e-mail já cadastrado recebe a mesma resposta e não muda a conta", async () => {
+  it("an already registered e-mail gets the same response and does not change the account", async () => {
     const email = `existing${DOMAIN}`;
     await verifiedUser(email);
 
@@ -178,15 +178,15 @@ describe("cadastro com confirmação de e-mail", () => {
     expect((await signIn(email, "attacker-password-999")).status).toBe(401);
   });
 
-  it("recusa senha curta", async () => {
+  it("rejects a short password", async () => {
     const response = await signUp(`short${DOMAIN}`, "short");
     expect(response.status).toBe(400);
     expect((await response.json()).code).toBe("PASSWORD_TOO_SHORT");
   });
 });
 
-describe("redefinição de senha", () => {
-  it("troca a senha pelo link, encerra as sessões e não deixa usar o link de novo", async () => {
+describe("password reset", () => {
+  it("changes the password through the link, ends the sessions and does not let the link be used again", async () => {
     const email = `reset${DOMAIN}`;
     await verifiedUser(email);
     const oldCookie = cookieOf(await signIn(email, PASSWORD));
@@ -197,7 +197,7 @@ describe("redefinição de senha", () => {
     const mail = lastMailTo(email);
     expect(mail.subject).toMatch(/reset/i);
 
-    // O link do e-mail confere o token e leva à tela do portal.
+    // The e-mail link checks the token and leads to the portal screen.
     const landing = await call(linkIn(mail), { method: "GET" });
     expect(landing.status).toBe(302);
     const token = new URL(landing.headers.get("location")!, "http://x").searchParams.get("token");
@@ -214,13 +214,13 @@ describe("redefinição de senha", () => {
     expect(reuse.status).toBe(400);
   });
 
-  it("o link vale 30 minutos", async () => {
+  it("the link is valid for 30 minutes", async () => {
     const email = `expiry${DOMAIN}`;
     await verifiedUser(email);
     const before = Date.now();
     await call("/request-password-reset", { body: { email, redirectTo: "/reset-password" } });
 
-    // O link é /api/auth/reset-password/<token>?callbackURL=...
+    // The link is /api/auth/reset-password/<token>?callbackURL=...
     const token = new URL(linkIn(lastMailTo(email))).pathname.split("/").at(-1);
     const [row] = await db
       .select({ id: verification.id, expiresAt: verification.expiresAt })
@@ -230,13 +230,13 @@ describe("redefinição de senha", () => {
     expect(minutes).toBeGreaterThan(29);
     expect(minutes).toBeLessThanOrEqual(30.1);
 
-    // Vencido, o link não leva mais à tela de nova senha.
+    // Once expired, the link no longer leads to the new password screen.
     await db.update(verification).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(verification.id, row!.id));
     const landing = await call(linkIn(lastMailTo(email)), { method: "GET" });
     expect(landing.headers.get("location")).toBe("http://localhost:3000/reset-password?error=INVALID_TOKEN");
   });
 
-  it("e-mail sem conta recebe a mesma resposta e nenhum e-mail sai", async () => {
+  it("an e-mail without an account gets the same response and no e-mail is sent", async () => {
     const response = await call("/request-password-reset", {
       body: { email: `nobody${DOMAIN}`, redirectTo: "/reset-password" },
     });
@@ -245,22 +245,22 @@ describe("redefinição de senha", () => {
   });
 });
 
-describe("limite de tentativas por IP", () => {
-  it("cadastro: 10 por hora", async () => {
+describe("attempt limit per IP", () => {
+  it("sign-up: 10 per hour", async () => {
     const ip = nextIp();
     for (let i = 0; i < 10; i++) expect((await signUp(`limit${i}${DOMAIN}`, PASSWORD, ip)).status).toBe(200);
     expect((await signUp(`limit10${DOMAIN}`, PASSWORD, ip)).status).toBe(429);
-    // Outro IP continua podendo.
+    // Another IP is still allowed.
     expect((await signUp(`limit11${DOMAIN}`)).status).toBe(200);
   });
 
-  it("login: 3 a cada 10 segundos", async () => {
+  it("sign-in: 3 every 10 seconds", async () => {
     const ip = nextIp();
     for (let i = 0; i < 3; i++) expect((await signIn(`nobody${DOMAIN}`, "wrong-password-0", ip)).status).toBe(401);
     expect((await signIn(`nobody${DOMAIN}`, "wrong-password-0", ip)).status).toBe(429);
   });
 
-  it("pedido de redefinição: 5 por hora", async () => {
+  it("reset request: 5 per hour", async () => {
     const ip = nextIp();
     const body = { email: `nobody${DOMAIN}`, redirectTo: "/reset-password" };
     for (let i = 0; i < 5; i++) expect((await call("/request-password-reset", { body, ip })).status).toBe(200);

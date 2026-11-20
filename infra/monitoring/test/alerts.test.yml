@@ -1,13 +1,13 @@
-# Testes de unidade das regras (#15): promtool test rules alerts.test.yml
-# Rodam no teste do monitoramento (test/monitoring-test.sh). Ficam fora de
-# prometheus/rules/, que o Prometheus carrega inteira.
+# Unit tests of the rules (#15): promtool test rules alerts.test.yml
+# They run in the monitoring test (test/monitoring-test.sh). They stay outside
+# prometheus/rules/, which Prometheus loads in full.
 rule_files:
   - ../prometheus/rules/alerts.yml
 
 evaluation_interval: 15s
 
 tests:
-  # Alvo fora do ar: dispara depois de 1 minuto, não antes.
+  # Target down: fires after 1 minute, not before.
   - interval: 15s
     input_series:
       - series: 'probe_success{job="endpoints", instance="https://app.example.org/api/auth/ok", component="portal"}'
@@ -28,8 +28,8 @@ tests:
               summary: "portal is down"
               description: "https://app.example.org/api/auth/ok has not answered with 2xx for over a minute."
 
-  # A checagem da pilha não dispara o EndpointDown, e sim o StackUnhealthy,
-  # depois de 5 minutos.
+  # The stack check does not fire EndpointDown, but StackUnhealthy,
+  # after 5 minutes.
   - interval: 15s
     input_series:
       - series: 'probe_success{job="endpoints", instance="https://e.example.org/healthz/stack", component="stack"}'
@@ -53,7 +53,7 @@ tests:
               summary: "The production stack check is failing"
               description: "Run `journalctl -u stellytics-check -n 20` on the VPS to see which check failed (containers, WAL archiving, base backup or disk)."
 
-  # O pedido ao blackbox falha: sem probe_success, mas com up=0.
+  # The request to the blackbox fails: no probe_success, but with up=0.
   - interval: 15s
     input_series:
       - series: 'up{job="endpoints", instance="https://e.example.org/healthz", component="ingest-web"}'
@@ -71,7 +71,7 @@ tests:
               summary: "ingest-web is not being checked"
               description: "The probe request for https://e.example.org/healthz itself fails, so its availability is unknown."
 
-  # Certificado com 10 dias de validade: alerta depois de 1 hora.
+  # Certificate with 10 days of validity: alerts after 1 hour.
   - interval: 1m
     input_series:
       - series: 'probe_ssl_earliest_cert_expiry{job="endpoints", instance="https://e.example.org/healthz", component="ingest-web"}'
@@ -89,7 +89,7 @@ tests:
               summary: "TLS certificate of ingest-web expires in less than 14 days"
               description: "https://e.example.org/healthz: the automatic renewal is probably failing."
 
-  # Certificado com 60 dias: nada.
+  # Certificate with 60 days: nothing.
   - interval: 1m
     input_series:
       - series: 'probe_ssl_earliest_cert_expiry{job="endpoints", instance="https://e.example.org/healthz", component="ingest-web"}'
@@ -99,7 +99,7 @@ tests:
         alertname: TLSCertificateExpiringSoon
         exp_alerts: []
 
-  # Blackbox fora do ar.
+  # Blackbox down.
   - interval: 15s
     input_series:
       - series: 'up{job="blackbox", instance="blackbox:9115"}'
@@ -116,7 +116,7 @@ tests:
               summary: "The blackbox prober is down"
               description: "Endpoints are not being checked."
 
-  # O sinal de vida está sempre ativo.
+  # The heartbeat is always active.
   - interval: 15s
     alert_rule_test:
       - eval_time: 1m

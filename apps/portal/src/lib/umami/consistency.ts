@@ -3,9 +3,9 @@ import type { OperatorContext } from "../access";
 import { listUmamiLinks } from "../data/operator/sites";
 import { umamiRequest } from "./http";
 
-// Teste de consistência do spec do E2, seção 7: todo `site.umami_website_id`
-// existe no Umami, e todo site do Umami tem linha em `site`. Checagem global,
-// só para o operador; devolve apenas IDs.
+// Consistency test from the E2 spec, section 7: every `site.umami_website_id`
+// exists in Umami, and every Umami site has a row in `site`. A global check,
+// only for the operator; it returns IDs only.
 
 type WebsitePage = { data: { id: string }[]; count: number };
 
@@ -27,9 +27,9 @@ export async function findUmamiInconsistencies(ctx: OperatorContext) {
   const links = await listUmamiLinks(ctx);
   const inPortal = new Set(links.map((l) => l.umamiWebsiteId));
   return {
-    // IDs de `site` cujo site sumiu do Umami.
+    // `site` IDs whose site disappeared from Umami.
     missingInUmami: links.filter((l) => !inUmami.has(l.umamiWebsiteId)).map((l) => l.siteId),
-    // Sites do Umami sem linha em `site` (por exemplo, um rollback que falhou).
+    // Umami sites with no row in `site` (for example, a rollback that failed).
     orphanedInUmami: [...inUmami].filter((id) => !inPortal.has(id)),
   };
 }

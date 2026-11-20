@@ -1,39 +1,25 @@
-import { getSessionCookie } from "better-auth/cookies";
 import { type NextRequest, NextResponse } from "next/server";
 
-// Redirecionamento otimista: só confere se o cookie de sessão existe.
-// A validação de verdade acontece no servidor (lib/session.ts).
+// The portal has no signed-in pages: the proxy only answers 404 for the
+// disabled image optimizer.
 export function proxy(request: NextRequest) {
-  // O otimizador está desligado e sua biblioteca não acompanha a imagem.
-  // O matcher normaliza a barra final e testa também o caminho decodificado,
-  // então a comparação repete isso: sem isso, /_next/image/ ou /_next/%69mage
-  // passariam pelo matcher e cairiam no redirecionamento de sessão.
+  // The optimizer is off and its library does not ship with the image.
+  // The matcher normalizes the trailing slash and also tests the decoded path,
+  // so the comparison repeats that: without it, /_next/image/ or /_next/%69mage
+  // would get through the matcher and fall into the session redirect.
   const pathname = request.nextUrl.pathname.replace(/\/+$/, "");
   let decoded = pathname;
   try {
     decoded = decodeURIComponent(pathname);
   } catch {
-    // Percent-encoding inválido: segue sem decodificar; o Next responde depois.
+    // Invalid percent-encoding: carry on without decoding; Next answers later.
   }
   if (decoded === "/_next/image") {
     return new NextResponse(null, { status: 404 });
-  }
-
-  if (!getSessionCookie(request)) {
-    const url = new URL("/sign-in", request.url);
-    url.searchParams.set("next", request.nextUrl.pathname);
-    return NextResponse.redirect(url);
   }
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    "/_next/image",
-    "/dashboard/:path*",
-    "/operator/:path*",
-    "/services/:path*",
-    "/sites/:path*",
-    "/onboarding/:path*",
-  ],
+  matcher: ["/_next/image"],
 };

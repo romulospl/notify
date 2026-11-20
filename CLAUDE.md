@@ -35,7 +35,7 @@ Flows:
 - **Portal** is the only entry point. It reads web stats through the Umami API and API stats directly from Postgres.
 - **Postgres:** separate databases `umami` (managed by Umami) and `stellytics` (tenants, keys, API metrics).
 
-Overview with diagrams: `docs/arquitetura.md`.
+Overview with diagrams: `docs/architecture.md`.
 
 ## Commands
 
@@ -57,7 +57,7 @@ Environment, CI, release and dependency rules: [docs/dev/environment.md](docs/de
 - **Tracking script is immutable per version** (`/s/vX.Y.Z/<name>.js`, with SRI). Script names and endpoints must not contain terms blocked by ad blockers (`umami`, `analytics`, `track`, `collect`).
 - **Route normalization** uses fixed rules in code: numeric IDs, Stellar G-/C-/M- addresses, UUIDs, hex hashes and trailing slash. A client-sent `http.route` takes priority.
 - **Secrets:** a full ingest or read key exists only in its creation response: never in logs, the database or error messages.
-- **`audit_log`** is insert-only; erasure (#154) may only replace `actor_user_id` with `[apagado]`.
+- **`audit_log`** is insert-only; erasure (#154) may only replace `actor_user_id` with `[erased]`.
 - **Never set `SEED_DEV_DATA` in production** or put dev seed SQL in `drizzle/`.
 - **Pending maintainer decision:** do not enable `RELAY_MAX_INFLIGHT` in production (ADR 0011).
 
@@ -77,6 +77,6 @@ Backlog, board, specs, ADRs, examples and the documents to keep up to date: [doc
 
 ## Conventions
 
-- **Everything in English since 2026-11-19:** code, comments, documentation, ADRs, issues, commits and PRs. Older Portuguese docs are translated when touched.
+- **Everything in English since 2026-11-19:** code, comments, documentation, ADRs, issues, commits and PRs.
 - A new architecture decision becomes a new ADR from `docs/adr/template.md`. An accepted ADR is not rewritten: create a new one and mark the old one as superseded.
-- After closing an issue, update `docs/andamento.md` and the matching `docs/eN-implementacao.md`.
+- After closing an issue, update `docs/progress.md` and the matching `docs/eN-implementation.md`.

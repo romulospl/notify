@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// step é um degrau do perfil de carga: rate eventos por segundo durante dur.
+// step is a step of the load profile: rate events per second for dur.
 type step struct {
 	Rate float64
 	Dur  time.Duration
@@ -26,25 +26,25 @@ func parseProfile(spec string) ([]step, error) {
 	for _, part := range strings.Split(spec, ",") {
 		r, d, ok := strings.Cut(strings.TrimSpace(part), "x")
 		if !ok {
-			return nil, fmt.Errorf("degrau %q: use taxaxduração, ex.: 11.6x2m", part)
+			return nil, fmt.Errorf("step %q: use ratexduration, e.g. 11.6x2m", part)
 		}
 		rate, err := strconv.ParseFloat(r, 64)
 		if err != nil || rate <= 0 {
-			return nil, fmt.Errorf("degrau %q: taxa inválida", part)
+			return nil, fmt.Errorf("step %q: invalid rate", part)
 		}
 		dur, err := time.ParseDuration(d)
 		if err != nil || dur <= 0 {
-			return nil, fmt.Errorf("degrau %q: duração inválida", part)
+			return nil, fmt.Errorf("step %q: invalid duration", part)
 		}
 		out = append(out, step{rate, dur})
 	}
 	return out, nil
 }
 
-// recorder guarda latências e códigos por degrau e operação.
+// recorder keeps latencies and codes per step and operation.
 type recorder struct {
 	mu   sync.Mutex
-	data map[string]*opStats // "degrau/op"
+	data map[string]*opStats // "step/op"
 }
 
 type opStats struct {
@@ -55,7 +55,7 @@ type opStats struct {
 
 func newRecorder() *recorder { return &recorder{data: map[string]*opStats{}} }
 
-// add registra uma operação concluída. code é o status HTTP ou "err".
+// add records a finished operation. code is the HTTP status or "err".
 func (r *recorder) add(stepIdx int, op string, d time.Duration, code string) {
 	key := fmt.Sprintf("%d/%s", stepIdx, op)
 	r.mu.Lock()
@@ -87,7 +87,7 @@ func (s *opStats) total() int {
 	return n
 }
 
-// report imprime as tabelas por degrau e operação.
+// report prints the tables per step and operation.
 func (r *recorder) report(steps []step) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -96,7 +96,7 @@ func (r *recorder) report(steps []step) {
 		keys = append(keys, k)
 	}
 	slices.Sort(keys)
-	fmt.Printf("\n%-22s %-10s %8s %9s %9s %9s %9s  %s\n", "degrau", "operação", "n", "p50", "p95", "p99", "max", "códigos")
+	fmt.Printf("\n%-22s %-10s %8s %9s %9s %9s %9s  %s\n", "step", "operation", "n", "p50", "p95", "p99", "max", "codes")
 	for _, k := range keys {
 		s := r.data[k]
 		slices.Sort(s.lats)
@@ -116,10 +116,10 @@ func (r *recorder) report(steps []step) {
 	}
 }
 
-// drive dispara fire em chegada de Poisson, degrau por degrau, sem esperar as
-// respostas. maxInflight limita as goroutines; chegadas que passam disso são
-// contadas em saturated (o gerador, não o servidor, é o gargalo). Devolve o
-// total disparado e os instantes de início de cada degrau.
+// drive fires fire in Poisson arrivals, step by step, without waiting for the
+// responses. maxInflight limits the goroutines; arrivals beyond that are
+// counted in saturated (the generator, not the server, is the bottleneck). It
+// returns the total fired and the start instants of each step.
 func drive(ctx context.Context, steps []step, maxInflight int, onStep func(i int, s step), fire func(ctx context.Context, stepIdx int)) (fired, saturated int64, starts []time.Time) {
 	sem := make(chan struct{}, maxInflight)
 	var wg sync.WaitGroup

@@ -1,5 +1,5 @@
-// As contas de desenvolvimento (drizzle-dev, senhas conhecidas) não vão para a
-// imagem de produção nem são ligadas fora do Compose de dev (#153).
+// The development accounts (drizzle-dev, known passwords) do not go into the
+// production image and are not enabled outside the dev Compose (#153).
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 const repo = path.join(import.meta.dirname, "..", "..", "..");
 const read = (file: string) => readFileSync(path.join(repo, file), "utf8");
 
-// Estágios do Dockerfile, na ordem; o último é o alvo padrão do build.
+// Dockerfile stages, in order; the last one is the default build target.
 function stages(dockerfile: string) {
   return dockerfile
     .split(/^(?=FROM\s)/m)
@@ -15,26 +15,26 @@ function stages(dockerfile: string) {
     .map((s) => ({ name: /^FROM\s+\S+(?:\s+AS\s+(\S+))?/i.exec(s)?.[1], body: s }));
 }
 
-describe("contas de desenvolvimento fora da produção", () => {
+describe("development accounts out of production", () => {
   const all = stages(read("apps/portal/Dockerfile"));
 
-  it("a imagem padrão do portal não copia o drizzle-dev", () => {
+  it("the default portal image does not copy drizzle-dev", () => {
     const last = all.at(-1)!;
     expect(last.name).toBeUndefined();
     expect(last.body).not.toMatch(/drizzle-dev/);
-    // O último estágio parte do runner, que também não pode levar o drizzle-dev.
+    // The last stage starts from the runner, which must not carry drizzle-dev either.
     expect(last.body).toMatch(/^FROM\s+runner\s*$/m);
     const runner = all.find((s) => s.name === "runner")!;
     expect(runner.body).not.toMatch(/drizzle-dev/);
   });
 
-  it("só o estágio dev leva o drizzle-dev, e só o Compose de dev o usa", () => {
+  it("only the dev stage carries drizzle-dev, and only the dev Compose uses it", () => {
     const withDev = all.filter((s) => /drizzle-dev/.test(s.body)).map((s) => s.name);
     expect(withDev).toEqual(["dev"]);
     expect(read("infra/compose/dev.yaml")).toMatch(/dockerfile: apps\/portal\/Dockerfile\n\s+#.*\n\s+target: dev/);
   });
 
-  it("nenhum Compose de produção define SEED_DEV_DATA", () => {
+  it("no production Compose sets SEED_DEV_DATA", () => {
     const compose = readdirSync(path.join(repo, "infra/compose")).filter((f) => /^prod.*\.ya?ml$/.test(f));
     expect(compose.length).toBeGreaterThan(0);
     for (const f of compose) expect(read(`infra/compose/${f}`), f).not.toMatch(/SEED_DEV_DATA/);

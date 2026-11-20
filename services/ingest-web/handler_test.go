@@ -35,7 +35,7 @@ type fakeSites map[string]bool
 
 func (f fakeSites) Active(_ context.Context, id string) (bool, error) { return f[id], nil }
 
-// fakeUmami grava o que chega em /api/send.
+// fakeUmami records what arrives at /api/send.
 type fakeUmami struct {
 	mu   sync.Mutex
 	reqs []received
@@ -95,11 +95,11 @@ func newSetup(t *testing.T, opts ...func(*gateway)) setup {
 	return setup{gw: gw, umami: umami, server: srv}
 }
 
-// testProofs emite os desafios nos testes, com dificuldade baixa.
-var testProofs = proof.New([]byte("chave-de-teste-com-pelo-menos-32-bytes"), 10*time.Minute, 4)
+// testProofs issues the challenges in the tests, with low difficulty.
+var testProofs = proof.New([]byte("test-key-with-at-least-32-bytes-long"), 10*time.Minute, 4)
 
-// proofField é o campo "p" com uma prova válida para website, como o script
-// manda depois de resolver o desafio de GET /c.
+// proofField is the "p" field with a valid proof for website, as the script
+// sends it after solving the GET /c challenge.
 func proofField(website string) string {
 	c := testProofs.Challenge(strings.ToLower(website))
 	return `"p":{"t":"` + c.Token + `","n":"` + proof.Solve(c.Token, c.Bits) + `"}`
@@ -107,7 +107,7 @@ func proofField(website string) string {
 
 func eventBody(website string) string {
 	return `{"type":"event",` + proofField(website) + `,"payload":{"website":"` + website + `","hostname":"example.org",` +
-		`"url":"/docs?x=1","referrer":"https://ref.example/","title":"Docs","language":"pt-BR","screen":"1920x1080"}}`
+		`"url":"/docs?x=1","referrer":"https://ref.example/","title":"Docs","language":"de-DE","screen":"1920x1080"}}`
 }
 
 func post(t *testing.T, s setup, contentType, body string, hdr ...string) *http.Response {
@@ -132,26 +132,26 @@ func TestEventRelayedToUmami(t *testing.T) {
 			s := newSetup(t)
 			resp := post(t, s, ct, eventBody(strings.ToUpper(activeSite)))
 			if resp.StatusCode != http.StatusNoContent {
-				t.Fatalf("status = %d, quero 204", resp.StatusCode)
+				t.Fatalf("status = %d, want 204", resp.StatusCode)
 			}
 			if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "*" {
 				t.Errorf("Access-Control-Allow-Origin = %q", got)
 			}
 			if c := resp.Header.Get("Set-Cookie"); c != "" {
-				t.Errorf("resposta grava cookie: %q", c)
+				t.Errorf("response sets a cookie: %q", c)
 			}
 
 			got := s.umami.received()
 			if len(got) != 1 {
-				t.Fatalf("umami recebeu %d eventos, quero 1", len(got))
+				t.Fatalf("umami received %d events, want 1", len(got))
 			}
 			h := got[0].header
 			if ua := h.Get("User-Agent"); ua != browserUA {
-				t.Errorf("User-Agent repassado = %q", ua)
+				t.Errorf("relayed User-Agent = %q", ua)
 			}
-			// O httptest conecta por 127.0.0.1.
+			// httptest connects through 127.0.0.1.
 			if ip := h.Get("x-stellytics-client-ip"); ip != "127.0.0.0" {
-				t.Errorf("IP repassado = %q, quero 127.0.0.0", ip)
+				t.Errorf("relayed IP = %q, want 127.0.0.0", ip)
 			}
 			payload := got[0].body["payload"].(map[string]any)
 			if payload["website"] != activeSite {
@@ -174,7 +174,7 @@ func TestEventDropsFieldsOutsideAllowlist(t *testing.T) {
 	gotJSON, _ := json.Marshal(got)
 	wantJSON, _ := json.Marshal(want)
 	if string(gotJSON) != string(wantJSON) {
-		t.Errorf("payload repassado = %s\nquero %s", gotJSON, wantJSON)
+		t.Errorf("relayed payload = %s\nquero %s", gotJSON, wantJSON)
 	}
 }
 
@@ -188,7 +188,7 @@ func TestCustomEventForwardsOnlyNameAndData(t *testing.T) {
 	got, _ := json.Marshal(s.umami.received()[0].body)
 	want := `{"payload":{"data":{"n":3,"ok":true,"wallet":"freighter"},"name":"wallet_connected","url":"/","website":"` + activeSite + `"},"type":"event"}`
 	if string(got) != want {
-		t.Errorf("payload repassado = %s\nquero %s", got, want)
+		t.Errorf("relayed payload = %s\nquero %s", got, want)
 	}
 }
 
@@ -197,10 +197,10 @@ func TestCustomEventLimitsAccepted(t *testing.T) {
 	body := `{"type":"event",` + proofField(activeSite) + `,"payload":{"website":"` + activeSite + `","url":"/","name":"x","data":{"` +
 		strings.Repeat("k", relay.MaxDataKey) + `":"` + strings.Repeat("a", relay.MaxDataString) + `"}}}`
 	if resp := post(t, s, "text/plain", body); resp.StatusCode != http.StatusNoContent {
-		t.Fatalf("status = %d, quero 204", resp.StatusCode)
+		t.Fatalf("status = %d, want 204", resp.StatusCode)
 	}
 	if n := len(s.umami.received()); n != 1 {
-		t.Fatalf("umami recebeu %d eventos, quero 1", n)
+		t.Fatalf("umami received %d events, want 1", n)
 	}
 }
 
@@ -212,30 +212,30 @@ func TestCustomEventRejected(t *testing.T) {
 	}
 	many += `}`
 	for name, extra := range map[string]string{
-		"nome com espaço":     `"name":"a b"`,
-		"nome longo":          `"name":"` + strings.Repeat("a", relay.MaxName+1) + `"`,
-		"nome com símbolo":    `"name":"<script>"`,
-		"data sem nome":       `"data":{"a":1}`,
-		"valor aninhado":      `"name":"x","data":{"a":{"b":1}}`,
-		"valor lista":         `"name":"x","data":{"a":[1]}`,
-		"valor nulo":          `"name":"x","data":{"a":null}`,
+		"name with a space":   `"name":"a b"`,
+		"long name":           `"name":"` + strings.Repeat("a", relay.MaxName+1) + `"`,
+		"name with a symbol":  `"name":"<script>"`,
+		"data without a name": `"data":{"a":1}`,
+		"nested value":        `"name":"x","data":{"a":{"b":1}}`,
+		"list value":          `"name":"x","data":{"a":[1]}`,
+		"null value":          `"name":"x","data":{"a":null}`,
 		"__proto__":           `"name":"x","data":{"__proto__":1}`,
-		"chave de 41":         `"name":"x","data":{"` + strings.Repeat("k", relay.MaxDataKey+1) + `":1}`,
-		"valor de 101":        `"name":"x","data":{"a":"` + strings.Repeat("a", relay.MaxDataString+1) + `"}`,
-		"número 1e999":        `"name":"x","data":{"a":1e999}`,
-		"número gigante":      `"name":"x","data":{"a":` + strings.Repeat("9", 200) + `}`,
-		"valor longo":         `"name":"x","data":{"a":"` + long + `"}`,
-		"chave inválida":      `"name":"x","data":{"a b":1}`,
-		"propriedades demais": `"name":"x","data":` + many,
+		"key of 41":           `"name":"x","data":{"` + strings.Repeat("k", relay.MaxDataKey+1) + `":1}`,
+		"value of 101":        `"name":"x","data":{"a":"` + strings.Repeat("a", relay.MaxDataString+1) + `"}`,
+		"number 1e999":        `"name":"x","data":{"a":1e999}`,
+		"huge number":         `"name":"x","data":{"a":` + strings.Repeat("9", 200) + `}`,
+		"long value":          `"name":"x","data":{"a":"` + long + `"}`,
+		"invalid key":         `"name":"x","data":{"a b":1}`,
+		"too many properties": `"name":"x","data":` + many,
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newSetup(t)
 			body := `{"type":"event",` + proofField(activeSite) + `,"payload":{"website":"` + activeSite + `","url":"/",` + extra + `}}`
 			if resp := post(t, s, "text/plain", body); resp.StatusCode != http.StatusBadRequest {
-				t.Errorf("status = %d, quero 400", resp.StatusCode)
+				t.Errorf("status = %d, want 400", resp.StatusCode)
 			}
 			if n := len(s.umami.received()); n != 0 {
-				t.Errorf("umami recebeu %d eventos", n)
+				t.Errorf("umami received %d events", n)
 			}
 		})
 	}
@@ -248,12 +248,12 @@ func TestEventDoesNotForwardClientHeaders(t *testing.T) {
 	h := s.umami.received()[0].header
 	for _, k := range []string{"X-Forwarded-For", "Cookie", "X-Umami-Cache", "Referer"} {
 		if v := h.Get(k); v != "" {
-			t.Errorf("header %s repassado: %q", k, v)
+			t.Errorf("header %s relayed: %q", k, v)
 		}
 	}
-	// Sem proxy confiável, o X-Forwarded-For é ignorado.
+	// Without a trusted proxy, X-Forwarded-For is ignored.
 	if ip := h.Get("x-stellytics-client-ip"); ip != "127.0.0.0" {
-		t.Errorf("IP repassado = %q", ip)
+		t.Errorf("relayed IP = %q", ip)
 	}
 }
 
@@ -263,7 +263,7 @@ func TestEventTrustedProxyTruncatesForwardedIP(t *testing.T) {
 	})
 	post(t, s, "text/plain", eventBody(activeSite), "X-Forwarded-For", "203.0.113.77")
 	if ip := s.umami.received()[0].header.Get("x-stellytics-client-ip"); ip != "203.0.113.0" {
-		t.Errorf("IP repassado = %q, quero 203.0.113.0", ip)
+		t.Errorf("relayed IP = %q, want 203.0.113.0", ip)
 	}
 }
 
@@ -272,26 +272,26 @@ func TestEventRejected(t *testing.T) {
 		name, ct, body string
 		want           int
 	}{
-		{"site desconhecido", "text/plain", eventBody("11111111-2222-4333-8444-555555555555"), http.StatusNoContent},
-		{"site pendente", "text/plain", eventBody(pendingSite), http.StatusNoContent},
-		{"website fora do formato", "text/plain", eventBody("not-a-uuid"), http.StatusBadRequest},
-		{"type diferente", "text/plain", `{"type":"identify","payload":{"website":"` + activeSite + `","url":"/"}}`, http.StatusBadRequest},
-		{"sem url", "text/plain", `{"type":"event","payload":{"website":"` + activeSite + `"}}`, http.StatusBadRequest},
-		{"title grande", "text/plain", `{"type":"event","payload":{"website":"` + activeSite + `","url":"/","title":"` + strings.Repeat("a", relay.MaxTitle+1) + `"}}`, http.StatusBadRequest},
-		{"JSON inválido", "text/plain", `{"type":`, http.StatusBadRequest},
-		{"dois objetos", "text/plain", eventBody(activeSite) + eventBody(activeSite), http.StatusBadRequest},
+		{"unknown site", "text/plain", eventBody("11111111-2222-4333-8444-555555555555"), http.StatusNoContent},
+		{"pending site", "text/plain", eventBody(pendingSite), http.StatusNoContent},
+		{"website outside the format", "text/plain", eventBody("not-a-uuid"), http.StatusBadRequest},
+		{"different type", "text/plain", `{"type":"identify","payload":{"website":"` + activeSite + `","url":"/"}}`, http.StatusBadRequest},
+		{"no url", "text/plain", `{"type":"event","payload":{"website":"` + activeSite + `"}}`, http.StatusBadRequest},
+		{"large title", "text/plain", `{"type":"event","payload":{"website":"` + activeSite + `","url":"/","title":"` + strings.Repeat("a", relay.MaxTitle+1) + `"}}`, http.StatusBadRequest},
+		{"invalid JSON", "text/plain", `{"type":`, http.StatusBadRequest},
+		{"two objects", "text/plain", eventBody(activeSite) + eventBody(activeSite), http.StatusBadRequest},
 		{"content-type", "application/x-www-form-urlencoded", eventBody(activeSite), http.StatusUnsupportedMediaType},
-		{"corpo grande", "text/plain", `{"type":"event","payload":{"website":"` + activeSite + `","url":"/` + strings.Repeat("a", maxBody) + `"}}`, http.StatusRequestEntityTooLarge},
+		{"large body", "text/plain", `{"type":"event","payload":{"website":"` + activeSite + `","url":"/` + strings.Repeat("a", maxBody) + `"}}`, http.StatusRequestEntityTooLarge},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			s := newSetup(t)
 			resp := post(t, s, c.ct, c.body)
 			if resp.StatusCode != c.want {
-				t.Errorf("status = %d, quero %d", resp.StatusCode, c.want)
+				t.Errorf("status = %d, want %d", resp.StatusCode, c.want)
 			}
 			if n := len(s.umami.received()); n != 0 {
-				t.Errorf("umami recebeu %d eventos, quero 0", n)
+				t.Errorf("umami received %d events, want 0", n)
 			}
 		})
 	}
@@ -306,11 +306,11 @@ func TestEventRateLimited(t *testing.T) {
 	want := []int{204, 204, 429}
 	for i := range want {
 		if codes[i] != want[i] {
-			t.Fatalf("status = %v, quero %v", codes, want)
+			t.Fatalf("status = %v, want %v", codes, want)
 		}
 	}
 	if n := len(s.umami.received()); n != 2 {
-		t.Errorf("umami recebeu %d eventos, quero 2", n)
+		t.Errorf("umami received %d events, want 2", n)
 	}
 }
 
@@ -322,7 +322,7 @@ func TestEventUmamiFailure(t *testing.T) {
 	base, _ := url.Parse(down.URL)
 	s := newSetup(t, func(g *gateway) { g.relay = relay.NewClient(base, "x-stellytics-client-ip", down.Client()) })
 	if resp := post(t, s, "text/plain", eventBody(activeSite)); resp.StatusCode != http.StatusBadGateway {
-		t.Errorf("status = %d, quero 502", resp.StatusCode)
+		t.Errorf("status = %d, want 502", resp.StatusCode)
 	}
 }
 
@@ -354,7 +354,7 @@ func TestHealthz(t *testing.T) {
 		t.Errorf("status = %d", resp.StatusCode)
 	}
 	if code := checkHealth(s.server.Listener.Addr().String()); code != 0 {
-		t.Errorf("checkHealth = %d, quero 0", code)
+		t.Errorf("checkHealth = %d, want 0", code)
 	}
 }
 
@@ -366,7 +366,7 @@ func TestScripts(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "v1.0.0", "n.js"), []byte("console.log(1)"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(filepath.Dir(dir), "segredo.txt"), []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(filepath.Dir(dir), "secret.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	root, err := os.OpenRoot(dir)
@@ -383,7 +383,7 @@ func TestScripts(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK || string(body) != "console.log(1)" {
-		t.Fatalf("status = %d, corpo = %q", resp.StatusCode, body)
+		t.Fatalf("status = %d, body = %q", resp.StatusCode, body)
 	}
 	for k, want := range map[string]string{
 		"Cache-Control":               "public, max-age=31536000, immutable",
@@ -392,27 +392,27 @@ func TestScripts(t *testing.T) {
 		"X-Content-Type-Options":      "nosniff",
 	} {
 		if got := resp.Header.Get(k); got != want {
-			t.Errorf("%s = %q, quero %q", k, got, want)
+			t.Errorf("%s = %q, want %q", k, got, want)
 		}
 	}
 
-	for _, p := range []string{"/s/", "/s/v1.0.0/", "/s/v9.9.9/n.js", "/s/../segredo.txt", "/s/%2e%2e/segredo.txt"} {
+	for _, p := range []string{"/s/", "/s/v1.0.0/", "/s/v9.9.9/n.js", "/s/../secret.txt", "/s/%2e%2e/secret.txt"} {
 		resp, err := http.Get(s.server.URL + p)
 		if err != nil {
 			t.Fatal(err)
 		}
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusNotFound {
-			t.Errorf("%s: status = %d, quero 404", p, resp.StatusCode)
+			t.Errorf("%s: status = %d, want 404", p, resp.StatusCode)
 		}
 		if cc := resp.Header.Get("Cache-Control"); strings.Contains(cc, "immutable") {
-			t.Errorf("%s: 404 com cache imutável", p)
+			t.Errorf("%s: 404 with immutable cache", p)
 		}
 	}
 }
 
-// Com SITE_STALE_TTL em 0, nada vencido é servido: a falha do banco continua
-// virando 503, mesmo para um site que o cache já conheceu.
+// With SITE_STALE_TTL at 0, nothing stale is served: the database failure still
+// becomes 503, even for a site the cache has already known.
 func TestEventStaleOffReturns503OnDBFailure(t *testing.T) {
 	var fail atomic.Bool
 	store := siteFunc(func(_ context.Context, id string) (bool, error) {
@@ -421,21 +421,22 @@ func TestEventStaleOffReturns503OnDBFailure(t *testing.T) {
 		}
 		return id == activeSite, nil
 	})
-	// TTL 0: toda requisição consulta o banco; sem stale, o erro passa.
+	// TTL 0: every request queries the database; without stale, the error goes
+	// through.
 	s := newSetup(t, func(g *gateway) { g.sites = site.NewCached(store, 0).WithStale(0) })
 	if r := post(t, s, "text/plain", eventBody(activeSite)); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("banco ok: status = %d, quero 204", r.StatusCode)
+		t.Fatalf("database ok: status = %d, want 204", r.StatusCode)
 	}
 	fail.Store(true)
 	if r := post(t, s, "text/plain", eventBody(activeSite)); r.StatusCode != http.StatusServiceUnavailable {
-		t.Fatalf("banco fora, stale desligado: status = %d, quero 503", r.StatusCode)
+		t.Fatalf("database down, stale off: status = %d, want 503", r.StatusCode)
 	}
 	if n := len(s.umami.received()); n != 1 {
-		t.Fatalf("eventos repassados = %d, quero 1", n)
+		t.Fatalf("relayed events = %d, want 1", n)
 	}
 }
 
-// Com stale ligado, o mesmo site conhecido segue aceito; um desconhecido não.
+// With stale on, the same known site stays accepted; an unknown one does not.
 func TestEventStaleOnServesKnownSite(t *testing.T) {
 	var fail atomic.Bool
 	store := siteFunc(func(_ context.Context, id string) (bool, error) {
@@ -448,14 +449,14 @@ func TestEventStaleOnServesKnownSite(t *testing.T) {
 	post(t, s, "text/plain", eventBody(activeSite))
 	fail.Store(true)
 	if r := post(t, s, "text/plain", eventBody(activeSite)); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("conhecido com banco fora: status = %d, quero 204", r.StatusCode)
+		t.Fatalf("known with database down: status = %d, want 204", r.StatusCode)
 	}
 	if n := len(s.umami.received()); n != 2 {
-		t.Fatalf("eventos repassados = %d, quero 2", n)
+		t.Fatalf("relayed events = %d, want 2", n)
 	}
 	unknown := "0a0b0c0d-0e0f-4000-8000-0000000000ff"
 	if r := post(t, s, "text/plain", eventBody(unknown)); r.StatusCode != http.StatusServiceUnavailable {
-		t.Fatalf("desconhecido com banco fora: status = %d, quero 503", r.StatusCode)
+		t.Fatalf("unknown with database down: status = %d, want 503", r.StatusCode)
 	}
 }
 
@@ -463,7 +464,7 @@ type siteFunc func(context.Context, string) (bool, error)
 
 func (f siteFunc) Active(ctx context.Context, id string) (bool, error) { return f(ctx, id) }
 
-// logStale registra o total de respostas vencidas, sem identificadores.
+// logStale logs the total of stale answers, without identifiers.
 func TestLogStaleReportsCount(t *testing.T) {
 	var fail atomic.Bool
 	store := siteFunc(func(context.Context, string) (bool, error) {
@@ -483,16 +484,16 @@ func TestLogStaleReportsCount(t *testing.T) {
 	done := make(chan struct{})
 	go func() { logStale(ctx, log, sites, 10*time.Millisecond); close(done) }()
 	deadline := time.Now().Add(2 * time.Second)
-	for !strings.Contains(buf.String(), "vencida") && time.Now().Before(deadline) {
+	for !strings.Contains(buf.String(), "stale") && time.Now().Before(deadline) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	cancel()
 	<-done
 	out := buf.String()
-	if !strings.Contains(out, `"respostas":1`) || !strings.Contains(out, `"total":1`) {
-		t.Fatalf("log inesperado: %s", out)
+	if !strings.Contains(out, `"responses":1`) || !strings.Contains(out, `"total":1`) {
+		t.Fatalf("unexpected log: %s", out)
 	}
 	if strings.Contains(out, activeSite) {
-		t.Fatal("o log não pode conter o ID do site")
+		t.Fatal("the log must not contain the site ID")
 	}
 }

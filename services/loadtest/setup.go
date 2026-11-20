@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// State é o que o setup cria, gravado em JSON para os outros subcomandos.
+// State is what setup creates, written as JSON for the other subcommands.
 type State struct {
 	UmamiURL string `json:"umami_url"`
 	// Web
@@ -28,21 +28,21 @@ type State struct {
 	UserID      string       `json:"user_id"`
 }
 
-// ServiceKey é um serviço de API do teste com a chave de ingestão dele.
+// ServiceKey is an API service of the test with its ingest key.
 type ServiceKey struct {
 	ID   string `json:"id"`
-	Mode string `json:"mode"` // "metrics" ou "spans"
+	Mode string `json:"mode"` // "metrics" or "spans"
 	Key  string `json:"key"`
 }
 
 func runSetup(args []string) error {
 	fs := flag.NewFlagSet("setup", flag.ExitOnError)
-	stellyticsDB := fs.String("stellytics-db", envOr("STELLYTICS_DATABASE_URL", "postgresql://stellytics:stellytics@127.0.0.1:5432/stellytics"), "banco stellytics (dono das tabelas)")
-	umamiURL := fs.String("umami-url", envOr("UMAMI_URL", "http://127.0.0.1:3001"), "Umami publicado no host")
-	out := fs.String("out", "state.json", "arquivo de estado (guarda as chaves ntf_ completas, modo 0600)")
-	metricsSvcs := fs.Int("metrics-services", 4, "serviços de API que mandam métricas")
-	spansSvcs := fs.Int("spans-services", 2, "serviços de API que mandam só spans")
-	allowRemote := fs.Bool("allow-remote", false, "permite alvos que não sejam loopback")
+	stellyticsDB := fs.String("stellytics-db", envOr("STELLYTICS_DATABASE_URL", "postgresql://stellytics:stellytics@127.0.0.1:5432/stellytics"), "stellytics database (owner of the tables)")
+	umamiURL := fs.String("umami-url", envOr("UMAMI_URL", "http://127.0.0.1:3001"), "Umami published on the host")
+	out := fs.String("out", "state.json", "state file (holds the full ntf_ keys, mode 0600)")
+	metricsSvcs := fs.Int("metrics-services", 4, "API services that send metrics")
+	spansSvcs := fs.Int("spans-services", 2, "API services that send only spans")
+	allowRemote := fs.Bool("allow-remote", false, "allows targets that are not loopback")
 	_ = fs.Parse(args)
 
 	if err := checkTargets(*allowRemote, map[string]string{"stellytics-db": *stellyticsDB, "umami-url": *umamiURL}); err != nil {
@@ -56,8 +56,8 @@ func runSetup(args []string) error {
 	defer db.Close(ctx)
 
 	st := State{UmamiURL: *umamiURL, UserID: "loadtest-" + randStr(8, "abcdefghijklmnopqrstuvwxyz0123456789")}
-	// O estado é gravado antes de cada passo e depois dele: se algo falhar no
-	// meio, o teardown acha o que já foi criado.
+	// The state is written before each step and after it: if something fails
+	// halfway, teardown finds what was already created.
 	save := func() error { return saveState(*out, st) }
 	if err := save(); err != nil {
 		return err
@@ -67,7 +67,7 @@ func runSetup(args []string) error {
 			st.UserID, st.UserID+"@example.invalid"); err != nil {
 			return err
 		}
-		// Web: site no Umami e tenant com esse site no banco stellytics.
+		// Web: site in Umami and tenant with that site in the stellytics database.
 		tok, err := umamiLogin(*umamiURL)
 		if err != nil {
 			return err
@@ -77,7 +77,7 @@ func runSetup(args []string) error {
 		}
 		if err := umamiDo(*umamiURL, tok, http.MethodPost, "/api/websites",
 			map[string]string{"name": st.UserID, "domain": "loadtest.example"}, &site); err != nil || site.ID == "" {
-			return fmt.Errorf("criando site no Umami: %v", err)
+			return fmt.Errorf("creating site in Umami: %v", err)
 		}
 		st.UmamiWebsiteID = site.ID
 		if err := save(); err != nil {
@@ -94,7 +94,7 @@ func runSetup(args []string) error {
 			return err
 		}
 
-		// API: um tenant com vários serviços, cada um com a própria chave.
+		// API: one tenant with several services, each with its own key.
 		if err := db.QueryRow(ctx, `INSERT INTO tenant (name, slug, status) VALUES ($1, $1, 'active') RETURNING id`, st.UserID+"-api").Scan(&st.APITenantID); err != nil {
 			return err
 		}
@@ -130,9 +130,9 @@ func runSetup(args []string) error {
 		return nil
 	}()
 	if err != nil {
-		return fmt.Errorf("setup parou no meio (%w); o que já foi criado está em %s: rode `loadtest teardown -state %s`", err, *out, *out)
+		return fmt.Errorf("setup stopped halfway (%w); what was already created is in %s: run `loadtest teardown -state %s`", err, *out, *out)
 	}
-	fmt.Printf("setup ok: site %s, tenant de API %s, %d serviços; estado em %s\n", st.UmamiWebsiteID, st.APITenantID, len(st.Services), *out)
+	fmt.Printf("setup ok: site %s, API tenant %s, %d services; state in %s\n", st.UmamiWebsiteID, st.APITenantID, len(st.Services), *out)
 	return nil
 }
 
@@ -144,19 +144,19 @@ func saveState(path string, st State) error {
 	return os.Chmod(path, 0o600)
 }
 
-// validateState confere que o estado descreve só dados do loadtest.
+// validateState checks that the state describes only loadtest data.
 func validateState(st State) error {
 	if !strings.HasPrefix(st.UserID, "loadtest-") || len(st.UserID) <= len("loadtest-") || strings.ContainsAny(st.UserID, "%_ ") {
-		return fmt.Errorf("user_id %q não começa com loadtest-: o arquivo não é de um setup", st.UserID)
+		return fmt.Errorf("user_id %q does not start with loadtest-: the file is not from a setup", st.UserID)
 	}
 	return nil
 }
 
 func runTeardown(args []string) error {
 	fs := flag.NewFlagSet("teardown", flag.ExitOnError)
-	stellyticsDB := fs.String("stellytics-db", envOr("STELLYTICS_DATABASE_URL", "postgresql://stellytics:stellytics@127.0.0.1:5432/stellytics"), "banco stellytics")
-	in := fs.String("state", "state.json", "arquivo de estado")
-	allowRemote := fs.Bool("allow-remote", false, "permite alvos que não sejam loopback")
+	stellyticsDB := fs.String("stellytics-db", envOr("STELLYTICS_DATABASE_URL", "postgresql://stellytics:stellytics@127.0.0.1:5432/stellytics"), "stellytics database")
+	in := fs.String("state", "state.json", "state file")
+	allowRemote := fs.Bool("allow-remote", false, "allows targets that are not loopback")
 	_ = fs.Parse(args)
 	st, err := loadState(*in)
 	if err != nil {
@@ -175,14 +175,14 @@ func runTeardown(args []string) error {
 	}
 	defer db.Close(ctx)
 
-	// Os tenants são achados pelo slug que o setup deu a eles; os IDs do
-	// arquivo, se houver, precisam bater. Nada é apagado se algo não bater.
+	// The tenants are found by the slug setup gave them; the IDs in the file,
+	// if any, must match. Nothing is deleted if something does not match.
 	var u int
 	if err := db.QueryRow(ctx, `SELECT count(*) FROM "user" WHERE id = $1 AND id LIKE 'loadtest-%'`, st.UserID).Scan(&u); err != nil {
 		return err
 	}
 	if u == 0 {
-		fmt.Printf("aviso: usuário %s não existe no banco; só os tenants e o site serão procurados\n", st.UserID)
+		fmt.Printf("warning: user %s does not exist in the database; only the tenants and the site will be looked up\n", st.UserID)
 	}
 	ids := map[string]string{}
 	for suffix, recorded := range map[string]string{"-web": st.WebTenantID, "-api": st.APITenantID} {
@@ -194,7 +194,7 @@ func runTeardown(args []string) error {
 		case err != nil:
 			return err
 		case recorded != "" && recorded != id:
-			return fmt.Errorf("tenant %s%s tem id %s no banco e %s no estado: abortando, nada foi apagado", st.UserID, suffix, id, recorded)
+			return fmt.Errorf("tenant %s%s has id %s in the database and %s in the state: aborting, nothing was deleted", st.UserID, suffix, id, recorded)
 		}
 		ids[suffix] = id
 	}
@@ -205,11 +205,11 @@ func runTeardown(args []string) error {
 			err = umamiDo(st.UmamiURL, tok, http.MethodDelete, "/api/websites/"+st.UmamiWebsiteID, nil, nil)
 		}
 		if err != nil {
-			fmt.Printf("AVISO: não consegui apagar o site %s no Umami (%v); apague à mão\n", st.UmamiWebsiteID, err)
+			fmt.Printf("WARNING: could not delete site %s in Umami (%v); delete it by hand\n", st.UmamiWebsiteID, err)
 		}
 	}
 
-	// Uma transação: ou apaga tudo no banco stellytics ou nada.
+	// One transaction: it deletes either everything in the stellytics database or nothing.
 	tx, err := db.Begin(ctx)
 	if err != nil {
 		return err
@@ -226,17 +226,17 @@ func runTeardown(args []string) error {
 			`DELETE FROM tenant WHERE id = $1`,
 		} {
 			if _, err := tx.Exec(ctx, q, id); err != nil {
-				return fmt.Errorf("%s: %w (transação desfeita: nada foi apagado no banco stellytics; o site do Umami pode já ter sido apagado)", q, err)
+				return fmt.Errorf("%s: %w (transaction rolled back: nothing was deleted in the stellytics database; the Umami site may already have been deleted)", q, err)
 			}
 		}
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM "user" WHERE id = $1 AND id LIKE 'loadtest-%'`, st.UserID); err != nil {
-		return fmt.Errorf("apagando usuário: %w (transação desfeita: nada foi apagado no banco stellytics)", err)
+		return fmt.Errorf("deleting user: %w (transaction rolled back: nothing was deleted in the stellytics database)", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
-	fmt.Printf("teardown ok: %d tenants e o usuário %s apagados\n", len(ids), st.UserID)
+	fmt.Printf("teardown ok: %d tenants and user %s deleted\n", len(ids), st.UserID)
 	return nil
 }
 
@@ -256,7 +256,7 @@ func umamiLogin(base string) (string, error) {
 	err := umamiDo(base, "", http.MethodPost, "/api/auth/login",
 		map[string]string{"username": envOr("UMAMI_USER", "admin"), "password": envOr("UMAMI_PASSWORD", "umami")}, &out)
 	if err == nil && out.Token == "" {
-		err = fmt.Errorf("login sem token")
+		err = fmt.Errorf("login without token")
 	}
 	return out.Token, err
 }

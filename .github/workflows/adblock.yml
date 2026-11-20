@@ -1,8 +1,8 @@
-# #23: confere o script e os endpoints do gateway contra as listas de bloqueio
-# (EasyList, EasyPrivacy, as listas padrão do uBlock Origin e a de Peter Lowe).
-# Fica fora do workflow ci: as listas mudam todo dia, e uma regra nova não pode
-# deixar vermelho um PR que não mexe no script nem nas rotas. Roda nos PRs que
-# mexem neles, na main e uma vez por dia, para pegar mudança nas listas.
+# #23: checks the script and the gateway endpoints against the block lists
+# (EasyList, EasyPrivacy, the uBlock Origin default lists and Peter Lowe's).
+# Stays out of the ci workflow: the lists change every day, and a new rule must
+# not turn red a PR that touches neither the script nor the routes. Runs on PRs
+# that touch them, on main and once a day, to catch changes in the lists.
 name: adblock
 
 on:

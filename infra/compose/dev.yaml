@@ -1,23 +1,23 @@
-# Ambiente local: PostgreSQL (bancos umami e stellytics), Umami v3.4.1, Mailpit, o portal,
-# o gateway de ingestão web, o coletor de métricas de API e o job de consolidação.
-# Valores padrão são só para desenvolvimento; sobrescreva em um .env na raiz.
+# Local environment: PostgreSQL (umami and stellytics databases), Umami v3.4.1, Mailpit, the portal,
+# the web ingestion gateway, the API metrics collector and the rollup job.
+# Default values are for development only; override them in a .env at the root.
 
 services:
   postgres:
-    # Postgres 17.11, fixado por digest.
+    # Postgres 17.11, pinned by digest.
     image: postgres:17.11-alpine@sha256:e5d2edd28b1f8d40a0a6c0c9cdc545b19b56a0d5d88f94bc11a97d970d4700d0
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       UMAMI_DB_PASSWORD: ${UMAMI_DB_PASSWORD:-umami}
       STELLYTICS_DB_PASSWORD: ${STELLYTICS_DB_PASSWORD:-stellytics}
-      # Usuários do gateway e do coletor, com permissão mínima (02-ingest-roles.sh).
+      # Gateway and collector users, with minimal privileges (02-ingest-roles.sh).
       STELLYTICS_INGEST_DB_PASSWORD: ${STELLYTICS_INGEST_DB_PASSWORD:-stellytics_ingest}
       STELLYTICS_COLLECTOR_DB_PASSWORD: ${STELLYTICS_COLLECTOR_DB_PASSWORD:-stellytics_collector}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      # Roda só na primeira subida (volume vazio): cria os bancos umami e stellytics
-      # e os usuários stellytics_ingest e stellytics_collector.
+      # Runs only on the first start (empty volume): creates the umami and stellytics databases
+      # and the stellytics_ingest and stellytics_collector users.
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
@@ -31,24 +31,24 @@ services:
     restart: unless-stopped
 
   umami:
-    # Umami v3.4.1, fixado por tag e digest. Só suba de versão por PR (ver CLAUDE.md).
+    # Umami v3.4.1, pinned by tag and digest. Upgrade only by PR (see CLAUDE.md).
     image: ghcr.io/umami-software/umami:3.4.1@sha256:e69d1a7932e9dab0fc523edc7be1f3a53f3c261f57856fc2167ae74a8fc022e8
     environment:
       DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD:-umami}@postgres:5432/umami
       APP_SECRET: ${UMAMI_APP_SECRET:-dev-only-umami-app-secret}
       DISABLE_TELEMETRY: "1"
-      # IP do cliente, já truncado pelo gateway.
+      # Client IP, already truncated by the gateway.
       CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-x-stellytics-client-ip}
     depends_on:
       postgres:
         condition: service_healthy
-    # Sem porta publicada (#62): o Umami só é alcançável pela rede interna, pelo
-    # portal e pelo gateway. Publicar o /api/send deixaria contornar o anti-bot e
-    # o truncamento de IP. Para usar a interface ou a API no host durante o
-    # desenvolvimento, inclua o umami-port.yaml (ver o README desta pasta).
-    # Gravação de sessão e heatmaps ficam desligados: só existem com
-    # recorder_enabled por site, que o portal nunca liga, e a rota /api/record
-    # não é repassada pelo gateway (docs/umami.md).
+    # No published port (#62): Umami is reachable only over the internal network, by the
+    # portal and the gateway. Publishing /api/send would allow bypassing the anti-bot and
+    # the IP truncation. To use the UI or the API on the host during
+    # development, include umami-port.yaml (see this folder's README).
+    # Session recording and heatmaps stay off: they exist only with
+    # recorder_enabled per site, which the portal never turns on, and the /api/record
+    # route is not relayed by the gateway (docs/umami.md).
     init: true
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/heartbeat"]
@@ -58,11 +58,11 @@ services:
       start_period: 20s
     restart: unless-stopped
 
-  # Recebe os e-mails do portal (confirmação e redefinição de senha, #60).
-  # Caixa de entrada em http://127.0.0.1:8025; SMTP em 127.0.0.1:1025 para o
-  # `next dev` fora do Docker. Em produção o SMTP vem da IaC (#14).
+  # Receives the portal's emails (confirmation and password reset, #60).
+  # Inbox at http://127.0.0.1:8025; SMTP at 127.0.0.1:1025 for
+  # `next dev` outside Docker. In production SMTP comes from the IaC (#14).
   mailpit:
-    # Mailpit v1.32.0, fixado por tag e digest.
+    # Mailpit v1.32.0, pinned by tag and digest.
     image: axllent/mailpit:v1.32.0@sha256:0790692be935ea4420d085694f7985b1f692ca6a8771ab0e0bd8ba75ac180498
     environment:
       MP_SMTP_AUTH_ACCEPT_ANY: "1"
@@ -81,28 +81,30 @@ services:
     build:
       context: ../..
       dockerfile: apps/portal/Dockerfile
-      # Estágio com as contas de desenvolvimento (drizzle-dev).
+      # Stage with the development accounts (drizzle-dev).
       target: dev
     image: stellytics-portal:dev
     environment:
       DATABASE_URL: postgresql://stellytics:${STELLYTICS_DB_PASSWORD:-stellytics}@postgres:5432/stellytics
       BETTER_AUTH_SECRET: ${PORTAL_AUTH_SECRET:-dev-only-portal-auth-secret-change-me}
       BETTER_AUTH_URL: http://localhost:${PORTAL_PORT:-3000}
-      # Aplica as migrações do Drizzle na subida.
+      # Applies the Drizzle migrations on startup.
       RUN_MIGRATIONS: "true"
-      # Contas de desenvolvimento (apps/portal/drizzle-dev). Nunca em produção.
+      # Development accounts (apps/portal/drizzle-dev). Never in production.
       SEED_DEV_DATA: "true"
-      # Conta de serviço no Umami (#58). A chave sai de
-      # `pnpm --filter @stellytics/portal umami:service-account`; sem ela o portal
-      # sobe, mas não cria sites nem lê estatísticas.
+      # Service account in Umami (#58). The key comes from
+      # `pnpm --filter @stellytics/portal umami:service-account`; without it the portal
+      # starts, but creates no sites and reads no statistics.
       UMAMI_URL: http://umami:3000
       UMAMI_API_KEY: ${UMAMI_API_KEY:-}
-      # E-mails de confirmação e de redefinição de senha vão para o Mailpit.
+      # Confirmation and password reset emails go to Mailpit.
       SMTP_URL: smtp://mailpit:1025
       MAIL_FROM: stellytics <no-reply@stellytics.localhost>
-      # Cadastro com aprovação prévia (#49, ADR 0007): true deixa projetos novos
-      # pendentes até um operador aprovar em /operator/approvals.
+      # Sign-up with prior approval (#49, ADR 0007): true leaves new projects
+      # pending until an operator approves them at /operator/approvals.
       SIGNUP_APPROVAL: ${SIGNUP_APPROVAL:-false}
+      # Public demo: slug of the tenant shown at /demo; empty = sample data.
+      DEMO_TENANT_SLUG: ${DEMO_TENANT_SLUG:-}
       # Gateway address in the installation tag shown on each site's page.
       INGEST_URL: http://localhost:${INGEST_WEB_PORT:-3002}
       # Collector OTLP address shown with each service's ingest keys.
@@ -128,20 +130,20 @@ services:
       dockerfile: services/ingest-web/Dockerfile
     image: stellytics-ingest-web:dev
     environment:
-      # Usuário que só lê a ingest_site.
+      # User that only reads ingest_site.
       DATABASE_URL: postgresql://stellytics_ingest:${STELLYTICS_INGEST_DB_PASSWORD:-stellytics_ingest}@postgres:5432/stellytics
       UMAMI_URL: http://umami:3000
       CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-x-stellytics-client-ip}
-      # CIDRs dos proxies cujo X-Forwarded-For vale (o Caddy, em produção).
+      # CIDRs of the proxies whose X-Forwarded-For is trusted (Caddy, in production).
       TRUSTED_PROXIES: ${INGEST_TRUSTED_PROXIES:-}
       RATE_LIMIT: ${INGEST_RATE_LIMIT:-20}
       RATE_BURST: ${INGEST_RATE_BURST:-40}
-      # Curto no ambiente local, para um site novo valer logo.
+      # Short in the local environment, so a new site takes effect quickly.
       SITE_CACHE_TTL: ${INGEST_SITE_CACHE_TTL:-5s}
-      # Chave dos desafios da prova de execução de JS (#25), com 32+ caracteres.
+      # Key for the JS execution proof challenges (#25), with 32+ characters.
       PROOF_SECRET: ${INGEST_PROOF_SECRET:-dev-only-ingest-proof-secret-change-me}
       PROOF_BITS: ${INGEST_PROOF_BITS:-12}
-      # Máximo de fingerprints distintas por IP truncado e site na janela (#26).
+      # Maximum distinct fingerprints per truncated IP and site in the window (#26).
       FINGERPRINT_LIMIT: ${INGEST_FINGERPRINT_LIMIT:-50}
       FINGERPRINT_WINDOW: ${INGEST_FINGERPRINT_WINDOW:-10m}
     depends_on:
@@ -149,7 +151,7 @@ services:
         condition: service_healthy
       umami:
         condition: service_healthy
-      # A visão ingest_site vem das migrações que o portal aplica ao subir.
+      # The ingest_site view comes from the migrations the portal applies on startup.
       portal:
         condition: service_healthy
     ports:
@@ -168,14 +170,14 @@ services:
       dockerfile: services/collector/Dockerfile
     image: stellytics-collector:dev
     environment:
-      # Usuário que só lê a ingest_key_active e grava em api_metric_1m.
+      # User that only reads ingest_key_active and writes to api_metric_1m.
       DATABASE_URL: postgresql://stellytics_collector:${STELLYTICS_COLLECTOR_DB_PASSWORD:-stellytics_collector}@postgres:5432/stellytics
-      # Curto no ambiente local, para uma chave nova ou revogada valer logo.
+      # Short in the local environment, so a new or revoked key takes effect quickly.
       INGEST_KEY_CACHE_TTL: ${COLLECTOR_KEY_CACHE_TTL:-5s}
     depends_on:
       postgres:
         condition: service_healthy
-      # A visão ingest_key_active vem das migrações que o portal aplica ao subir.
+      # The ingest_key_active view comes from the migrations the portal applies on startup.
       portal:
         condition: service_healthy
     ports:
@@ -189,26 +191,26 @@ services:
       start_period: 5s
     restart: unless-stopped
 
-  # Consolidação 1m -> 1h -> 1d e retenção das métricas de API (#34).
+  # Rollup 1m -> 1h -> 1d and retention of the API metrics (#34).
   rollup:
     build:
       context: ../..
       dockerfile: services/rollup/Dockerfile
     image: stellytics-rollup:dev
     environment:
-      # Dono das tabelas de métricas: cria e apaga partições.
+      # Owner of the metric tables: creates and drops partitions.
       DATABASE_URL: postgresql://stellytics:${STELLYTICS_DB_PASSWORD:-stellytics}@postgres:5432/stellytics
       ROLLUP_INTERVAL: ${ROLLUP_INTERVAL:-15m}
       ROLLUP_LOOKBACK: ${ROLLUP_LOOKBACK:-48h}
-      # Retenção dos eventos web no Umami (#154): o mesmo job apaga eventos e
-      # sessões mais antigos que UMAMI_RETENTION_DAYS (padrão, cerca de seis
-      # meses). Sem UMAMI_DATABASE_URL a poda fica desligada.
+      # Retention of the web events in Umami (#154): the same job deletes events and
+      # sessions older than UMAMI_RETENTION_DAYS (default, about six
+      # months). Without UMAMI_DATABASE_URL the pruning stays off.
       UMAMI_DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD:-umami}@postgres:5432/umami
       UMAMI_RETENTION_DAYS: ${UMAMI_RETENTION_DAYS:-183}
     depends_on:
       postgres:
         condition: service_healthy
-      # As funções api_metric_* vêm das migrações que o portal aplica ao subir.
+      # The api_metric_* functions come from the migrations the portal applies on startup.
       portal:
         condition: service_healthy
     healthcheck:

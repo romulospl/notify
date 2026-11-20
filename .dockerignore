@@ -8,4 +8,8 @@
 .github
 **/.env
 **/.env.*
-docs
+# Only the Markdown guides go into the build context (the portal renders them
+# at /docs); the local RFP copy is not part of the repository.
+docs/**
+!docs/**/*.md
+docs/RFP_*

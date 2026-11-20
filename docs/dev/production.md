@@ -1,6 +1,6 @@
 # Production infrastructure
 
-Step by step in `docs/deploy.md`; overview in `docs/arquitetura.md` (update it when a component or production changes). Decision in ADR 0016: one VPS, no high availability, no provisioning tool.
+Step by step in `docs/deploy.md`; overview in `docs/architecture.md` (update it when a component or production changes). Decision in ADR 0016: one VPS, no high availability, no provisioning tool.
 
 ## VPS path
 
@@ -19,9 +19,9 @@ Step by step in `docs/deploy.md`; overview in `docs/arquitetura.md` (update it w
 
 ## Availability, load and handover (#51, #52, #54)
 
-- Load: `docs/relatorios/carga-1m-dia.md` (tool in `services/loadtest/`, which refuses a remote target without `-allow-remote`; measured only on a local machine).
+- Load: `docs/reports/load-1m-per-day.md` (tool in `services/loadtest/`, which refuses a remote target without `-allow-remote`; measured only on a local machine).
 - Availability: `docs/sla.md`. One VPS does not sustain 99.99%; HA was dropped as outside the RFP (ADR 0016, ADR 0009 rejected).
-- Handover: `docs/transferencia.md` with `infra/scripts/db-export|db-import|db-fingerprint.sh` (import deletes databases: needs `--yes`, refuses a target with tenants and validates dumps before any `DROP`).
+- Handover: `docs/handover.md` with `infra/scripts/db-export|db-import|db-fingerprint.sh` (import deletes databases: needs `--yes`, refuses a target with tenants and validates dumps before any `DROP`).
 
 ## Runbooks (#53)
 

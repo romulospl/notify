@@ -1,4 +1,4 @@
-// Package limit aplica um token bucket por chave (o IP já truncado).
+// Package limit applies a token bucket per key (the already truncated IP).
 package limit
 
 import (
@@ -10,7 +10,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// Limiter guarda um rate.Limiter por chave, só em memória.
+// Limiter keeps one rate.Limiter per key, in memory only.
 type Limiter struct {
 	rate  rate.Limit
 	burst int
@@ -26,8 +26,8 @@ type bucket struct {
 	seen time.Time
 }
 
-// New cria um Limiter com perSecond eventos por segundo e rajada burst.
-// Chaves sem uso há mais de idle são removidas por Run.
+// New creates a Limiter with perSecond events per second and a burst of burst.
+// Keys unused for longer than idle are removed by Run.
 func New(perSecond float64, burst int, idle time.Duration) *Limiter {
 	return &Limiter{
 		rate:    rate.Limit(perSecond),
@@ -38,7 +38,7 @@ func New(perSecond float64, burst int, idle time.Duration) *Limiter {
 	}
 }
 
-// Allow consome um token da chave e diz se o evento pode seguir.
+// Allow consumes a token from the key and says whether the event may proceed.
 func (l *Limiter) Allow(key netip.Addr) bool {
 	now := l.now()
 	l.mu.Lock()
@@ -52,7 +52,7 @@ func (l *Limiter) Allow(key netip.Addr) bool {
 	return b.lim.AllowN(now, 1)
 }
 
-// Sweep remove as chaves paradas há mais de idle.
+// Sweep removes the keys idle for longer than idle.
 func (l *Limiter) Sweep() {
 	cutoff := l.now().Add(-l.idle)
 	l.mu.Lock()
@@ -64,14 +64,14 @@ func (l *Limiter) Sweep() {
 	}
 }
 
-// Len diz quantas chaves estão em memória.
+// Len says how many keys are in memory.
 func (l *Limiter) Len() int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return len(l.buckets)
 }
 
-// Run chama Sweep a cada every até o contexto acabar.
+// Run calls Sweep at each every interval until the context ends.
 func (l *Limiter) Run(ctx context.Context, every time.Duration) {
 	t := time.NewTicker(every)
 	defer t.Stop()

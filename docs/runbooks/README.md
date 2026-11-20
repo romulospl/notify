@@ -1,22 +1,22 @@
-# Runbooks de operação
+# Operations runbooks
 
-Procedimentos para operar a produção do stellytics ([#53](https://github.com/romulospl/stellytics/issues/53)). Eles partem do que existe na `main`: o [`infra/compose/prod.yaml`](../../infra/compose/prod.yaml), os scripts de [`infra/`](../../infra/README.md), os alertas de [`infra/monitoring`](../../infra/monitoring/prometheus/rules/alerts.yml) e os comandos `pnpm` do portal. O passo a passo de montar e restaurar a produção continua em [`docs/deploy.md`](../deploy.md); os runbooks apontam para ele em vez de copiá-lo.
+Procedures for operating stellytics in production ([#53](https://github.com/romulospl/stellytics/issues/53)). They start from what exists on `main`: [`infra/compose/prod.yaml`](../../infra/compose/prod.yaml), the scripts in [`infra/`](../../infra/README.md), the alerts in [`infra/monitoring`](../../infra/monitoring/prometheus/rules/alerts.yml) and the portal's `pnpm` commands. The step-by-step for setting up and restoring production stays in [`docs/deploy.md`](../deploy.md); the runbooks point to it instead of copying it.
 
-> **Status.** Nenhum destes runbooks foi exercitado numa produção real: ainda não houve deploy numa VPS real (ver "Como este guia foi conferido" em [`docs/deploy.md`](../deploy.md)). Os comandos foram conferidos contra os arquivos do repositório (nomes de serviços, scripts, units e variáveis), não executados na VPS. Cada runbook lista o que não pôde ser testado. Depois do primeiro incidente ou ensaio real, corrija o runbook.
+> **Status.** None of these runbooks has been exercised in a real production: there has been no deploy on a real VPS yet (see "How this guide was checked" in [`docs/deploy.md`](../deploy.md)). The commands were checked against the repository files (service names, scripts, units and variables), not run on the VPS. Each runbook lists what could not be tested. After the first real incident or rehearsal, fix the runbook.
 
-| Runbook | Quando usar |
+| Runbook | When to use |
 |---|---|
-| [Incidentes](incidentes.md) | Alerta do monitoramento, portal ou ingestão web fora do ar, certificado vencendo |
-| [Backup e restauração](backup-e-restauracao.md) | Backup não rodou, perda de dados ou do disco, ensaio de restauração |
-| [Rotação de segredos](rotacao-de-segredos.md) | Segredo vazou ou é hora de trocar |
-| [Atualização do Umami](atualizacao-do-umami.md) | PR do Renovate com versão nova do Umami |
-| [Resposta a vulnerabilidades](vulnerabilidades.md) | Relato em `SECURITY.md`, chave vazada, projeto a bloquear, operador comprometido |
+| [Incidents](incidents.md) | Monitoring alert, portal or web ingestion down, certificate expiring |
+| [Backup and restore](backup-and-restore.md) | Backup did not run, loss of data or of the disk, restore rehearsal |
+| [Secret rotation](secret-rotation.md) | A secret leaked or it is time to change it |
+| [Umami upgrade](umami-upgrade.md) | Renovate PR with a new Umami version |
+| [Vulnerability response](vulnerabilities.md) | Report under `SECURITY.md`, leaked key, project to block, compromised operator |
 
-## Convenções
+## Conventions
 
-- **Na VPS** quer dizer `ssh` na VPS e, a partir daí, `cd` na pasta do checkout do repositório (onde rodam `init.sh` e `deploy.sh`; a produção é uma VPS só, sem réplica, ver [ADR 0016](../adr/0016-producao-em-vps.md)). Nos runbooks, `docker compose -f prod.yaml` é abreviação de `sudo docker compose --env-file .env.production -f infra/compose/prod.yaml`, rodado dessa pasta. Os serviços do `prod.yaml` são `postgres`, `umami`, `portal`, `ingest-web`, `collector`, `rollup` e `caddy` (o projeto se chama `stellytics`; os contêineres são `stellytics-<serviço>-1`). Todos esses serviços, inclusive o proxy Caddy, rodam em Docker Compose.
-- **Pelo túnel** quer dizer com [`infra/scripts/admin-tunnel.sh <ip-da-vps>`](../../infra/scripts/admin-tunnel.sh) aberto: Postgres em `127.0.0.1:15432` e Umami em `http://127.0.0.1:13001`.
-- **No host de monitoramento** os arquivos ficam em `infra/monitoring/` de um checkout do repositório, gerados por `infra/monitoring/configure.sh <env-file>`, com `docker compose` a partir dessa pasta.
-- Logs de serviço: `docker compose -f prod.yaml logs --tail 200 <serviço>`. O Caddy remove IP, cabeçalhos e URL dos logs; os demais serviços também não devem persistir IP completo.
-- O coletor de API e o `rollup` estão no `prod.yaml` desde 16/11/2026 (ADR 0012), mas os runbooks ainda não têm procedimento próprio para eles: use a triagem geral de `incidentes.md` (`ps`, `logs collector`, `logs rollup`).
-- Quem escala: hoje a operação é de uma pessoa só (a que mantém o repositório). "Escalar" nos runbooks quer dizer registrar o incidente por escrito (relato de segurança do GitHub, se envolver vulnerabilidade, ou uma nota datada) e acionar suporte do provedor quando o problema for dele (VPS, armazenamento S3 do backup, Let's Encrypt, SMTP).
+- **On the VPS** means `ssh` into the VPS and, from there, `cd` into the repository checkout folder (where `init.sh` and `deploy.sh` run; production is a single VPS, with no replica, see [ADR 0016](../adr/0016-production-on-a-vps.md)). In the runbooks, `docker compose -f prod.yaml` is short for `sudo docker compose --env-file .env.production -f infra/compose/prod.yaml`, run from that folder. The services in `prod.yaml` are `postgres`, `umami`, `portal`, `ingest-web`, `collector`, `rollup` and `caddy` (the project is named `stellytics`; the containers are `stellytics-<service>-1`). All of these services, including the Caddy proxy, run in Docker Compose.
+- **Through the tunnel** means with [`infra/scripts/admin-tunnel.sh <vps-ip>`](../../infra/scripts/admin-tunnel.sh) open: Postgres at `127.0.0.1:15432` and Umami at `http://127.0.0.1:13001`.
+- **On the monitoring host** the files live in `infra/monitoring/` of a repository checkout, generated by `infra/monitoring/configure.sh <env-file>`, with `docker compose` run from that folder.
+- Service logs: `docker compose -f prod.yaml logs --tail 200 <service>`. Caddy removes IP, headers and URL from the logs; the other services must not persist the full IP either.
+- The API collector and `rollup` have been in `prod.yaml` since 16 November 2026 (ADR 0012), but the runbooks do not yet have a procedure of their own for them: use the general triage in `incidents.md` (`ps`, `logs collector`, `logs rollup`).
+- Who escalates: today operations are run by one person only (the one who maintains the repository). "Escalate" in the runbooks means recording the incident in writing (a GitHub security report, if it involves a vulnerability, or a dated note) and contacting the provider's support when the problem is theirs (VPS, S3 storage for the backup, Let's Encrypt, SMTP).

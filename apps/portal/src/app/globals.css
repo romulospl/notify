@@ -180,3 +180,37 @@
     outline-offset: 2px;
   }
 }
+
+/* Bullet lists of the documentation guides (/docs/[slug]): one row per item
+   between rules, marked with a "+"; nested lists stay compact. */
+@layer components {
+  .docs-list {
+    margin-top: 1.25rem;
+  }
+  .docs-list > li {
+    position: relative;
+    border-top: 1px solid var(--border);
+    padding: 0.75rem 0 0.75rem 1.75rem;
+    line-height: 1.65;
+  }
+  .docs-list > li::before {
+    content: "+";
+    position: absolute;
+    left: 0.25rem;
+    top: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--accent-text);
+  }
+  .docs-list .docs-list {
+    margin-top: 0.5rem;
+  }
+  .docs-list .docs-list > li {
+    border-top: 0;
+    padding: 0.2rem 0 0.2rem 1.25rem;
+  }
+  .docs-list .docs-list > li::before {
+    content: "–";
+    top: 0.2rem;
+    color: var(--muted);
+  }
+}

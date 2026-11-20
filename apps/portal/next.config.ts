@@ -2,12 +2,12 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Imagem Docker enxuta: só o servidor e as dependências rastreadas.
+  // Lean Docker image: only the server and the traced dependencies.
   output: "standalone",
-  // Monorepo: rastreia dependências a partir da raiz do repositório.
+  // Monorepo: traces dependencies from the repository root.
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
   poweredByHeader: false,
-  // O portal não usa o otimizador de imagens; evita depender de libvips em execução.
+  // The portal does not use the image optimizer; avoids depending on libvips at runtime.
   images: { unoptimized: true },
 };
 

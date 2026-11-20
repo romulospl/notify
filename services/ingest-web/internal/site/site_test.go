@@ -30,38 +30,38 @@ func TestCachedKeepsPositiveAndNegative(t *testing.T) {
 
 	for range 3 {
 		if ok, _ := c.Active(ctx, "a"); !ok {
-			t.Fatal("a deveria estar ativo")
+			t.Fatal("a should be active")
 		}
 		if ok, _ := c.Active(ctx, "b"); ok {
-			t.Fatal("b não deveria estar ativo")
+			t.Fatal("b should not be active")
 		}
 	}
 	if next.calls != 2 {
-		t.Fatalf("consultas = %d, quero 2", next.calls)
+		t.Fatalf("queries = %d, want 2", next.calls)
 	}
 
-	// Depois do TTL, a resposta é buscada de novo.
+	// After the TTL, the answer is fetched again.
 	next.active["b"] = true
 	now = now.Add(time.Minute)
 	if ok, _ := c.Active(ctx, "b"); !ok {
-		t.Fatal("b não foi atualizado depois do TTL")
+		t.Fatal("b was not updated after the TTL")
 	}
 	if next.calls != 3 {
-		t.Fatalf("consultas = %d, quero 3", next.calls)
+		t.Fatalf("queries = %d, want 3", next.calls)
 	}
 }
 
 func TestCachedDoesNotKeepErrors(t *testing.T) {
-	next := &countingStore{err: errors.New("banco fora")}
+	next := &countingStore{err: errors.New("database down")}
 	c := NewCached(next, time.Minute)
 	ctx := context.Background()
 	for range 2 {
 		if _, err := c.Active(ctx, "a"); err == nil {
-			t.Fatal("erro não repassado")
+			t.Fatal("error not passed on")
 		}
 	}
 	if next.calls != 2 {
-		t.Fatalf("consultas = %d, quero 2", next.calls)
+		t.Fatalf("queries = %d, want 2", next.calls)
 	}
 }
 
@@ -72,18 +72,19 @@ func TestCachedIsBounded(t *testing.T) {
 		_, _ = c.Active(ctx, string(rune(i)))
 	}
 	if n := len(c.neg); n > maxCached {
-		t.Fatalf("cache com %d entradas, limite %d", n, maxCached)
+		t.Fatalf("cache with %d entries, limit %d", n, maxCached)
 	}
 }
 
-// flakyStore troca entre respostas e falhas e é seguro para uso concorrente.
+// flakyStore switches between answers and failures and is safe for concurrent
+// use.
 type flakyStore struct {
 	mu      sync.Mutex
 	calls   int
 	active  map[string]bool
 	fail    bool
-	gate    chan struct{} // se não nulo, Active espera nele (ou no ctx)
-	started chan struct{} // se não nulo, recebe um sinal a cada consulta iniciada
+	gate    chan struct{} // if non-nil, Active waits on it (or on ctx)
+	started chan struct{} // if non-nil, receives a signal for each query started
 }
 
 func (s *flakyStore) Active(ctx context.Context, id string) (bool, error) {
@@ -102,7 +103,7 @@ func (s *flakyStore) Active(ctx context.Context, id string) (bool, error) {
 		}
 	}
 	if fail {
-		return false, errors.New("banco fora")
+		return false, errors.New("database down")
 	}
 	return a, nil
 }
@@ -125,7 +126,7 @@ func (s *flakyStore) n() int {
 	return s.calls
 }
 
-// testClock é um relógio controlado, seguro para uso concorrente.
+// testClock is a controlled clock, safe for concurrent use.
 type testClock struct {
 	mu sync.Mutex
 	t  time.Time
@@ -151,27 +152,27 @@ func newStale(stale time.Duration) (*Cached, *flakyStore, *testClock) {
 	return c, next, clk
 }
 
-// Regressão: com stale 0, o erro do banco continua sendo repassado, mesmo com
-// entrada conhecida e vencida, e o circuit breaker não age.
+// Regression: with stale 0, the database error is still passed on, even with a
+// known, expired entry, and the circuit breaker does not act.
 func TestStaleOffKeepsErrors(t *testing.T) {
 	c, next, clk := newStale(0)
 	ctx := context.Background()
 	if ok, err := c.Active(ctx, "live"); !ok || err != nil {
-		t.Fatal("deveria aceitar")
+		t.Fatal("should accept")
 	}
 	next.set(true)
 	clk.add(2 * time.Minute)
 	base := next.n()
 	for range 3 {
 		if _, err := c.Active(ctx, "live"); err == nil {
-			t.Fatal("sem stale, o erro deveria passar")
+			t.Fatal("without stale, the error should go through")
 		}
 	}
 	if got := next.n() - base; got != 3 {
-		t.Fatalf("sem stale cada chamada consulta o banco: %d consultas, quero 3", got)
+		t.Fatalf("without stale each call queries the database: %d queries, want 3", got)
 	}
 	if c.StaleServed() != 0 {
-		t.Fatal("contador deveria ser zero")
+		t.Fatal("counter should be zero")
 	}
 }
 
@@ -181,36 +182,37 @@ func TestStaleServesKnownSiteUntilTTL(t *testing.T) {
 	c.Active(ctx, "live")
 	next.set(true)
 
-	clk.add(time.Minute) // vencida, dentro do stale
+	clk.add(time.Minute) // expired, within stale
 	if ok, err := c.Active(ctx, "live"); !ok || err != nil {
-		t.Fatalf("deveria servir vencida: %v %v", ok, err)
+		t.Fatalf("should serve the stale one: %v %v", ok, err)
 	}
-	clk.add(9*time.Minute + 59*time.Second) // ainda dentro (vencida há < 10 min)
+	clk.add(9*time.Minute + 59*time.Second) // still within (expired < 10 min ago)
 	if ok, err := c.Active(ctx, "live"); !ok || err != nil {
-		t.Fatalf("ainda dentro do stale: %v %v", ok, err)
+		t.Fatalf("still within stale: %v %v", ok, err)
 	}
 	if c.StaleServed() != 2 {
-		t.Fatalf("contador = %d, quero 2", c.StaleServed())
+		t.Fatalf("counter = %d, want 2", c.StaleServed())
 	}
-	clk.add(2 * time.Second) // passou do stale
+	clk.add(2 * time.Second) // past stale
 	if _, err := c.Active(ctx, "live"); err == nil {
-		t.Fatal("depois do stale deveria voltar o erro")
+		t.Fatal("after stale the error should return")
 	}
 	if c.StaleServed() != 2 {
-		t.Fatal("erro não conta como vencida servida")
+		t.Fatal("an error does not count as a stale one served")
 	}
 }
 
 func TestStaleNeverAcceptsUnknownSite(t *testing.T) {
 	c, next, _ := newStale(time.Hour)
 	next.set(true)
-	ok, err := c.Active(context.Background(), "live") // nunca visto
+	ok, err := c.Active(context.Background(), "live") // never seen
 	if ok || err == nil {
-		t.Fatalf("site nunca visto: ok=%v err=%v, quero erro", ok, err)
+		t.Fatalf("site never seen: ok=%v err=%v, want an error", ok, err)
 	}
 }
 
-// Um site recusado nunca vira aceito por estar vencido, e não ganha stale.
+// A refused site never becomes accepted for being expired, and gets no stale
+// answer.
 func TestStaleNeverTurnsRefusedIntoAccepted(t *testing.T) {
 	c, next, clk := newStale(time.Hour)
 	ctx := context.Background()
@@ -218,9 +220,9 @@ func TestStaleNeverTurnsRefusedIntoAccepted(t *testing.T) {
 	next.set(true)
 	clk.add(5 * time.Minute)
 	if ok, _ := c.Active(ctx, "gone"); ok {
-		t.Fatal("recusado nunca pode virar aceito")
+		t.Fatal("a refused one can never become accepted")
 	}
-	// Um site aceito que passa a ser recusado perde a entrada aceita.
+	// An accepted site that becomes refused loses the accepted entry.
 	next.set(false)
 	next.mu.Lock()
 	next.active["live"] = true
@@ -230,30 +232,32 @@ func TestStaleNeverTurnsRefusedIntoAccepted(t *testing.T) {
 	next.active["live"] = false
 	next.mu.Unlock()
 	clk.add(2 * time.Minute)
-	c.Active(ctx, "live") // volta recusado
+	c.Active(ctx, "live") // comes back refused
 	next.set(true)
 	clk.add(2 * time.Minute)
 	if ok, _ := c.Active(ctx, "live"); ok {
-		t.Fatal("site que virou recusado não pode voltar pelo stale")
+		t.Fatal("a site that became refused must not come back through stale")
 	}
 }
 
-// A revogação durante a falha só vale quando o banco volta.
+// A revocation during the failure only takes effect when the database comes
+// back.
 func TestStaleRevocationAppliesWhenDBReturns(t *testing.T) {
 	c, next, clk := newStale(time.Hour)
 	ctx := context.Background()
 	c.Active(ctx, "live")
 	next.set(true)
 	next.mu.Lock()
-	next.active["live"] = false // removido durante a queda
+	next.active["live"] = false // removed during the outage
 	next.mu.Unlock()
 	clk.add(5 * time.Minute)
 	if ok, _ := c.Active(ctx, "live"); !ok {
-		t.Fatal("durante a queda a resposta vencida ainda vale")
+		t.Fatal("during the outage the stale answer is still valid")
 	}
 	next.set(false)
-	clk.add(errBackoff) // o circuito deixa a sonda passar
-	// A sonda é em segundo plano; a primeira chamada ainda recebe o vencido.
+	clk.add(errBackoff) // the circuit lets the probe through
+	// The probe runs in the background; the first call still gets the stale
+	// one.
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		ok, err := c.Active(ctx, "live")
@@ -261,14 +265,14 @@ func TestStaleRevocationAppliesWhenDBReturns(t *testing.T) {
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("com o banco de volta deveria recusar: %v %v", ok, err)
+			t.Fatalf("with the database back it should refuse: %v %v", ok, err)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 }
 
-// waitWaiters espera, sem dormir às cegas, até n requisições estarem presas na
-// consulta em voo de id.
+// waitWaiters waits, without sleeping blindly, until n requests are stuck on
+// the in-flight query for id.
 func waitWaiters(t *testing.T, c *Cached, id string, n int) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
@@ -284,7 +288,7 @@ func waitWaiters(t *testing.T, c *Cached, id string, n int) {
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("esperadores = %d, quero %d", got, n)
+			t.Fatalf("waiters = %d, want %d", got, n)
 		}
 		runtime.Gosched()
 	}
@@ -317,11 +321,11 @@ func TestStaleSingleFlight(t *testing.T) {
 	close(results)
 	for r := range results {
 		if !r {
-			t.Fatal("todas deveriam receber a resposta vencida")
+			t.Fatal("all of them should get the stale answer")
 		}
 	}
 	if got := next.n() - base; got != 1 {
-		t.Fatalf("consultas em voo = %d, quero 1", got)
+		t.Fatalf("queries in flight = %d, want 1", got)
 	}
 }
 
@@ -338,24 +342,24 @@ func TestCanceledWaiterDoesNotBreakOthers(t *testing.T) {
 	<-started
 	cancel()
 	if err := <-errc; err == nil {
-		t.Fatal("quem cancelou deveria receber erro")
+		t.Fatal("whoever cancelled should get an error")
 	}
 	close(gate)
-	// A consulta compartilhada continuou: esta chamada entra nela ou lê o cache.
+	// The shared query went on: this call joins it or reads the cache.
 	if ok, err := c.Active(context.Background(), "live"); !ok || err != nil {
-		t.Fatalf("a consulta compartilhada deveria ter sido aproveitada: %v %v", ok, err)
+		t.Fatalf("the shared query should have been reused: %v %v", ok, err)
 	}
 }
 
-// IDs inventados só enchem o mapa negativo: o site aceito sobrevive, também
-// durante a falha do banco.
+// Made-up IDs only fill the negative map: the accepted site survives, also
+// during the database failure.
 func TestStaleSaturationKeepsAcceptedSite(t *testing.T) {
 	c, next, clk := newStale(time.Hour)
 	ctx := context.Background()
 	if ok, _ := c.Active(ctx, "live"); !ok {
-		t.Fatal("deveria aceitar")
+		t.Fatal("should accept")
 	}
-	// Enche o cache com mais negativas do que o teto.
+	// Fills the cache with more negatives than the cap.
 	for i := range maxCached + 500 {
 		_, _ = c.Active(ctx, fmt.Sprintf("fake-%d", i))
 	}
@@ -365,16 +369,17 @@ func TestStaleSaturationKeepsAcceptedSite(t *testing.T) {
 	}
 	c.mu.Unlock()
 
-	// Banco cai; mais IDs inventados, e o site bom segue sendo servido vencido.
+	// The database goes down; more made-up IDs, and the good site keeps being
+	// served stale.
 	next.set(true)
 	clk.add(5 * time.Minute)
 	for i := range 3000 {
 		if ok, _ := c.Active(ctx, fmt.Sprintf("fake2-%d", i)); ok {
-			t.Fatal("inventado não pode ser aceito")
+			t.Fatal("a made-up one must not be accepted")
 		}
 	}
 	if ok, err := c.Active(ctx, "live"); !ok || err != nil {
-		t.Fatalf("site aceito perdido na saturação: %v %v", ok, err)
+		t.Fatalf("accepted site lost in the saturation: %v %v", ok, err)
 	}
 }
 
@@ -390,10 +395,10 @@ func TestAcceptedMapIsBounded(t *testing.T) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if len(c.entries) > maxCached {
-		t.Fatalf("aceitos = %d, limite %d", len(c.entries), maxCached)
+		t.Fatalf("accepted = %d, limit %d", len(c.entries), maxCached)
 	}
 	if _, ok := c.entries[fmt.Sprintf("s-%d", maxCached+49)]; !ok {
-		t.Fatal("a entrada mais nova deveria estar no cache")
+		t.Fatal("the newest entry should be in the cache")
 	}
 }
 
@@ -401,9 +406,9 @@ type storeFunc func(context.Context, string) (bool, error)
 
 func (f storeFunc) Active(ctx context.Context, id string) (bool, error) { return f(ctx, id) }
 
-// Banco pendurado: a primeira requisição espera o timeout; depois o circuito
-// abre e as seguintes recebem o vencido na hora, sem novas consultas, até a
-// sonda de depois do backoff.
+// Hanging database: the first request waits for the timeout; then the circuit
+// opens and the following ones get the stale one immediately, without new
+// queries, until the probe after the backoff.
 func TestStaleTimeoutAndCircuitBreaker(t *testing.T) {
 	c, next, clk := newStale(time.Hour)
 	c.timeout = 50 * time.Millisecond
@@ -411,42 +416,43 @@ func TestStaleTimeoutAndCircuitBreaker(t *testing.T) {
 	c.Active(ctx, "live")
 	base := next.n()
 	next.set(true)
-	next.setGate(make(chan struct{})) // nunca abre: o banco pendura
+	next.setGate(make(chan struct{})) // never opens: the database hangs
 	clk.add(5 * time.Minute)
 
 	start := time.Now()
 	if ok, err := c.Active(ctx, "live"); !ok || err != nil {
-		t.Fatalf("deveria servir o vencido depois do timeout: %v %v", ok, err)
+		t.Fatalf("should serve the stale one after the timeout: %v %v", ok, err)
 	}
 	if d := time.Since(start); d < 40*time.Millisecond || d > 2*time.Second {
-		t.Fatalf("esperou %v, esperado perto do timeout de 50ms", d)
+		t.Fatalf("waited %v, expected close to the 50ms timeout", d)
 	}
 
-	// Circuito aberto: resposta imediata e nenhuma consulta nova.
+	// Circuit open: immediate answer and no new query.
 	start = time.Now()
 	for range 100 {
 		if ok, err := c.Active(ctx, "live"); !ok || err != nil {
-			t.Fatalf("circuito aberto deveria servir o vencido: %v %v", ok, err)
+			t.Fatalf("open circuit should serve the stale one: %v %v", ok, err)
 		}
 		if _, err := c.Active(ctx, "never-seen"); err == nil {
-			t.Fatal("desconhecido deveria receber o erro")
+			t.Fatal("an unknown one should get the error")
 		}
 	}
 	if d := time.Since(start); d > 40*time.Millisecond {
-		t.Fatalf("circuito aberto demorou %v", d)
+		t.Fatalf("open circuit took %v", d)
 	}
 	if got := next.n() - base; got != 1 {
-		t.Fatalf("consultas = %d, quero 1 (o resto veio do circuito)", got)
+		t.Fatalf("queries = %d, want 1 (the rest came from the circuit)", got)
 	}
 
-	// Depois do backoff, uma sonda (só uma) testa o banco, ainda pendurado.
+	// After the backoff, one probe (only one) tests the database, still
+	// hanging.
 	clk.add(errBackoff)
 	for range 20 {
 		if ok, _ := c.Active(ctx, "live"); !ok {
-			t.Fatal("durante a sonda o vencido continua valendo")
+			t.Fatal("during the probe the stale one is still valid")
 		}
 	}
-	// A sonda expira em 50ms e reabre o circuito.
+	// The probe expires in 50ms and reopens the circuit.
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		c.mu.Lock()
@@ -456,15 +462,15 @@ func TestStaleTimeoutAndCircuitBreaker(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("sonda não terminou")
+			t.Fatal("probe did not finish")
 		}
 		runtime.Gosched()
 	}
 	if got := next.n() - base; got != 2 {
-		t.Fatalf("consultas = %d, quero 2 (a primeira e uma sonda)", got)
+		t.Fatalf("queries = %d, want 2 (the first one and one probe)", got)
 	}
 
-	// O banco volta: a próxima sonda fecha o circuito.
+	// The database comes back: the next probe closes the circuit.
 	next.set(false)
 	next.setGate(nil)
 	clk.add(errBackoff)
@@ -478,11 +484,11 @@ func TestStaleTimeoutAndCircuitBreaker(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("circuito não fechou")
+			t.Fatal("circuit did not close")
 		}
 		runtime.Gosched()
 	}
 	if ok, err := c.Active(ctx, "live"); !ok || err != nil {
-		t.Fatalf("depois da recuperação: %v %v", ok, err)
+		t.Fatalf("after the recovery: %v %v", ok, err)
 	}
 }

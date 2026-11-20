@@ -1,8 +1,8 @@
-# OTel Collector do tenant fazendo dual-export (#35): recebe o OTLP do app e
-# manda o mesmo dado para o backend próprio e para o coletor do stellytics.
+# The tenant's OTel Collector doing dual-export (#35): receives the app's OTLP
+# and sends the same data to the tenant's own backend and to the stellytics collector.
 #
-# Variáveis: STELLYTICS_OTLP_ENDPOINT (ex.: https://otlp.<dominio-do-stellytics>) e
-# STELLYTICS_INGEST_KEY (ntf_..., criada em /services no portal).
+# Variables: STELLYTICS_OTLP_ENDPOINT (e.g. https://otlp.<stellytics-domain>) and
+# STELLYTICS_INGEST_KEY (ntf_..., created in /services in the portal).
 receivers:
   otlp:
     protocols:
@@ -15,10 +15,10 @@ processors:
   batch: {}
 
 exporters:
-  # Fica no lugar do APM do tenant (Jaeger, Tempo, Prometheus, um SaaS...).
+  # Stands in for the tenant's APM (Jaeger, Tempo, Prometheus, a SaaS...).
   debug:
     verbosity: basic
-  # Coletor do stellytics.
+  # stellytics collector.
   otlp_http/stellytics:
     endpoint: ${env:STELLYTICS_OTLP_ENDPOINT}
     headers:

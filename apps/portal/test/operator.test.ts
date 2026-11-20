@@ -1,5 +1,5 @@
-// Operador SCF (#19): regra D2 no banco, comando de administração, seed de
-// desenvolvimento e visão global, contra o Postgres de DATABASE_URL.
+// SCF operator (#19): rule D2 in the database, admin command, development
+// seed and global view, against the DATABASE_URL Postgres.
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -27,12 +27,12 @@ const SCRIPTS = path.join(import.meta.dirname, "..", "scripts");
 const DOMAIN = "@operator-test.stellytics.invalid";
 const SLUG = "operator-test-";
 const PASSWORD = "operator-password-123";
-// Só o teste monta o contexto à mão; no portal ele vem de requireOperatorContext().
-// O userId é preenchido no beforeAll com um operador de verdade, porque
-// tenant.status_changed_by aponta para user.id.
+// Only the test builds the context by hand; in the portal it comes from requireOperatorContext().
+// The userId is filled in beforeAll with a real operator, because
+// tenant.status_changed_by points to user.id.
 let operator = { userId: "test-operator" } as OperatorContext;
 
-// Roda um script do portal com o banco dos testes e sem Umami.
+// Runs a portal script with the test database and without Umami.
 async function script(name: string, args: string[], env: Record<string, string> = {}) {
   const base = { ...process.env };
   delete base.UMAMI_API_KEY;
@@ -86,8 +86,8 @@ afterAll(async () => {
   await sql.end();
 });
 
-describe("operador não é membro de tenant (D2) no banco", () => {
-  it("recusa pôr um operador num tenant", async () => {
+describe("an operator is not a tenant member (D2) in the database", () => {
+  it("refuses to put an operator in a tenant", async () => {
     const op = await createUser("operator");
     const t = await createTenant();
     await expect(db.insert(tenantMember).values({ tenantId: t.id, userId: op.id })).rejects.toMatchObject({
@@ -95,7 +95,7 @@ describe("operador não é membro de tenant (D2) no banco", () => {
     });
   });
 
-  it("recusa promover um membro de tenant a operador", async () => {
+  it("refuses to promote a tenant member to operator", async () => {
     const member = await createUser();
     const t = await createTenant();
     await db.insert(tenantMember).values({ tenantId: t.id, userId: member.id, role: "owner" });
@@ -105,8 +105,8 @@ describe("operador não é membro de tenant (D2) no banco", () => {
   });
 });
 
-describe("comando de administração", () => {
-  it("create cria operador com e-mail confirmado, sem tenant, e registra no audit_log", async () => {
+describe("admin command", () => {
+  it("create creates an operator with a confirmed e-mail, without a tenant, and records it in the audit_log", async () => {
     const email = `new-op${DOMAIN}`;
     const result = await script("operator.mjs", ["create", "--email", email, "--name", "SCF"], {
       OPERATOR_PASSWORD: PASSWORD,
@@ -120,11 +120,11 @@ describe("comando de administração", () => {
     const entries = (await db.select().from(auditLog).where(eq(auditLog.action, "operator.created"))).filter(
       (a) => (a.details as { userId?: string }).userId === created!.id,
     );
-    // Ator nulo: a ação veio do comando de administração.
+    // Null actor: the action came from the admin command.
     expect(entries).toMatchObject([{ actorUserId: null }]);
   });
 
-  it("create recusa senha curta", async () => {
+  it("create rejects a short password", async () => {
     const result = await script("operator.mjs", ["create", "--email", `short${DOMAIN}`, "--name", "X"], {
       OPERATOR_PASSWORD: "short",
     });
@@ -132,7 +132,7 @@ describe("comando de administração", () => {
     expect(await db.select().from(user).where(eq(user.email, `short${DOMAIN}`))).toEqual([]);
   });
 
-  it("promote e demote mudam o papel, registram e encerram as sessões", async () => {
+  it("promote and demote change the role, record it and end the sessions", async () => {
     const target = await createUser();
     await db.insert(session).values({
       id: randomUUID(),
@@ -156,7 +156,7 @@ describe("comando de administração", () => {
     expect(actions).toEqual(["operator.promoted", "operator.demoted"]);
   });
 
-  it("promote recusa membro de tenant e não muda nada", async () => {
+  it("promote refuses a tenant member and changes nothing", async () => {
     const member = await createUser();
     const t = await createTenant();
     await db.insert(tenantMember).values({ tenantId: t.id, userId: member.id, role: "owner" });
@@ -168,24 +168,24 @@ describe("comando de administração", () => {
     expect(row!.role).toBe("tenant");
   });
 
-  it("o cadastro de usuário comum não cria operador", async () => {
+  it("regular user sign-up does not create an operator", async () => {
     const email = `plain${DOMAIN}`;
     const result = await script("create-user.mjs", ["--email", email, "--name", "X", "--role", "operator"], {
       PORTAL_USER_PASSWORD: PASSWORD,
     });
-    // A opção --role não existe mais: o script recusa o argumento.
+    // The --role option no longer exists: the script rejects the argument.
     expect(result.code).not.toBe(0);
     expect(await db.select().from(user).where(eq(user.email, email))).toEqual([]);
   });
 });
 
-describe("seed de desenvolvimento", () => {
-  it("cria 2 projetos e 1 operador, e pode rodar de novo", async () => {
+describe("development seed", () => {
+  it("creates 2 projects and 1 operator, and can run again", async () => {
     const env = { SEED_PASSWORD: PASSWORD };
     expect((await script("seed.mjs", [], env)).code).toBe(0);
     const again = await script("seed.mjs", [], env);
     expect(again.code).toBe(0);
-    expect(again.out).toContain("já existia");
+    expect(again.out).toContain("already existed");
 
     const seeded = await db.select().from(tenant).where(inArray(tenant.slug, ["seed-project-a", "seed-project-b"]));
     expect(seeded).toHaveLength(2);
@@ -200,8 +200,8 @@ describe("seed de desenvolvimento", () => {
   });
 });
 
-describe("visão global do operador", () => {
-  it("lista todos os tenants, inclusive removidos, com as contagens", async () => {
+describe("operator's global view", () => {
+  it("lists all tenants, including removed ones, with the counts", async () => {
     const active = await createTenant();
     const removed = await createTenant("removed");
     const owner = await createUser();
@@ -226,7 +226,7 @@ describe("visão global do operador", () => {
     expect(all.find((t) => t.id === removed.id)).toMatchObject({ status: "removed", members: 0 });
   });
 
-  it("detalha o tenant sem expor o hash das chaves", async () => {
+  it("details the tenant without exposing the hash of the keys", async () => {
     const t = await createTenant();
     const owner = await createUser();
     await db.insert(tenantMember).values({ tenantId: t.id, userId: owner.id, role: "owner" });
@@ -253,12 +253,12 @@ describe("visão global do operador", () => {
   });
 });
 
-describe("remoção e reativação de projeto (#20)", () => {
+describe("project removal and reactivation (#20)", () => {
   async function auditOf(tenantId: string) {
     return db.select().from(auditLog).where(eq(auditLog.tenantId, tenantId)).orderBy(auditLog.at);
   }
 
-  it("remover grava status, quem, quando e motivo, e registra no audit_log", async () => {
+  it("removing stores status, who, when and reason, and records it in the audit_log", async () => {
     const t = await createTenant();
     const before = Date.now();
 
@@ -280,7 +280,7 @@ describe("remoção e reativação de projeto (#20)", () => {
     ]);
   });
 
-  it("remover exige motivo e limita o tamanho, sem gravar nada", async () => {
+  it("removing requires a reason and limits its length, without storing anything", async () => {
     const t = await createTenant();
     for (const reason of ["", "  ", "no", "x".repeat(REASON_MAX + 1)]) {
       await expect(removeTenant(operator, t.id, { reason })).rejects.toBeInstanceOf(TenantStatusError);
@@ -290,7 +290,7 @@ describe("remoção e reativação de projeto (#20)", () => {
     expect(await auditOf(t.id)).toEqual([]);
   });
 
-  it("remover de novo não muda nada nem duplica o registro, mesmo com pedidos simultâneos", async () => {
+  it("removing again changes nothing and does not duplicate the record, even with simultaneous requests", async () => {
     const t = await createTenant();
     const results = await Promise.all([
       removeTenant(operator, t.id, { reason: "first" }),
@@ -301,7 +301,7 @@ describe("remoção e reativação de projeto (#20)", () => {
     expect(await auditOf(t.id)).toHaveLength(1);
   });
 
-  it("reativar volta a active, limpa o motivo e registra a observação (D6)", async () => {
+  it("reactivating goes back to active, clears the reason and records the note (D6)", async () => {
     const t = await createTenant();
     await removeTenant(operator, t.id, { reason: "Spam" });
 
@@ -313,12 +313,12 @@ describe("remoção e reativação de projeto (#20)", () => {
       ["tenant.removed", { from: "active", reason: "Spam" }],
       ["tenant.reactivated", { from: "removed", reason: "Removed by mistake" }],
     ]);
-    // Sem observação também vale.
+    // Without a note works too.
     await removeTenant(operator, t.id, { reason: "Spam again" });
     expect(await reactivateTenant(operator, t.id)).toBe("changed");
   });
 
-  it("reativar só vale para projeto removido", async () => {
+  it("reactivating only works for a removed project", async () => {
     const active = await createTenant();
     expect(await reactivateTenant(operator, active.id)).toBe("unchanged");
     const [pending] = await db
@@ -330,7 +330,7 @@ describe("remoção e reativação de projeto (#20)", () => {
     expect(await auditOf(pending!.id)).toEqual([]);
   });
 
-  it("aprovar vale só para projeto pendente: vira active e registra quem, quando e a observação (#49)", async () => {
+  it("approving only works for a pending project: it becomes active and records who, when and the note (#49)", async () => {
     const t = await createTenant("pending");
     expect(await listPendingTenants(operator)).toEqual(expect.arrayContaining([expect.objectContaining({ id: t.id })]));
 
@@ -342,14 +342,14 @@ describe("remoção e reativação de projeto (#20)", () => {
       ["tenant.approved", operator.userId, { from: "pending", reason: "Known Stellar team" }],
     ]);
     expect((await listPendingTenants(operator)).map((p) => p.id)).not.toContain(t.id);
-    // Aprovar de novo, ou um projeto que não está pendente, não grava nada.
+    // Approving again, or a project that is not pending, stores nothing.
     expect(await approveTenant(operator, t.id)).toBe("unchanged");
     const removed = await createTenant("removed");
     expect(await approveTenant(operator, removed.id)).toBe("unchanged");
     expect(await auditOf(removed.id)).toEqual([]);
   });
 
-  it("rejeitar exige motivo, vira removed com o motivo e pode ser reativado (#49)", async () => {
+  it("rejecting requires a reason, becomes removed with the reason and can be reactivated (#49)", async () => {
     const t = await createTenant("pending");
     await expect(rejectTenant(operator, t.id, { reason: " " })).rejects.toBeInstanceOf(TenantStatusError);
     await expect(rejectTenant(operator, t.id, { reason: "x".repeat(REASON_MAX + 1) })).rejects.toBeInstanceOf(
@@ -367,25 +367,25 @@ describe("remoção e reativação de projeto (#20)", () => {
     expect((await auditOf(t.id)).map((a) => [a.action, a.actorUserId, a.details])).toEqual([
       ["tenant.rejected", operator.userId, { from: "pending", reason: "Not a Stellar project" }],
     ]);
-    // Rejeitar projeto ativo não vale; reativar o rejeitado vale (D6).
+    // Rejecting an active project does not work; reactivating the rejected one does (D6).
     const active = await createTenant();
     expect(await rejectTenant(operator, active.id, { reason: "Spam" })).toBe("unchanged");
     expect(await reactivateTenant(operator, t.id)).toBe("changed");
   });
 
-  it("aprovar e rejeitar: ID inexistente ou inválido devolve nulo", async () => {
+  it("approve and reject: a nonexistent or invalid ID returns null", async () => {
     expect(await approveTenant(operator, randomUUID())).toBeNull();
     expect(await approveTenant(operator, "not-a-uuid")).toBeNull();
     expect(await rejectTenant(operator, randomUUID(), { reason: "Spam" })).toBeNull();
   });
 
-  it("projeto inexistente ou ID inválido devolve nulo", async () => {
+  it("a nonexistent project or invalid ID returns null", async () => {
     expect(await removeTenant(operator, randomUUID(), { reason: "Spam" })).toBeNull();
     expect(await removeTenant(operator, "not-a-uuid", { reason: "Spam" })).toBeNull();
     expect(await reactivateTenant(operator, randomUUID())).toBeNull();
   });
 
-  it("o detalhe mostra quem mudou o status e o histórico, do mais novo ao mais antigo", async () => {
+  it("the detail shows who changed the status and the history, newest to oldest", async () => {
     const t = await createTenant();
     await removeTenant(operator, t.id, { reason: "Spam" });
     await reactivateTenant(operator, t.id, { reason: "Appeal accepted" });

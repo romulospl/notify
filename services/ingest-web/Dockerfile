@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Imagem do gateway de ingestão web. O contexto do build é a raiz do repositório:
+# Web ingestion gateway image. The build context is the repository root:
 #   docker build -f services/ingest-web/Dockerfile .
 
 FROM golang:1.26.11-alpine@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab AS build

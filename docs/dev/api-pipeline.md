@@ -1,6 +1,6 @@
 # API pipeline: collector, metric tables and rollup
 
-Contract in `docs/specs/e5-pipeline-de-api.md` (route normalization, tables, buckets, retention). Read it before any E5 issue (#30–#36).
+Contract in `docs/specs/e5-api-pipeline.md` (route normalization, tables, buckets, retention). Read it before any E5 issue (#30–#36).
 
 ## Collector (`services/collector`)
 

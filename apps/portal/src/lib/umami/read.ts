@@ -2,14 +2,15 @@ import "server-only";
 import type { Period } from "../period";
 import { umamiRequest } from "./http";
 
-// Leituras do Umami pelo ID do site no Umami. INTERNO a src/lib/umami/: quem
-// chama já conferiu de onde veio o ID (o site do tenant, em stats.ts, ou a
-// lista de projetos ativos do operador, em overview.ts). A regra de lint
-// proíbe importar este arquivo fora de src/lib/umami/, como o http.ts, porque
-// o spec do E2 (seção 4) não deixa função pública aceitar o ID do Umami.
+// Umami reads by the site's ID in Umami. INTERNAL to src/lib/umami/: the
+// caller has already checked where the ID came from (the tenant's site, in
+// stats.ts, or the operator's list of active projects, in overview.ts). The
+// lint rule forbids importing this file outside src/lib/umami/, like http.ts,
+// because the E2 spec (section 4) does not let a public function accept the
+// Umami ID.
 //
-// Formato conferido no Umami 3.4.1 (ADR 0001): `y` do /metrics conta
-// visitantes; /pageviews só devolve os baldes com dados.
+// Format checked on Umami 3.4.1 (ADR 0001): `y` of /metrics counts visitors;
+// /pageviews only returns the buckets with data.
 
 export type Totals = {
   pageviews: number;

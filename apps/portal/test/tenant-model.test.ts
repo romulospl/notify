@@ -1,5 +1,5 @@
-// Teste de integração do modelo de tenants (#16) contra um Postgres real
-// (DATABASE_URL). Exige os papéis stellytics_ingest e stellytics_collector
+// Integration test of the tenant model (#16) against a real Postgres
+// (DATABASE_URL). Requires the roles stellytics_ingest and stellytics_collector
 // (infra/compose/postgres/init/02-ingest-roles.sh).
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { eq, inArray, like } from "drizzle-orm";
@@ -12,7 +12,7 @@ import { asRole } from "./helpers/as-role";
 const DOMAIN = "@tenant-test.stellytics.invalid";
 const SLUG = "tenant-test-";
 
-// Prefixo de 8 caracteres em base32 minúsculo, como o da #59.
+// 8-character prefix in lowercase base32, like the one from #59.
 function randomPrefix() {
   const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
   return Array.from(randomBytes(8), (b) => alphabet[b % 32]).join("");
@@ -70,8 +70,8 @@ afterAll(async () => {
   await sql.end();
 });
 
-describe("modelo de tenants", () => {
-  it("cria o tenant ativo por padrão e aceita os três status", async () => {
+describe("tenant model", () => {
+  it("creates the tenant active by default and accepts the three statuses", async () => {
     const created = await createTenant();
     expect(created.status).toBe("active");
     expect(created.statusChangedBy).toBeNull();
@@ -84,7 +84,7 @@ describe("modelo de tenants", () => {
     ).rejects.toThrow();
   });
 
-  it("um usuário pertence a um único tenant (D1)", async () => {
+  it("a user belongs to a single tenant (D1)", async () => {
     const a = await createTenant();
     const b = await createTenant();
     const member = await createUser();
@@ -94,7 +94,7 @@ describe("modelo de tenants", () => {
     ).rejects.toThrow();
   });
 
-  it("o domínio do site é único por tenant", async () => {
+  it("the site domain is unique per tenant", async () => {
     const a = await createTenant();
     const b = await createTenant();
     const values = { name: "Site", domain: "example.org" };
@@ -105,7 +105,7 @@ describe("modelo de tenants", () => {
     ).rejects.toThrow();
   });
 
-  it("a chave de ingestão precisa ser do mesmo tenant do serviço", async () => {
+  it("the ingest key must belong to the same tenant as the service", async () => {
     const a = await createTenant();
     const b = await createTenant();
     const serviceOfA = await createService(a.id);
@@ -113,7 +113,7 @@ describe("modelo de tenants", () => {
     await expect(createKey(serviceOfA.id, b.id, userId)).rejects.toThrow();
   });
 
-  it("recusa prefixo fora do formato e hash que não é SHA-256", async () => {
+  it("rejects a malformed prefix and a hash that is not SHA-256", async () => {
     const a = await createTenant();
     const service = await createService(a.id);
     const base = { apiServiceId: service.id, tenantId: a.id, createdBy: userId };
@@ -125,24 +125,24 @@ describe("modelo de tenants", () => {
     ).rejects.toThrow();
   });
 
-  it("audit_log só recebe inserções", async () => {
+  it("audit_log is insert-only", async () => {
     await expect(
       sql.begin(async (tx) => {
         await tx`insert into audit_log (action) values ('test.append_only')`;
         await tx`update audit_log set action = 'changed' where action = 'test.append_only'`;
       }),
-    ).rejects.toThrow(/só recebe inserções/);
+    ).rejects.toThrow(/is insert-only/);
     await expect(
       sql.begin(async (tx) => {
         await tx`insert into audit_log (action) values ('test.append_only')`;
         await tx`delete from audit_log where action = 'test.append_only'`;
       }),
-    ).rejects.toThrow(/só recebe inserções/);
+    ).rejects.toThrow(/is insert-only/);
   });
 });
 
-describe("visões de ingestão (D4)", () => {
-  it("ingest_site aceita só site não arquivado de tenant ativo", async () => {
+describe("ingestion views (D4)", () => {
+  it("ingest_site accepts only a non-archived site of an active tenant", async () => {
     const active = await createTenant();
     const removed = await createTenant("removed");
     const live = randomUUID();
@@ -169,7 +169,7 @@ describe("visões de ingestão (D4)", () => {
     expect(accepts).toEqual({ [live]: true, [archived]: false, [ofRemoved]: false });
   });
 
-  it("ingest_key_active mostra só chaves válidas, com tenant e serviço", async () => {
+  it("ingest_key_active shows only valid keys, with tenant and service", async () => {
     const active = await createTenant();
     const removed = await createTenant("removed");
     const service = await createService(active.id);
@@ -187,7 +187,7 @@ describe("visões de ingestão (D4)", () => {
     expect(rows).toEqual([{ prefix: valid, tenant_id: active.id, service_name: "api" }]);
   });
 
-  it("os usuários de ingestão não leem as tabelas nem a visão do outro", async () => {
+  it("the ingestion users read neither the tables nor each other's view", async () => {
     const denied = [
       ["stellytics_ingest", 'select 1 from "user"'],
       ["stellytics_ingest", "select 1 from site"],

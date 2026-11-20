@@ -1,6 +1,6 @@
-// Chaves de leitura do SCF e API de leitura (#48, ADR 0006) contra o Postgres
-// de DATABASE_URL e um Umami falso. Os casos de isolamento (tenant, ingestão,
-// coletor) ficam em isolation.test.ts.
+// SCF read keys and read API (#48, ADR 0006) against the DATABASE_URL
+// Postgres and a fake Umami. The isolation cases (tenant, ingestion,
+// collector) live in isolation.test.ts.
 import { randomUUID } from "node:crypto";
 import { desc, eq, inArray, like } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,9 +25,9 @@ import { GET as getProjects } from "@/app/api/v1/projects/route";
 import { GET as getWeb } from "@/app/api/v1/web/route";
 import { startFakeUmami, type FakeUmami } from "./fake-umami";
 
-// O segredo é tudo depois de `nrk_<prefixo>_`. Ele é base64url e pode conter `_`,
-// então cortar a chave por `_` e pegar o terceiro pedaço dá um fragmento curto
-// que aparece em qualquer JSON e deixa o teste instável.
+// The secret is everything after `nrk_<prefix>_`. It is base64url and may contain `_`,
+// so splitting the key on `_` and taking the third piece gives a short fragment
+// that shows up in any JSON and makes the test flaky.
 function secretOf(key: string): string {
   return key.slice(key.indexOf("_", "nrk_".length) + 1);
 }
@@ -96,8 +96,8 @@ afterAll(async () => {
   await sql.end();
 });
 
-describe("formato da chave", () => {
-  it("é nrk_<prefixo>_<segredo> e nunca parece uma chave de ingestão", () => {
+describe("key format", () => {
+  it("is nrk_<prefix>_<secret> and never looks like an ingest key", () => {
     const { key, prefix, keyHash } = generateReadKey();
     expect(key).toMatch(READ_KEY_PATTERN);
     expect(key.startsWith(`nrk_${prefix}_`)).toBe(true);
@@ -107,15 +107,15 @@ describe("formato da chave", () => {
   });
 });
 
-describe("gerar, listar e revogar", () => {
-  it("guarda só o hash, lista sem segredo e escreve no audit_log", async () => {
+describe("generate, list and revoke", () => {
+  it("stores only the hash, lists without the secret and writes to the audit_log", async () => {
     const created = await newKey("Grafana");
     expect(created.key).toMatch(READ_KEY_PATTERN);
     expect(created.summary).toMatchObject({ name: "Grafana", createdByMe: true, revokedAt: null, lastUsedOn: null });
 
     const [row] = await db.select().from(operatorApiKey).where(eq(operatorApiKey.id, created.summary.id));
     expect(row!.keyHash).toEqual(hashReadKey(created.key));
-    // A chave completa não está em nenhuma coluna de texto da tabela nem do audit_log.
+    // The full key is in no text column of the table or of the audit_log.
     const secret = secretOf(created.key);
     const dump = JSON.stringify([
       row,
@@ -134,17 +134,17 @@ describe("gerar, listar e revogar", () => {
     expect(audit!.details).toMatchObject({ keyId: created.summary.id, prefix: created.summary.prefix });
   });
 
-  it("valida o nome", async () => {
+  it("validates the name", async () => {
     await expect(createReadKey(op, { name: "   " })).rejects.toBeInstanceOf(ReadKeyError);
     await expect(createReadKey(op, { name: "x".repeat(101) })).rejects.toMatchObject({ code: "invalid_name" });
   });
 
-  it("revoga uma vez, trata repetição e ID desconhecido, e audita", async () => {
+  it("revokes once, handles repetition and an unknown ID, and audits", async () => {
     const { summary } = await newKey("to-revoke");
     expect(await revokeReadKey(op, summary.id)).toBe(true);
     expect(await revokeReadKey(op, summary.id)).toBe(false);
     expect(await revokeReadKey(op, randomUUID())).toBeNull();
-    expect(await revokeReadKey(op, "não-é-uuid")).toBeNull();
+    expect(await revokeReadKey(op, "not-a-uuid")).toBeNull();
     const [audit] = await db
       .select()
       .from(auditLog)
@@ -155,7 +155,7 @@ describe("gerar, listar e revogar", () => {
     expect((await listReadKeys(op)).find((k) => k.id === summary.id)?.revokedAt).not.toBeNull();
   });
 
-  it("limita as chaves ativas", async () => {
+  it("limits the active keys", async () => {
     await db.update(operatorApiKey).set({ revokedAt: new Date() });
     for (let i = 0; i < MAX_ACTIVE_READ_KEYS; i++) await newKey(`k${i}`);
     await expect(newKey("one-more")).rejects.toMatchObject({ code: "key_limit" });
@@ -163,12 +163,12 @@ describe("gerar, listar e revogar", () => {
   });
 });
 
-describe("autenticação da API", () => {
+describe("API authentication", () => {
   async function snapshot(res: Response) {
     return { status: res.status, body: await res.text(), headers: [...res.headers].sort() };
   }
 
-  it("toda recusa tem status, corpo e cabeçalhos idênticos, sem pista do motivo", async () => {
+  it("every refusal has identical status, body and headers, with no hint of the reason", async () => {
     const good = await newKey("good");
     const revoked = await newKey("revoked-401");
     await revokeReadKey(op, revoked.summary.id);
@@ -179,15 +179,15 @@ describe("autenticação da API", () => {
     const wrongSecret = `${good.key.slice(0, -1)}${good.key.endsWith("A") ? "B" : "A"}`;
 
     const attempts: [string, string | undefined, string | undefined][] = [
-      ["sem header", undefined, undefined],
-      ["esquema errado", undefined, "Basic abc"],
-      ["bearer sem chave", undefined, "Bearer "],
-      ["formato errado", "nrk_ABCDEFGH_x", undefined],
-      ["chave de ingestão", `ntf_abcdefgh_${"A".repeat(43)}`, undefined],
-      ["prefixo desconhecido", `nrk_zzzzzzzz_${"A".repeat(43)}`, undefined],
-      ["segredo errado", wrongSecret, undefined],
-      ["chave revogada", revoked.key, undefined],
-      ["ex-operador", ex.key, undefined],
+      ["no header", undefined, undefined],
+      ["wrong scheme", undefined, "Basic abc"],
+      ["bearer without a key", undefined, "Bearer "],
+      ["wrong format", "nrk_ABCDEFGH_x", undefined],
+      ["ingest key", `ntf_abcdefgh_${"A".repeat(43)}`, undefined],
+      ["unknown prefix", `nrk_zzzzzzzz_${"A".repeat(43)}`, undefined],
+      ["wrong secret", wrongSecret, undefined],
+      ["revoked key", revoked.key, undefined],
+      ["ex-operator", ex.key, undefined],
     ];
     const results = [];
     for (const [name, key, header] of attempts) {
@@ -204,37 +204,37 @@ describe("autenticação da API", () => {
     await sql`UPDATE "user" SET role = 'operator' WHERE id = ${exId}`;
   });
 
-  it("aceita o esquema Bearer sem diferenciar maiúsculas (RFC 7235)", async () => {
+  it("accepts the Bearer scheme case-insensitively (RFC 7235)", async () => {
     const { key } = await newKey("case");
     for (const scheme of ["bearer", "BEARER", "BeArEr"]) {
       expect((await call(getProjects, "/api/v1/projects", undefined, `${scheme} ${key}`)).status, scheme).toBe(200);
     }
   });
 
-  it("falha ao gravar o último uso não derruba uma chave válida e não vaza a chave", async () => {
+  it("a failure to record the last use does not bring down a valid key and does not leak the key", async () => {
     const { key, summary } = await newKey("write-fails");
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const update = vi.spyOn(db, "update").mockImplementationOnce(() => {
-      throw new Error(`falha com ${key}`);
+      throw new Error(`failure with ${key}`);
     });
     const res = await call(getProjects, "/api/v1/projects", key);
     expect(res.status).toBe(200);
     expect(update).toHaveBeenCalledTimes(1);
-    expect(spy).toHaveBeenCalledWith("Falha ao gravar o último uso da chave de leitura", "Error");
+    expect(spy).toHaveBeenCalledWith("Failed to record the last use of the read key", "Error");
     expect(JSON.stringify(spy.mock.calls)).not.toContain(secretOf(key));
     expect((await listReadKeys(op)).find((k) => k.id === summary.id)?.lastUsedOn).toBeNull();
     update.mockRestore();
     spy.mockRestore();
   });
 
-  it("segredo errado com prefixo certo: 401", async () => {
+  it("wrong secret with the right prefix: 401", async () => {
     const { key } = await newKey();
     const wrong = `${key.slice(0, -1)}${key.endsWith("A") ? "B" : "A"}`;
     expect((await call(getProjects, "/api/v1/projects", wrong)).status).toBe(401);
     expect((await call(getProjects, "/api/v1/projects", key)).status).toBe(200);
   });
 
-  it("chave revogada falha e a chave de quem deixou de ser operador também", async () => {
+  it("a revoked key fails and so does the key of someone who is no longer an operator", async () => {
     const { key, summary } = await newKey("revoked");
     expect((await call(getProjects, "/api/v1/projects", key)).status).toBe(200);
     await revokeReadKey(op, summary.id);
@@ -250,14 +250,14 @@ describe("autenticação da API", () => {
     expect((await call(getProjects, "/api/v1/projects", second.key)).status).toBe(200);
   });
 
-  it("grava o último uso no máximo uma vez por dia", async () => {
+  it("records the last use at most once a day", async () => {
     const { key, summary } = await newKey("used");
     await call(getProjects, "/api/v1/projects", key);
     const today = new Date().toISOString().slice(0, 10);
     expect((await listReadKeys(op)).find((k) => k.id === summary.id)?.lastUsedOn).toBe(today);
   });
 
-  it("não escreve a chave no log em caso de erro", async () => {
+  it("does not write the key to the log on error", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { key } = await newKey("log");
     await call(getProjects, "/api/v1/projects", key);
@@ -267,8 +267,8 @@ describe("autenticação da API", () => {
   });
 });
 
-describe("limite de requisições", () => {
-  it("devolve 429 com Retry-After depois do limite, por chave", async () => {
+describe("request limit", () => {
+  it("returns 429 with Retry-After after the limit, per key", async () => {
     const a = await newKey("a");
     const b = await newKey("b");
     for (let i = 0; i < READ_API_LIMIT; i++) {
@@ -277,11 +277,11 @@ describe("limite de requisições", () => {
     const limited = await call(getProjects, "/api/v1/projects", a.key);
     expect(limited.status).toBe(429);
     expect(Number(limited.headers.get("retry-after"))).toBeGreaterThan(0);
-    // Outra chave não é afetada.
+    // Another key is not affected.
     expect((await call(getProjects, "/api/v1/projects", b.key)).status).toBe(200);
   });
 
-  it("a janela reabre depois de um minuto", () => {
+  it("the window reopens after one minute", () => {
     const t0 = 1_000_000;
     for (let i = 0; i < 3; i++) expect(takeToken("w", t0, 3).ok).toBe(true);
     expect(takeToken("w", t0 + 1000, 3)).toMatchObject({ ok: false });
@@ -289,11 +289,11 @@ describe("limite de requisições", () => {
   });
 });
 
-describe("limite por IP antes da consulta", () => {
+describe("per-IP limit before the lookup", () => {
   const withIp = (ip: string, key: string) => call(getProjects, "/api/v1/projects", key, undefined, { "x-forwarded-for": ip });
   const unknown = `nrk_zzzzzzzz_${"A".repeat(43)}`;
 
-  it("depois do limite, chutes de chave dão 429 sem consultar o banco; outro IP segue", async () => {
+  it("after the limit, key guesses get 429 without querying the database; another IP carries on", async () => {
     const select = vi.spyOn(db, "select");
     for (let i = 0; i < LOOKUP_LIMIT_PER_IP; i++) expect((await withIp("203.0.113.7", unknown)).status).toBe(401);
     expect(select).toHaveBeenCalledTimes(LOOKUP_LIMIT_PER_IP);
@@ -301,33 +301,33 @@ describe("limite por IP antes da consulta", () => {
     expect(limited.status).toBe(429);
     expect(Number(limited.headers.get("retry-after"))).toBeGreaterThan(0);
     expect(select).toHaveBeenCalledTimes(LOOKUP_LIMIT_PER_IP);
-    // Mesmo /24 conta junto; outro IP não.
+    // The same /24 counts together; another IP does not.
     expect((await withIp("203.0.113.200", unknown)).status).toBe(429);
     expect((await withIp("198.51.100.9", unknown)).status).toBe(401);
     select.mockRestore();
   });
 
-  it("header sem o formato de chave não gasta o limite nem toca no banco", async () => {
+  it("a header without the key format does not use up the limit or touch the database", async () => {
     const select = vi.spyOn(db, "select");
     for (let i = 0; i < LOOKUP_LIMIT_PER_IP + 5; i++) {
-      expect((await call(getProjects, "/api/v1/projects", "lixo", undefined, { "x-forwarded-for": "192.0.2.1" })).status).toBe(401);
+      expect((await call(getProjects, "/api/v1/projects", "garbage", undefined, { "x-forwarded-for": "192.0.2.1" })).status).toBe(401);
     }
     expect(select).not.toHaveBeenCalled();
     select.mockRestore();
   });
 
-  it("vale a última entrada do X-Forwarded-For (a do Caddy), não a que o cliente escreve", () => {
+  it("the last X-Forwarded-For entry counts (Caddy's), not the one the client writes", () => {
     expect(truncatedClientIp("1.2.3.4, 203.0.113.7")).toBe("203.0.113.0");
     expect(truncatedClientIp("203.0.113.7")).toBe("203.0.113.0");
     expect(truncatedClientIp("2001:db8:abcd:12:1:2:3:4")).toBe("2001:db8:abcd::/48");
     expect(truncatedClientIp("2001:db8::1")).toBe("2001:db8:0::/48");
-    expect(truncatedClientIp("não é ip")).toBe("unknown");
+    expect(truncatedClientIp("not an ip")).toBe("unknown");
     expect(truncatedClientIp(null)).toBe("unknown");
   });
 });
 
-describe("respostas", () => {
-  it("/projects lista só projetos ativos, sem ID do Umami nem dado pessoal", async () => {
+describe("responses", () => {
+  it("/projects lists only active projects, without the Umami ID or personal data", async () => {
     const { key } = await newKey();
     const res = await call(getProjects, "/api/v1/projects", key);
     const body = (await res.json()) as { projects: { id: string; name: string; slug: string }[] };
@@ -342,7 +342,7 @@ describe("respostas", () => {
     for (const id of umami.websites.keys()) expect(text).not.toContain(id);
   });
 
-  it("/web traz os totais do painel e deixa projeto removido de fora, sem chamá-lo no Umami", async () => {
+  it("/web brings the dashboard totals and leaves a removed project out, without calling it in Umami", async () => {
     const { key } = await newKey();
     const res = await call(getWeb, "/api/v1/web?period=30d", key);
     expect(res.status).toBe(200);
@@ -357,7 +357,7 @@ describe("respostas", () => {
     expect(umami.requests.some((r) => r.path.includes(removedWebsite.id))).toBe(false);
   });
 
-  it("/api traz volume e latência dos projetos ativos", async () => {
+  it("/api brings volume and latency of the active projects", async () => {
     const { key } = await newKey();
     const res = await call(getApi, "/api/v1/api", key);
     expect(res.status).toBe(200);
@@ -367,14 +367,14 @@ describe("respostas", () => {
     expect(body.projects.find((p) => p.id === removedTenantId)).toBeUndefined();
   });
 
-  it("período desconhecido: 400, e nada chega ao Umami", async () => {
+  it("unknown period: 400, and nothing reaches Umami", async () => {
     const { key } = await newKey();
     const res = await call(getWeb, "/api/v1/web?period=1y", key);
     expect(res.status).toBe(400);
     expect(umami.requests).toEqual([]);
   });
 
-  it("falha do Umami num site: o projeto vem com totals nulo", async () => {
+  it("Umami failure on one site: the project comes with null totals", async () => {
     const { key } = await newKey();
     umami.down = true;
     try {

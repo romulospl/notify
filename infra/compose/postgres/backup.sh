@@ -1,9 +1,9 @@
 #!/bin/sh
-# stellytics-backup (#14, ADR 0004): backup base do Postgres no Object Storage e
-# limpeza dos antigos. O WAL vai continuamente pelo archive_command; o backup
-# base dá o ponto de partida da restauração. Roda uma vez por dia na VM:
+# stellytics-backup (#14, ADR 0004): Postgres base backup to Object Storage and
+# cleanup of the old ones. WAL goes continuously through archive_command; the base
+# backup gives the starting point of the restore. Runs once a day on the VM:
 #   docker compose -f prod.yaml exec -T -u postgres postgres stellytics-backup
-# Mantém os WALG_RETAIN_FULL (padrão 7) backups mais novos e o WAL entre eles.
+# Keeps the WALG_RETAIN_FULL (default 7) newest backups and the WAL between them.
 set -eu
 : "${PGDATA:?}"
 wal-g backup-push "$PGDATA"

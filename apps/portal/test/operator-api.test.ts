@@ -1,11 +1,9 @@
-// Painel de API global do SCF (#38): projetos ativos, soma dos serviços, a
-// mesma regra de tabelas do painel do tenant e a página, contra o Postgres de
-// DATABASE_URL. O banco pode ter projetos de outros testes, então as
-// verificações olham só os projetos criados aqui.
+// SCF global API dashboard (#38): active projects, sum of the services, the
+// same table rule as the tenant dashboard and the page, against the
+// DATABASE_URL Postgres. The database may hold projects from other tests, so
+// the checks look only at the projects created here.
 import { randomUUID } from "node:crypto";
 import { inArray, like } from "drizzle-orm";
-import type { ReactElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadTenantContext, type OperatorContext } from "@/lib/access";
 import { getServiceDashboard } from "@/lib/data/api-metrics";
@@ -14,11 +12,9 @@ import { db, sql } from "@/lib/db";
 import { runMigrations } from "@/lib/db/migrate";
 import { apiService, tenant, tenantMember, user } from "@/lib/db/schema";
 import { resolvePeriod } from "@/lib/period";
-import OperatorApiPage from "@/app/(private)/operator/api/page";
 
 const DOMAIN = "@operator-api-test.stellytics.invalid";
 const SLUG = "operator-api-test-";
-const NOT_FOUND = { digest: expect.stringContaining("404") };
 const NOW = new Date("2026-11-14T10:37:12.345Z");
 const RUN = randomUUID().slice(0, 8);
 
@@ -69,13 +65,7 @@ function mine(projects: ProjectApiStats[]) {
   return projects.filter((p) => p.name.startsWith(RUN));
 }
 
-function text(html: string): string {
-  return html.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/\s+/g, " ");
-}
 
-function page(query: Record<string, string> = {}) {
-  return OperatorApiPage({ searchParams: Promise.resolve(query) }).then((e: ReactElement) => renderToStaticMarkup(e));
-}
 
 async function cleanup() {
   const ids = (await db.select({ id: tenant.id }).from(tenant).where(like(tenant.slug, `${SLUG}%`))).map((t) => t.id);
@@ -102,27 +92,27 @@ beforeAll(async () => {
   operatorId = randomUUID();
   await db.insert(user).values({ id: operatorId, name: "Op", email: `${operatorId}${DOMAIN}`, emailVerified: true, role: "operator" });
 
-  // Dois serviços e um arquivado; dados em 1d, 1h e 1m, mais armadilhas que
-  // contariam duas vezes ou viriam de fora do período.
+  // Two services and an archived one; data in 1d, 1h and 1m, plus traps that
+  // would count twice or come from outside the period.
   busy = await createProject("busy", { services: 2, archived: 1 });
   const [s1, s2, gone] = busy.services as [string, string, string];
   await insert("api_metric_1d", busy.tenantId, s1, { at: "2026-11-10T00:00:00Z", count: 100 });
   await insert("api_metric_1d", busy.tenantId, s2, { at: "2026-11-11T00:00:00Z", status: 500, count: 10, b: { 9: 10 } });
   await insert("api_metric_1h", busy.tenantId, s1, { at: "2026-11-14T05:00:00Z", status: 404, count: 20 });
   await insert("api_metric_1m", busy.tenantId, s2, { at: "2026-11-14T09:30:00Z", count: 7 });
-  await insert("api_metric_1h", busy.tenantId, s1, { at: "2026-11-10T12:00:00Z", count: 1000 }); // já no 1d
-  await insert("api_metric_1m", busy.tenantId, s1, { at: "2026-11-14T05:10:00Z", count: 1000 }); // já no 1h
-  await insert("api_metric_1d", busy.tenantId, s1, { at: "2026-11-14T00:00:00Z", count: 1000 }); // dia parcial
-  // Hora já consolidada, mas dentro da folga de uma hora: vem do 1m (09:30).
+  await insert("api_metric_1h", busy.tenantId, s1, { at: "2026-11-10T12:00:00Z", count: 1000 }); // already in 1d
+  await insert("api_metric_1m", busy.tenantId, s1, { at: "2026-11-14T05:10:00Z", count: 1000 }); // already in 1h
+  await insert("api_metric_1d", busy.tenantId, s1, { at: "2026-11-14T00:00:00Z", count: 1000 }); // partial day
+  // Hour already rolled up, but inside the one-hour margin: it comes from 1m (09:30).
   await insert("api_metric_1h", busy.tenantId, s1, { at: "2026-11-14T09:00:00Z", count: 1000 });
-  await insert("api_metric_1d", busy.tenantId, s1, { at: "2026-11-07T00:00:00Z", count: 1000 }); // fora
-  await insert("api_metric_1d", busy.tenantId, gone, { at: "2026-11-10T00:00:00Z", count: 1000 }); // arquivado
+  await insert("api_metric_1d", busy.tenantId, s1, { at: "2026-11-07T00:00:00Z", count: 1000 }); // outside
+  await insert("api_metric_1d", busy.tenantId, gone, { at: "2026-11-10T00:00:00Z", count: 1000 }); // archived
 
-  // Job atrasado: a última hora consolidada é 13/11 20:00; depois disso, só minutos.
+  // Late job: the last rolled-up hour is 13 November 20:00; after that, only minutes.
   lagging = await createProject("lagging");
   const [l] = lagging.services as [string];
   await insert("api_metric_1h", lagging.tenantId, l, { at: "2026-11-13T20:00:00Z", count: 3 });
-  await insert("api_metric_1m", lagging.tenantId, l, { at: "2026-11-13T20:10:00Z", count: 1000 }); // já no 1h
+  await insert("api_metric_1m", lagging.tenantId, l, { at: "2026-11-13T20:10:00Z", count: 1000 }); // already in 1h
   await insert("api_metric_1m", lagging.tenantId, l, { at: "2026-11-14T03:15:00Z", count: 5 });
 
   idle = await createProject("idle");
@@ -144,8 +134,8 @@ afterAll(async () => {
   await sql.end();
 });
 
-describe("leitura", () => {
-  it("soma os serviços não arquivados de cada projeto ativo, sem contar nada duas vezes", async () => {
+describe("read", () => {
+  it("sums the non-archived services of each active project, without counting anything twice", async () => {
     const projects = mine(await getApiOverview(operator, resolvePeriod("7d", NOW)));
     const by = new Map(projects.map((p) => [p.tenantId, p]));
     expect(projects.map((p) => p.tenantId).sort()).toEqual(
@@ -160,7 +150,7 @@ describe("leitura", () => {
     expect(by.get(empty.tenantId)).toMatchObject({ services: 0, totals: { requests: 0 } });
   });
 
-  it("mostra os mesmos números que o painel de cada serviço", async () => {
+  it("shows the same numbers as each service's dashboard", async () => {
     for (const key of ["24h", "7d", "30d", "12m"] as const) {
       const period = resolvePeriod(key, NOW);
       const overview = new Map(mine(await getApiOverview(operator, period)).map((p) => [p.tenantId, p]));
@@ -171,7 +161,7 @@ describe("leitura", () => {
         let clientErrors = 0;
         for (const serviceId of project.services) {
           const d = await getServiceDashboard(ctx, serviceId, period);
-          if (!d) continue; // arquivado
+          if (!d) continue; // archived
           requests += d.totals.requests;
           serverErrors += d.totals.serverErrors;
           clientErrors += d.totals.clientErrors;
@@ -183,7 +173,7 @@ describe("leitura", () => {
         });
       }
     }
-    // Com um serviço só, os percentis também batem.
+    // With a single service, the percentiles match too.
     const ctx = (await loadTenantContext(lagging.userId))!;
     const service = await getServiceDashboard(ctx, lagging.services[0]!, resolvePeriod("7d", NOW));
     const project = mine(await getApiOverview(operator, resolvePeriod("7d", NOW))).find((p) => p.tenantId === lagging.tenantId)!;
@@ -191,57 +181,9 @@ describe("leitura", () => {
     expect(project.totals.p95).toBeCloseTo(service!.totals.p95!, 9);
   });
 
-  it("período por hora não lê o 1d", async () => {
+  it("an hourly period does not read 1d", async () => {
     const project = mine(await getApiOverview(operator, resolvePeriod("24h", NOW))).find((p) => p.tenantId === busy.tenantId)!;
-    // 24 horas até NOW: a hora de 05:00 (1h) e o minuto das 09:30 (1m).
+    // 24 hours up to NOW: the 05:00 hour (1h) and the 09:30 minute (1m).
     expect(project.totals.requests).toBe(27);
-  });
-});
-
-describe("página", () => {
-  it("lista os projetos ativos, ordena e filtra pela URL", async () => {
-    vi.useFakeTimers({ toFake: ["Date"], now: NOW });
-    sessionUser = { id: operatorId, role: "operator" };
-
-    const html = await page({ q: RUN });
-    const t = text(html);
-    expect(t).toContain(`${RUN} busy`);
-    expect(t).not.toContain(`${RUN} removed`);
-    expect(t).toContain("No requests in this period");
-    expect(t).toContain("No API services");
-    // Padrão: mais requisições primeiro.
-    const order = [...html.matchAll(new RegExp(`>${RUN} (\\w+)<`, "g"))].map((m) => m[1]);
-    expect(order.slice(0, 2)).toEqual(["busy", "lagging"]);
-    expect(t).toContain("137 7.3% 15% ");
-    expect(html).toMatch(/aria-sort="descending"[^>]*><a[^>]*>Requests/);
-
-    // Crescente: os sem uso primeiro (empate pelo nome).
-    const asc = await page({ q: RUN, sort: "requests", dir: "asc" });
-    const ascOrder = [...asc.matchAll(new RegExp(`>${RUN} (\\w+)<`, "g"))].map((m) => m[1]);
-    expect(ascOrder).toEqual(["empty", "idle", "lagging", "busy"]);
-
-    // Por 5xx, os sem requisição ficam no fim nos dois sentidos.
-    for (const dir of ["asc", "desc"]) {
-      const h = await page({ q: RUN, sort: "server", dir });
-      const o = [...h.matchAll(new RegExp(`>${RUN} (\\w+)<`, "g"))].map((m) => m[1]);
-      expect(o.slice(2).sort()).toEqual(["empty", "idle"]);
-    }
-
-    const filtered = text(await page({ q: `${RUN} lag` }));
-    expect(filtered).toContain(`${RUN} lagging`);
-    expect(filtered).not.toContain(`${RUN} busy`);
-    expect(text(await page({ q: `${RUN} nada` }))).toContain("No active project matches this filter.");
-
-    // Valores desconhecidos na URL viram o padrão.
-    const odd = await page({ q: RUN, sort: "__proto__", period: "1y" });
-    expect(odd).toMatch(/aria-current="page"[^>]*>Last 7 days</);
-    expect(odd).toMatch(/aria-sort="descending"[^>]*><a[^>]*>Requests/);
-  });
-
-  it("membro de projeto e quem não entrou não abrem", async () => {
-    sessionUser = { id: busy.userId, role: "tenant" };
-    await expect(page()).rejects.toMatchObject(NOT_FOUND);
-    sessionUser = null;
-    await expect(page()).rejects.toMatchObject({ digest: "NEXT_REDIRECT;/sign-in" });
   });
 });

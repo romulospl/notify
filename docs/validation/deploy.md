@@ -1,6 +1,6 @@
 # Validation script for the deploy guide (#42)
 
-No outside operator has run this script yet. On 2026-11-19 it was run as a simulation by an AI agent on throwaway virtual machines ([report](reports/deploy-2026-11-19-simulation.md)), and its findings were fixed in the guide. #42 was closed on that run and the team rehearsal of PR #176; by maintainer decision, a run by an outside operator is no longer required there and may be done later, for example before the handover (RFP 3.4). The script was written from [`docs/deploy.md`](../deploy.md) after the move to a single VPS ([ADR 0016](../adr/0016-producao-em-vps.md)), issue #42 and the repository. Its companion for the onboarding guide is [`onboarding-de-tenant.md`](onboarding-de-tenant.md).
+No outside operator has run this script yet. On 2026-11-19 it was run as a simulation by an AI agent on throwaway virtual machines ([report](reports/deploy-2026-11-19-simulation.md)), and its findings were fixed in the guide. #42 was closed on that run and the team rehearsal of PR #176; by maintainer decision, a run by an outside operator is no longer required there and may be done later, for example before the handover (RFP 3.4). The script was written from [`docs/deploy.md`](../deploy.md) after the move to a single VPS ([ADR 0016](../adr/0016-production-on-a-vps.md)), issue #42 and the repository. Its companion for the onboarding guide is [`tenant-onboarding.md`](tenant-onboarding.md).
 
 ## What it is for
 
@@ -70,7 +70,7 @@ Section references below point to the sections of the guide: What you need, 1. I
 
 | ID | What to check | Expected result | Result | Notes |
 |---|---|---|---|---|
-| E1 ● | Data residency: where do the data live? (What you need) | The VPS and bucket regions, which the operator can name and declare ([`privacidade.md`](../privacidade.md)) | | |
+| E1 ● | Data residency: where do the data live? (What you need) | The VPS and bucket regions, which the operator can name and declare ([`privacy.md`](../privacy.md)) | | |
 | E2 ● | Secrets: is any secret in a file tracked by git? (`git status` on the VPS and the monitoring host) | `.env.production` and `monitoring.env` are not tracked | | |
 | E3 | Terms: list every word, acronym or tool the operator did not understand | A list, even if empty | | |
 | E4 | Dashboards: the operator checked the tenant dashboards (site and service) and the operator view | They show the data from D16 and D18 | | |

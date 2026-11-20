@@ -1,10 +1,11 @@
-// Package httpmetrics transforma o OTLP do tenant em pontos de 1 minuto (#31).
+// Package httpmetrics turns the tenant's OTLP into 1-minute points (#31).
 //
-// Contrato no spec do E5, seções 2 a 4. Só duas entradas viram métrica: spans
-// de servidor HTTP e histogramas http.server.request.duration (ou o antigo
-// http.server.duration, em ms). Tudo o mais é descartado. De cada requisição
-// ficam só o tenant e o serviço (do recurso carimbado pelo tenantattr), a rota
-// normalizada, o método, o status e a duração; nenhum outro atributo sai daqui.
+// Contract in the E5 spec, sections 2 to 4. Only two inputs become a metric:
+// HTTP server spans and http.server.request.duration histograms (or the old
+// http.server.duration, in ms). Everything else is dropped. From each request
+// only the tenant and the service (from the resource stamped by tenantattr),
+// the normalized route, the method, the status and the duration are kept; no
+// other attribute leaves this package.
 package httpmetrics
 
 import (
@@ -13,23 +14,23 @@ import (
 	"github.com/romulospl/stellytics/services/collector/components/routenorm"
 )
 
-// NumBuckets é o tamanho de duration_buckets (spec, seção 4, D2).
+// NumBuckets is the size of duration_buckets (spec, section 4, D2).
 const NumBuckets = 15
 
-// Bounds são os limites superiores, em segundos, dos 14 primeiros buckets; o
-// último conta o que passa de 10 s. Iguais à api_metric_bounds() do banco.
+// Bounds are the upper bounds, in seconds, of the first 14 buckets; the last
+// one counts what goes over 10 s. Same as the database's api_metric_bounds().
 var Bounds = [NumBuckets - 1]float64{0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10}
 
-// Rotas especiais (spec, seção 3).
+// Special routes (spec, section 3).
 const (
-	RouteOther   = "{other}"   // além do teto de rotas por serviço e dia (D4)
-	RouteUnknown = "{unknown}" // nem http.route nem caminho
+	RouteOther   = "{other}"   // beyond the route cap per service and day (D4)
+	RouteUnknown = "{unknown}" // neither http.route nor path
 )
 
-// MaxRoutesPerDay é o teto de rotas distintas por serviço e dia (D4).
+// MaxRoutesPerDay is the cap of distinct routes per service and day (D4).
 const MaxRoutesPerDay = 500
 
-// MethodOther substitui métodos fora da lista padrão do HTTP.
+// MethodOther replaces methods outside the standard HTTP list.
 const MethodOther = "_OTHER"
 
 var methods = map[string]bool{
@@ -37,9 +38,9 @@ var methods = map[string]bool{
 	"CONNECT": true, "OPTIONS": true, "TRACE": true, "PATCH": true,
 }
 
-// Key identifica uma linha de api_metric_1m.
+// Key identifies a row of api_metric_1m.
 type Key struct {
-	Bucket    time.Time // início do minuto, em UTC
+	Bucket    time.Time // start of the minute, in UTC
 	TenantID  string
 	ServiceID string
 	Route     string
@@ -47,14 +48,14 @@ type Key struct {
 	Status    int16
 }
 
-// Point é o que se soma numa linha.
+// Point is what is summed into a row.
 type Point struct {
 	Count   int64
-	Sum     float64 // segundos
+	Sum     float64 // seconds
 	Buckets [NumBuckets]int64
 }
 
-// Batch junta os pontos de um lote por linha.
+// Batch groups the points of a batch by row.
 type Batch map[Key]*Point
 
 func (b Batch) add(k Key, count int64, sum float64, buckets [NumBuckets]int64) {
@@ -73,7 +74,7 @@ func (b Batch) add(k Key, count int64, sum float64, buckets [NumBuckets]int64) {
 	}
 }
 
-// BucketIndex devolve o bucket de uma duração em segundos.
+// BucketIndex returns the bucket of a duration in seconds.
 func BucketIndex(seconds float64) int {
 	for i, ub := range Bounds {
 		if seconds <= ub {

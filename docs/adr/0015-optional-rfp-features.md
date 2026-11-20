@@ -8,7 +8,7 @@
 
 The RFP lists two nice-to-haves (section 3.2): custom events and capture of Stellar Wallets Kit events. Issue #50 asks to record a decision for each one and, for whatever is adopted, to demonstrate the integration; for the Wallets Kit, "capture without additional tenant configuration".
 
-[ADR 0008](0008-eventos-customizados-e-wallets-kit.md) delivered `window.stellytics.event` in the script (v1.2.0) and concluded that capture without configuration is not feasible without monkey patching the kit. [ADR 0010](0010-adaptador-opt-in-do-wallets-kit.md) delivered the opt-in adapter `window.stellytics.wallets(kit, KitEventType)` (v1.3.0). Still missing were the maintainer's decision, reading the events in the dashboard, and the demonstration.
+[ADR 0008](0008-custom-events-and-wallets-kit.md) delivered `window.stellytics.event` in the script (v1.2.0) and concluded that capture without configuration is not feasible without monkey patching the kit. [ADR 0010](0010-wallets-kit-opt-in-adapter.md) delivered the opt-in adapter `window.stellytics.wallets(kit, KitEventType)` (v1.3.0). Still missing were the maintainer's decision, reading the events in the dashboard, and the demonstration.
 
 New facts, checked on 19/11/2026 in the `@creit.tech/stellar-wallets-kit@2.8.0` package (npm, MIT; code in `esm/sdk/kit.js` and `esm/state/values.js`):
 

@@ -13,7 +13,7 @@ services/bin/
 *.test
 *.out
 
-# Ambiente e segredos
+# Environment and secrets
 .env
 .env.*
 !.env.example
@@ -24,7 +24,7 @@ services/bin/
 infra/monitoring/alertmanager/
 infra/monitoring/prometheus/targets/
 
-# Sistema e editores
+# System and editors
 .DS_Store
 .idea/
 .vscode/
@@ -34,7 +34,7 @@ infra/monitoring/prometheus/targets/
 next-env.d.ts
 
 
-# Estado do gerador de carga (guarda chaves ntf_ completas)
+# Load generator state (holds full ntf_ keys)
 state.json
 services/loadtest/*.json
 

@@ -66,19 +66,19 @@ func key(route, method string, status int16) Key {
 
 func TestTracesExtractsServerHTTPSpans(t *testing.T) {
 	td := ptrace.NewTraces()
-	// Duas requisições na mesma rota normalizada, uma lenta.
+	// Two requests on the same normalized route, one slow.
 	addSpan(td, ptrace.SpanKindServer, 20*time.Millisecond,
 		attr("url.path", "/accounts/"+account+"/payments/"), attr("http.response.status_code", 200),
 		attr("user.id", "alice"), attr("url.query", "token=secret"))
 	addSpan(td, ptrace.SpanKindServer, 3*time.Second,
 		attr("url.path", "/accounts/GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5/payments"), attr("http.response.status_code", 200))
-	// http.route do cliente vale; convenção antiga de atributos.
+	// The client's http.route wins; old attribute convention.
 	addSpan(td, ptrace.SpanKindServer, 5*time.Millisecond,
 		func(sp ptrace.Span) { sp.Attributes().Remove("http.request.method") },
 		attr("http.method", "POST"), attr("http.route", "/users/:id"), attr("http.status_code", "201"))
-	// Método estranho, sem rota nem status.
+	// Odd method, without route or status.
 	addSpan(td, ptrace.SpanKindServer, time.Millisecond, attr("http.request.method", "PURGE"))
-	// Ignorados: cliente, interno e servidor sem atributo HTTP.
+	// Ignored: client, internal and server without an HTTP attribute.
 	addSpan(td, ptrace.SpanKindClient, time.Millisecond, attr("url.path", "/x"))
 	addSpan(td, ptrace.SpanKindInternal, time.Millisecond)
 	addSpan(td, ptrace.SpanKindServer, time.Millisecond, func(sp ptrace.Span) { sp.Attributes().Clear() })
@@ -100,11 +100,11 @@ func TestTracesIgnoreUnauthenticatedResource(t *testing.T) {
 	sp.SetKind(ptrace.SpanKindServer)
 	sp.Attributes().PutStr("http.request.method", "GET")
 	if b := New().Traces(td); len(b) != 0 {
-		t.Fatalf("recurso sem tenant gerou %d linhas", len(b))
+		t.Fatalf("resource without tenant produced %d rows", len(b))
 	}
 }
 
-// histogram monta um ponto de http.server.request.duration.
+// histogram builds a point of http.server.request.duration.
 func histogram(md pmetric.Metrics, name, unit string, temp pmetric.AggregationTemporality, start, at time.Time,
 	bounds []float64, counts []uint64, sum float64, route string) {
 	var rm pmetric.ResourceMetrics
@@ -150,7 +150,7 @@ func TestMetricsDeltaSameBounds(t *testing.T) {
 
 func TestMetricsRemapsOtherBoundsAndMilliseconds(t *testing.T) {
 	md := pmetric.NewMetrics()
-	// Antiga, em ms, com limites próprios: (..5], (5..30], (30..2000], (2000..].
+	// Old one, in ms, with its own bounds: (..5], (5..30], (30..2000], (2000..].
 	histogram(md, "http.server.duration", "ms", pmetric.AggregationTemporalityDelta,
 		base.Add(-time.Minute), base, []float64{5, 30, 2000}, []uint64{1, 2, 3, 4}, 30000, "/x")
 	got := New().WithClock(func() time.Time { return base }).Metrics(md)
@@ -179,33 +179,33 @@ func TestMetricsCumulative(t *testing.T) {
 		return c
 	}
 
-	// Processo antigo (começou há 1 h): o primeiro ponto só vira base.
+	// Old process (started 1 h ago): the first point only becomes the baseline.
 	old := base.Add(-time.Hour)
 	if c := count(send(old, base, 100)); c != 0 {
-		t.Errorf("primeiro ponto de processo antigo contou %d, quero 0", c)
+		t.Errorf("first point of an old process counted %d, want 0", c)
 	}
 	if c := count(send(old, base.Add(time.Minute), 130)); c != 30 {
-		t.Errorf("delta = %d, quero 30", c)
+		t.Errorf("delta = %d, want 30", c)
 	}
-	// Reinício do processo: StartTimestamp novo, conta inteiro.
+	// Process restart: new StartTimestamp, counts in full.
 	restart := base.Add(2 * time.Minute)
 	if c := count(send(restart, restart.Add(time.Minute), 7)); c != 7 {
-		t.Errorf("depois do reinício = %d, quero 7", c)
+		t.Errorf("after the restart = %d, want 7", c)
 	}
-	// Valor que cai sem StartTimestamp novo também é reinício.
+	// A value that drops without a new StartTimestamp is also a restart.
 	if c := count(send(restart, restart.Add(2*time.Minute), 2)); c != 2 {
-		t.Errorf("queda = %d, quero 2", c)
+		t.Errorf("drop = %d, want 2", c)
 	}
 
-	// Série nova de processo recém-iniciado conta inteira.
+	// A new series from a freshly started process counts in full.
 	a2 := New().WithClock(func() time.Time { return now })
 	md := pmetric.NewMetrics()
 	counts := make([]uint64, NumBuckets)
 	counts[0] = 5
 	histogram(md, "http.server.request.duration", "s", pmetric.AggregationTemporalityCumulative,
-		base.Add(-time.Minute), base, b, counts, 0.01, "/novo")
+		base.Add(-time.Minute), base, b, counts, 0.01, "/new")
 	if c := count(a2.Metrics(md)); c != 5 {
-		t.Errorf("processo novo = %d, quero 5", c)
+		t.Errorf("new process = %d, want 5", c)
 	}
 }
 
@@ -218,18 +218,18 @@ func TestMetricPrecedenceOverSpans(t *testing.T) {
 		return len(a.Traces(td))
 	}
 	if spans() != 1 {
-		t.Fatal("sem métrica, o span deveria contar")
+		t.Fatal("without a metric, the span should count")
 	}
 	md := pmetric.NewMetrics()
 	histogram(md, "http.server.request.duration", "s", pmetric.AggregationTemporalityDelta,
 		base.Add(-time.Minute), base, Bounds[:], make([]uint64, NumBuckets), 0, "/p")
 	a.Metrics(md)
 	if spans() != 0 {
-		t.Error("com a métrica recente, o span não deveria contar (D9)")
+		t.Error("with the recent metric, the span should not count (D9)")
 	}
 	now = base.Add(16 * time.Minute)
 	if spans() != 1 {
-		t.Error("15 minutos sem métrica, o span volta a contar")
+		t.Error("15 minutes without a metric, the span counts again")
 	}
 }
 
@@ -244,7 +244,7 @@ func TestIgnoresOtherMetrics(t *testing.T) {
 	g.SetName("http.server.request.duration")
 	g.SetEmptyGauge().DataPoints().AppendEmpty().SetDoubleValue(1)
 	if b := New().Metrics(md); len(b) != 0 {
-		t.Fatalf("métricas fora do contrato geraram %d linhas", len(b))
+		t.Fatalf("metrics outside the contract produced %d rows", len(b))
 	}
 }
 
@@ -256,16 +256,16 @@ func TestRouteCap(t *testing.T) {
 	}
 	got := a.Traces(td)
 	if len(got) != MaxRoutesPerDay+1 {
-		t.Fatalf("linhas = %d, quero %d rotas mais {other}", len(got), MaxRoutesPerDay+1)
+		t.Fatalf("rows = %d, want %d routes plus {other}", len(got), MaxRoutesPerDay+1)
 	}
 	if p := got[key(RouteOther, "GET", 0)]; p == nil || p.Count != 20 {
-		t.Fatalf("{other} = %+v, quero 20 requisições", p)
+		t.Fatalf("{other} = %+v, want 20 requests", p)
 	}
-	// Rota já vista no dia continua com o próprio nome.
+	// A route already seen in the day keeps its own name.
 	td2 := ptrace.NewTraces()
 	addSpan(td2, ptrace.SpanKindServer, time.Millisecond, attr("http.route", "/r3"))
 	if _, ok := a.Traces(td2)[key("/r3", "GET", 0)]; !ok {
-		t.Error("rota conhecida virou {other}")
+		t.Error("known route became {other}")
 	}
 }
 
@@ -273,7 +273,7 @@ func TestBucketIndex(t *testing.T) {
 	cases := map[float64]int{0: 0, 0.005: 0, 0.0051: 1, 0.1: 5, 1: 9, 10: 13, 10.0001: 14, 300: 14}
 	for v, want := range cases {
 		if got := BucketIndex(v); got != want {
-			t.Errorf("BucketIndex(%v) = %d, quero %d", v, got, want)
+			t.Errorf("BucketIndex(%v) = %d, want %d", v, got, want)
 		}
 	}
 }
@@ -289,16 +289,16 @@ func buckets(m map[int]int64) [NumBuckets]int64 {
 func assertBatch(t *testing.T, got Batch, want map[Key]Point) {
 	t.Helper()
 	if len(got) != len(want) {
-		t.Fatalf("linhas = %d, quero %d: %v", len(got), len(want), keys(got))
+		t.Fatalf("rows = %d, want %d: %v", len(got), len(want), keys(got))
 	}
 	for k, w := range want {
 		p := got[k]
 		if p == nil {
-			t.Errorf("falta a linha %+v; veio %v", k, keys(got))
+			t.Errorf("missing row %+v; got %v", k, keys(got))
 			continue
 		}
 		if p.Count != w.Count || p.Buckets != w.Buckets || diff(p.Sum, w.Sum) > 1e-9 {
-			t.Errorf("%s: %+v, quero %+v", k.Route, *p, w)
+			t.Errorf("%s: %+v, want %+v", k.Route, *p, w)
 		}
 	}
 }
