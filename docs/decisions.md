@@ -45,7 +45,7 @@ The architecture decisions of stellytics (formerly ADRs), one short section each
 
 ## 0004. Hosting and backup
 
-Replaced by [0016](#0016-production-on-a-vps). What remains: **continuous WAL-G backup** of Postgres, encrypted on the client (libsodium, key kept off the server), with a daily base backup and point-in-time restore tested in CI.
+Replaced by [0016](#0016-production-on-a-vps). What remains: **continuous WAL-G backup** of Postgres, encrypted on the client (libsodium, key kept off the server), with a daily base backup and point-in-time restore tested in CI. Optional since the public demo: with `WALG_S3_*` empty, `deploy.sh` runs the stack without backup and warns.
 
 ## 0005. External monitoring
 
@@ -115,7 +115,7 @@ Replaced by [0014](#0014-infra-in-docker-compose). Nginx with Certbot on the hos
 ## 0016. Production on a VPS
 
 - Production is **one VPS with Docker Compose**: `init.sh` prepares the host and `.env.production`, `deploy.sh` builds and starts `infra/compose/prod.yaml` and installs the backup timer.
-- WAL-G backup to any S3-compatible bucket. The operator chooses and declares the provider and region (data residency).
+- WAL-G backup to any S3-compatible bucket. The operator chooses and declares the provider and region (data residency). The bucket is optional (the demo runs without one); without it a server failure loses the data.
 - OpenTofu, Ansible and all high-availability pieces are removed. External monitoring stays on its own host (`infra/monitoring/configure.sh`).
 - **Why:** a setup another team can rebuild from the repository alone. A server failure means downtime until a restore from backup ([`deploy.md`](deploy.md)).
 

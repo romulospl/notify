@@ -69,12 +69,24 @@ def validate(path):
         "UMAMI_APP_SECRET", "PORTAL_AUTH_SECRET", "INGEST_PROOF_SECRET",
         "PORTAL_HOST", "PORTAL_ALIAS_HOST", "INGEST_HOST", "API_HOST",
         "ACME_EMAIL",
-        "WALG_S3_PREFIX", "WALG_S3_ENDPOINT", "WALG_S3_REGION",
-        "WALG_S3_ACCESS_KEY", "WALG_S3_SECRET_KEY", "WALG_LIBSODIUM_KEY",
     )
     missing = [key for key in required if not values.get(key)]
     if missing:
         raise SystemExit("deploy: fill in these fields in .env.production: " + ", ".join(missing))
+
+    # Backup (WAL-G): all of the bucket fields and the key, or none. With
+    # none, deploy.sh runs the stack without backup (enough for the demo).
+    backup = (
+        "WALG_S3_PREFIX", "WALG_S3_ENDPOINT", "WALG_S3_REGION",
+        "WALG_S3_ACCESS_KEY", "WALG_S3_SECRET_KEY",
+    )
+    if any(values.get(key) for key in backup):
+        missing = [key for key in backup + ("WALG_LIBSODIUM_KEY",) if not values.get(key)]
+        if missing:
+            raise SystemExit(
+                "deploy: backup is half configured; fill in " + ", ".join(missing)
+                + " or empty every WALG_S3_* field to run without backup"
+            )
 
     if values["POSTGRES_PASSWORD"] in {"postgres", "password", "CHANGE_ME"}:
         raise SystemExit("deploy: POSTGRES_PASSWORD still uses an insecure value")

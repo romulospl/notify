@@ -21,7 +21,8 @@ Usage: sudo ./deploy.sh
 
 Validates .env.production, builds the application images and starts the
 production stack on this VPS: the public demo portal, web gateway, OTLP API,
-Umami, Postgres with continuous backup (WAL-G), rollup and Caddy. Data in
+Umami, Postgres, rollup and Caddy. With a bucket in WALG_S3_*, Postgres has
+continuous backup (WAL-G); with those fields empty, no backup. Data in
 STELLYTICS_DATA_DIR (/srv/stellytics). Images set in PORTAL_IMAGE,
 INGEST_WEB_IMAGE, COLLECTOR_IMAGE or ROLLUP_IMAGE are pulled instead of built.
 
@@ -86,14 +87,64 @@ start_stack() {
   "${compose[@]}" exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 }
 
+# Backup is optional (enough for the demo): on only with a bucket in WALG_S3_*.
+backup_enabled() {
+  [[ -n "$(env_value WALG_S3_PREFIX)" ]]
+}
+
 install_timers() {
-  local docker_bin python_bin data_dir
+  local docker_bin python_bin data_dir check_backup=on
   docker_bin="$(command -v docker)"
   python_bin="$(command -v python3)"
   data_dir="$(env_value STELLYTICS_DATA_DIR)"
   data_dir="${data_dir:-/srv/stellytics}"
 
-  step "Installing the backup and stack check timers"
+  if backup_enabled; then
+    step "Installing the backup and stack check timers"
+    install_backup_timer "$docker_bin"
+  else
+    step "Installing the stack check timer (no backup: WALG_S3_* is empty)"
+    check_backup=off
+    # A bucket removed since the last deploy: stop the daily backup.
+    if [[ -f "$UNIT_DIR/stellytics-backup.timer" ]]; then
+      systemctl disable --now stellytics-backup.timer
+      rm -f "$UNIT_DIR/stellytics-backup.timer" "$UNIT_DIR/stellytics-backup.service"
+    fi
+  fi
+
+  # Stack check every minute (infra/scripts/stack-check.py): containers, WAL
+  # archiving, base backup age and disk. The result becomes Caddy's
+  # /healthz/stack, which the external monitoring probes.
+  cat > "$UNIT_DIR/stellytics-check.service" <<UNIT
+[Unit]
+Description=stellytics: stack check for the external monitoring
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=$ROOT_DIR
+Environment="COMPOSE=$docker_bin compose --env-file $ENV_FILE -f $COMPOSE_FILE"
+Environment=STACK_CHECK_BACKUP=$check_backup
+ExecStart=$python_bin $ROOT_DIR/infra/scripts/stack-check.py $data_dir
+UNIT
+  cat > "$UNIT_DIR/stellytics-check.timer" <<'UNIT'
+[Unit]
+Description=stellytics: stack check every minute
+
+[Timer]
+OnCalendar=*:*:00
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable --now stellytics-check.timer
+}
+
+install_backup_timer() {
+  local docker_bin="$1"
 
   # Daily Postgres base backup (WAL goes continuously through archive_command).
   cat > "$UNIT_DIR/stellytics-backup.service" <<UNIT
@@ -118,35 +169,8 @@ RandomizedDelaySec=10m
 [Install]
 WantedBy=timers.target
 UNIT
-
-  # Stack check every minute (infra/scripts/stack-check.py): containers, WAL
-  # archiving, base backup age and disk. The result becomes Caddy's
-  # /healthz/stack, which the external monitoring probes.
-  cat > "$UNIT_DIR/stellytics-check.service" <<UNIT
-[Unit]
-Description=stellytics: stack check for the external monitoring
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-WorkingDirectory=$ROOT_DIR
-Environment="COMPOSE=$docker_bin compose --env-file $ENV_FILE -f $COMPOSE_FILE"
-ExecStart=$python_bin $ROOT_DIR/infra/scripts/stack-check.py $data_dir
-UNIT
-  cat > "$UNIT_DIR/stellytics-check.timer" <<'UNIT'
-[Unit]
-Description=stellytics: stack check every minute
-
-[Timer]
-OnCalendar=*:*:00
-AccuracySec=5s
-
-[Install]
-WantedBy=timers.target
-UNIT
   systemctl daemon-reload
-  systemctl enable --now stellytics-backup.timer stellytics-check.timer
+  systemctl enable --now stellytics-backup.timer
 }
 
 # With no base backup in storage (first deploy), do not wait for 03:00: the
@@ -183,6 +207,10 @@ summary() {
   else
     printf '  Showing sample data (DEMO_TENANT_SLUG is empty).\n'
   fi
+  if ! backup_enabled; then
+    printf '\nWARNING: no backup. WALG_S3_* is empty, so losing this disk loses all data.\n'
+    printf 'Fill in the bucket in %s and run sudo ./deploy.sh again to turn it on.\n' "$ENV_FILE"
+  fi
   printf 'Checks: docs/deploy.md, section "3. Check production".\n'
 }
 
@@ -198,5 +226,7 @@ preflight
 prepare_images
 start_stack
 install_timers
-ensure_first_backup
+if backup_enabled; then
+  ensure_first_backup
+fi
 summary
