@@ -226,7 +226,7 @@ jobs:
   infra:
     name: infra
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Caddyfile
@@ -244,6 +244,9 @@ jobs:
         run: |
           docker compose build portal ingest-web collector rollup
           infra/compose/test/prod-stack-test.sh
+      # Migração de dados entre operadores (#54, RFP §3.4: "full data migration").
+      - name: Migração de dados (lógica e física)
+        run: infra/compose/test/data-migration-test.sh
 
   # Monitoramento externo (#15, ADR 0005): sobe Prometheus, blackbox e
   # Alertmanager com a configuração do configure.sh e confere o sinal de vida, o

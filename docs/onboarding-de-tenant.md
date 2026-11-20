@@ -67,21 +67,21 @@ The site must be served over **HTTPS** (or from `localhost`): the script solves 
 
 ### 3.2 Install the script
 
-The script is served by the gateway, with the version in the path and an SRI hash. The hashes of all versions are in [`packages/tracker/published/sri.json`](../packages/tracker/published/sri.json). The newest version is **v1.5.0**.
+The script is served by the gateway, with the version in the path and an SRI hash. The hashes of all versions are in [`packages/tracker/published/sri.json`](../packages/tracker/published/sri.json). The newest version is **v1.6.0**.
 
 **Static HTML and SPA.** In the `<head>` of every page (in an SPA, only in `index.html`):
 
 ```html
 <script
   defer
-  src="https://<gateway>/s/v1.5.0/n.js"
-  integrity="sha384-vooloWJB6q/nJjvyeo1DPMqrJAzjUcODMuLvE+d3FSSayHr9KskukNvOTueDji1I"
+  src="https://<gateway>/s/v1.6.0/n.js"
+  integrity="sha384-cAxHFzNxpJfof+rLRpDVRPPpZZk3btq/2AV2cCsbaDEZGntOrfxIIZX4L9+LW8qp"
   crossorigin="anonymous"
   data-site="<website-id>"
 ></script>
 ```
 
-An SPA needs nothing else: the script counts route changes made by `history.pushState`, `history.replaceState` and the browser's back button. Routers such as React Router, Vue Router and SvelteKit's use these APIs. Examples: [`examples/static-html`](../examples/static-html), [`examples/spa`](../examples/spa).
+An SPA needs nothing else: the script counts route changes made by `history.pushState`, `history.replaceState` and the browser's back button. Routers such as React Router, Vue Router and SvelteKit's use these APIs. Since v1.6.0 it also counts hash routes (`/#/route` or `/#!/route`, the hash mode of Vue Router or Angular): only the route part is sent, without its query, and plain anchors such as `#section` are not page views. Examples: [`examples/static-html`](../examples/static-html), [`examples/spa`](../examples/spa).
 
 **Next.js (App Router, with SSR).** In `app/layout.tsx`, inside `<head>`:
 
@@ -89,8 +89,8 @@ An SPA needs nothing else: the script counts route changes made by `history.push
 <head>
   <script
     defer
-    src="https://<gateway>/s/v1.5.0/n.js"
-    integrity="sha384-vooloWJB6q/nJjvyeo1DPMqrJAzjUcODMuLvE+d3FSSayHr9KskukNvOTueDji1I"
+    src="https://<gateway>/s/v1.6.0/n.js"
+    integrity="sha384-cAxHFzNxpJfof+rLRpDVRPPpZZk3btq/2AV2cCsbaDEZGntOrfxIIZX4L9+LW8qp"
     crossOrigin="anonymous"
     data-site="<website-id>"
   />
@@ -106,7 +106,7 @@ The snippets above are the same as in [`examples/README.md`](../examples/README.
 - Each published version (`/s/vX.Y.Z/n.js`) **never changes**: the file is served with a one-year immutable cache and the hash comes from `sri.json`. If the content changed, the browser would reject the script because of `integrity`.
 - The script **never updates itself**. To change versions, change the path and the `integrity` in your HTML.
 - `crossorigin="anonymous"` is required together with `integrity`; the gateway responds with `Access-Control-Allow-Origin: *` for this.
-- Use **v1.5.0**, the newest. The table below shows what each published version brings.
+- Use **v1.6.0**, the newest. The table below shows what each published version brings.
 
 | Version | What it brings |
 |---|---|
@@ -116,6 +116,7 @@ The snippets above are the same as in [`examples/README.md`](../examples/README.
 | v1.3.0 | Opt-in Wallets Kit adapter (`window.notify.wallets`). |
 | v1.4.0 | The global object becomes `window.stellytics` (`event` and `wallets`). |
 | v1.5.0 | The Wallets Kit adapter counts only wallets the user chooses (section 3.4.1). |
+| v1.6.0 | Hash routes in SPAs (`/#/route`) count as page views. |
 
 Versions v1.0.0 to v1.3.0 stay as they were published and do not have `window.stellytics`; the examples in this guide use `window.stellytics` and need v1.4.0 or newer, and the wallet count needs v1.5.0.
 
@@ -178,8 +179,8 @@ The script and the endpoints use `/s/`, `/e` and `/c`, without the terms the def
 ### 4.2 What the collector needs to receive
 
 - **Endpoint:** OTLP/HTTP (`/v1/metrics`, `/v1/traces`) or OTLP/gRPC, at `<collector>`.
-- **Header:** `Authorization: Bearer ntf_...`. Without a valid key (or with a revoked key, or one from a removed project), the response is `401` (HTTP) or `Unauthenticated` (gRPC).
-- **Signal:** the `http.server.request.duration` histogram (in seconds, the current name in the OpenTelemetry semantic conventions; the old `http.server.duration`, in `ms`, also works). Alternative: HTTP server spans. If the service sends both, stellytics uses the metric and ignores the spans, to avoid double counting. Prefer the metric: traces with sampling count fewer requests than the real ones.
+- **Header:** `Authorization: Bearer ntf_...`. Without a valid key (or with a revoked key, or one from a removed project), the response is `401` (HTTP) or `Unauthenticated` (gRPC). The collector caches each key lookup for up to 60 seconds, so a revocation or a project removal takes effect within a minute.
+- **Signal:** the `http.server.request.duration` histogram (in seconds, the current name in the OpenTelemetry semantic conventions; the old `http.server.duration`, in `ms`, also works). Alternative: HTTP server spans. If the service sends both, stellytics uses the metric and ignores the spans, to avoid double counting. Prefer the metric: traces with sampling count fewer requests than the real ones. The histogram must use explicit buckets, the SDK default: a base-2 **exponential** histogram (opt-in in the Java, Go and .NET SDKs) is ignored, and without spans the service shows no data.
 - **Attributes read:** `http.request.method`, `http.response.status_code` and `http.route`. Without `http.route`, the collector uses the path (`url.path`) and normalizes it.
 - **Temporality:** prefer **delta**. Cumulative also works (the collector converts it), but a collector restart may lose an interval.
 

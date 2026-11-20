@@ -6,7 +6,7 @@ This script has not been run yet. It was written from the guide, issues #43, #45
 
 Issue [#43](https://github.com/romulospl/stellytics/issues/43) has two acceptance criteria: "Covers web and API" and "Validated with a real pilot". The second depends on pilots [#45](https://github.com/romulospl/stellytics/issues/45) (three web analytics pilots) and [#46](https://github.com/romulospl/stellytics/issues/46) (one API analytics pilot). This script is what each pilot fills in while following the guide, and the report in section 6 is the evidence that stays in the repository for the criterion.
 
-The script assumes the guide with script `v1.5.0`, prior approval and `<collector>` as a host. If the guide moves to a newer version, replace `v1.5.0` with it and its hash from `packages/tracker/published/sri.json`.
+The script assumes the guide with script `v1.6.0`, prior approval and `<collector>` as a host. If the guide moves to a newer version, replace `v1.6.0` with it and its hash from `packages/tracker/published/sri.json`.
 
 Section references below point to the numbered sections of the guide; "2.3" means item 3 of section 2.
 
@@ -51,7 +51,7 @@ Prerequisite: the pilot's site served over HTTPS and permission to edit the `<he
 |---|---|---|---|---|
 | W1 ● | In `/sites`, enter **Name** and **Domain** and add (3.1) | The site shows in the table with a **Website ID** (UUID) | | |
 | W2 ● | Pick the snippet for the site type (static HTML, SPA or Next.js) and replace `<gateway>` and `<website-id>` (3.2) | Tag built with no doubt about where the values go | | |
-| W3 ● | Check the hash: `curl -fsS https://<gateway>/s/v1.5.0/n.js \| openssl dgst -sha384 -binary \| openssl base64 -A` and compare with the value after `sha384-` in `integrity` (3.2, 3.3) | Equal to the one in `packages/tracker/published/sri.json` (to be confirmed) | | |
+| W3 ● | Check the hash: `curl -fsS https://<gateway>/s/v1.6.0/n.js \| openssl dgst -sha384 -binary \| openssl base64 -A` and compare with the value after `sha384-` in `integrity` (3.2, 3.3) | Equal to the one in `packages/tracker/published/sri.json` (to be confirmed) | | |
 | W4 ● | Put the tag in the `<head>` and open a page of the site, with the ad blocker off, in an incognito window (3.2, 3.4) | No `integrity` or `crossorigin` error in the console | | |
 | W5 | In the browser Network tab, look at `GET /c` and `POST /e` (3.4) | `GET /c` returns 200 and `POST /e` returns 204. 204 is also returned when the event is discarded, so it alone does not prove the event was stored | | |
 | W6 ● | Generate a known number of visits (for example, 5 page views on different pages) and open the dashboard `/sites/[siteId]` (5.1). Note the time until it shows up | Page views appear in the dashboard; the guide gives no time limit, so this script measures it | | |

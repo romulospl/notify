@@ -49,6 +49,14 @@ describe("pageUrl", () => {
     );
     expect(pageUrl(new URL("https://a.example/docs?q=1#sec"))).toBe("/docs");
   });
+
+  it("mantém rotas de SPA no fragmento, sem query", () => {
+    expect(pageUrl(new URL("https://a.example/?utm_source=x#/conta/1?token=2"))).toBe(
+      "/?utm_source=x#/conta/1",
+    );
+    expect(pageUrl(new URL("https://a.example/#!/docs"))).toBe("/#/docs");
+    expect(pageUrl(new URL("https://a.example/app#access_token=abc"))).toBe("/app");
+  });
 });
 
 describe("cleanReferrer", () => {
@@ -398,6 +406,24 @@ describe("start", () => {
     expect(events.map((e) => e.url)).toEqual(["/inicio?utm_campaign=lancamento", "/docs", "/inicio"]);
     expect(events[1]).toMatchObject({ title: "Docs", referrer: `${location.origin}/inicio` });
     expect(events[2]).toMatchObject({ referrer: `${location.origin}/docs` });
+  });
+
+  it("conta rotas de SPA por fragmento (hashchange)", async () => {
+    stop = start(script({ src: SRC, "data-site": SITE }));
+    await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
+
+    History.prototype.replaceState.call(history, null, "", "/inicio#/docs");
+    dispatchEvent(new HashChangeEvent("hashchange"));
+    vi.advanceTimersByTime(NAVIGATION_DELAY_MS);
+    // Âncora na mesma página não é rota.
+    History.prototype.replaceState.call(history, null, "", "/inicio#secao");
+    dispatchEvent(new HashChangeEvent("hashchange"));
+    vi.advanceTimersByTime(NAVIGATION_DELAY_MS);
+
+    await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(3));
+    const events = sent(fetchMock).map((e) => e.payload);
+    expect(events.map((e) => e.url)).toEqual(["/inicio?utm_campaign=lancamento", "/inicio#/docs", "/inicio"]);
+    expect(events[2]).toMatchObject({ referrer: `${location.origin}/inicio#/docs` });
   });
 
   it("não grava cookie nem storage", async () => {
