@@ -22,7 +22,7 @@ The production ones are in `.env.production` (template in `.env.production.examp
 | `UMAMI_API_KEY` | The portal uses the new key when it is recreated | Run `sudo ./deploy.sh` again; revoke the old one with `--revoke-old` (above) or through the Umami interface (tunnel) |
 | Umami `admin` password | Only used through the interface, through the tunnel | Change it through the interface; it is never kept in `.env.production` |
 | `INGEST_PROOF_SECRET` | The challenges in circulation become invalid; browsers request a new one at `GET /c` on the next event | No action (minimum of 32 characters) |
-| `SMTP_URL` | Email confirmation and password recovery depend on it | Test with a sign-up or `/forgot-password` afterwards |
+| `SMTP_URL` | Not used by the public portal of this version (no sign-up, operator invites disabled) | Run `sudo ./deploy.sh` again |
 | `WALG_S3_ACCESS_KEY`, `WALG_S3_SECRET_KEY` | WAL archiving and the backup use the new credential when Postgres is recreated | Create the new credential at the S3 provider first, run `sudo ./deploy.sh` and confirm `backup-list`; only then revoke the old one ([backup and restore](backup-and-restore.md)) |
 | `WALG_LIBSODIUM_KEY` | **Cannot be rotated**: `docs/deploy.md` says it cannot be changed, because the old backups would no longer open (`prod.yaml` accepts a single key) | Do not change it as a routine. If it leaks, see "Encryption key" in [backup and restore](backup-and-restore.md) |
 | Monitoring `SMTP_PASSWORD` | Email alerts | `infra/monitoring/configure.sh <env-file>`, restart `alertmanager` and test an alert (see `docs/deploy.md`, "Monitoring") |

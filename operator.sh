@@ -2,7 +2,7 @@
 # SCF operator admin on the production server (#19, ADR 0017).
 #
 # Runs scripts/operator.mjs inside the running portal container, which already
-# has DATABASE_URL, SMTP_URL, MAIL_FROM and BETTER_AUTH_URL: no tunnel, and no
+# has DATABASE_URL and BETTER_AUTH_URL: no tunnel, and no
 # secret leaves the server. Whoever can SSH into the server and use sudo can
 # run it; that is the group that controls who is an operator.
 #
