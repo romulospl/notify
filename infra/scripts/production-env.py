@@ -79,6 +79,13 @@ def validate(path):
     if values["POSTGRES_PASSWORD"] in {"postgres", "password", "CHANGE_ME"}:
         raise SystemExit("deploy: POSTGRES_PASSWORD ainda usa um valor inseguro")
 
+    # Release images: all four or none. deploy.sh builds from the checkout when
+    # none is set and pulls them, without building, when all four are.
+    images = ("PORTAL_IMAGE", "INGEST_WEB_IMAGE", "COLLECTOR_IMAGE", "ROLLUP_IMAGE")
+    chosen = [key for key in images if values.get(key)]
+    if chosen and len(chosen) != len(images):
+        raise SystemExit("deploy: set all of " + ", ".join(images) + " or none of them")
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
