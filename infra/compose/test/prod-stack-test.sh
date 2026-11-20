@@ -106,6 +106,8 @@ done
 # On the portal host, /api/heartbeat belongs to Next (404), not Umami.
 [ "$(curl -sk --resolve portal.localhost:443:127.0.0.1 https://portal.localhost/api/heartbeat)" != "ok" ] || fail "the portal host reaches Umami"
 [ "$(curl -sk --resolve alias.localhost:443:127.0.0.1 -o /dev/null -w '%{http_code}' https://alias.localhost/docs)" = 301 ] || fail "the portal alias does not redirect"
+# /p/ (linked from the SCF submission) ends on the demo project's card, not a 404.
+[ "$(curl -skL --resolve portal.localhost:443:127.0.0.1 -o /dev/null -w '%{http_code} %{url_effective}' https://portal.localhost/p/)" = "200 https://portal.localhost/p/stellytics" ] || fail "/p/ should end on the demo card"
 
 # API host (ADR 0012): only OTLP, and only with an ingest key.
 post() { curl -sk -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' \
