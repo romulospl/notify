@@ -2,7 +2,7 @@
 
 Production is one Debian or Ubuntu VPS running Docker Compose ([ADR 0016](adr/0016-producao-em-vps.md)): Caddy, portal, web ingestion gateway, API collector, rollup job, Umami and Postgres with continuous encrypted backup, plus external monitoring on a second host. Files are in [`infra/`](../infra/README.md).
 
-> **Scope.** [#42](https://github.com/romulospl/stellytics/issues/42) is not done yet: its acceptance criterion (someone outside the team deploys by following only this guide) needs a real account.
+> **Status.** [#42](https://github.com/romulospl/stellytics/issues/42) is closed: the guide was followed end to end on 2026-11-19 with local stand-ins for DNS, certificates, SMTP and S3 (see "How this guide was checked"). Not yet done: a run on a real account by an operator from outside the team, and the backup of the current production ([#182](https://github.com/romulospl/stellytics/issues/182)).
 
 ## What you need
 

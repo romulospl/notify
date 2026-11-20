@@ -7,13 +7,13 @@ Record of what has been done, the decisions taken and the next steps. Updated on
 | Item | Status |
 |---|---|
 | MVP scope | Defined from the RFP (section [MVP](#1-mvp-defined-from-the-rfp)) |
-| Backlog | 10 epics and 77 issues on GitHub; 16 open: epics E1, E7, E8, E9 and E10, plus #42–#47, #64, #65, #140 and #174 |
+| Backlog | 10 epics and 78 issues on GitHub; 16 open: epics E1, E7, E8, E9 and E10, plus #43–#47, #64, #65, #140, #174 and #182 |
 | Base tool | **Umami v3.4.1** ([ADR 0001](adr/0001-ferramenta-base.md)) |
 | Architecture and stack | Defined ([ADR 0002](adr/0002-arquitetura-e-stack.md)) |
 | Production | One VPS with Docker Compose and Caddy, installed by `init.sh` and `deploy.sh`, continuous WAL-G backup, no high availability ([ADR 0016](adr/0016-producao-em-vps.md)). Portal, web gateway, Umami, OTel collector and rollup all run in `infra/compose/prod.yaml`. External monitoring by `infra/monitoring/configure.sh` (#15). Data residency region: **not decided yet** |
 | Code | Epics E2–E6 closed: portal, tracking script and web gateway, API pipeline, and the tenant and SCF web and API dashboards. Details in [`e2-implementacao.md`](e2-implementacao.md), [`e4-implementacao.md`](e4-implementacao.md) and [`e6-implementacao.md`](e6-implementacao.md) |
-| Validation | Deploy guide rehearsed on a clean Ubuntu 24.04 container (PR #176, comment on #42); the acceptance criterion is still an outside operator following [`validation/deploy.md`](validation/deploy.md) |
-| What remains for the MVP | Pilots (#44 → #45/#46 → #47), outside validation of the guides (#42, #43) and an account action (#140). See [section 6](#6-next-steps) |
+| Validation | Deploy guide followed end to end with local stand-ins: team rehearsal on a clean Ubuntu 24.04 container (PR #176) and a full run of [`validation/deploy.md`](validation/deploy.md) on throwaway VMs, including alerts, restore and rollback (PR #178). #42 closed on 2026-11-19; an outside-operator run is optional, for later |
+| What remains for the MVP | Pilots (#44 → #45/#46 → #47), validation of the onboarding guide by the pilots (#43) and an account action (#140). Production backup (#182) is needed before the hosting window, not for the POC. See [section 6](#6-next-steps) |
 
 ## 1. MVP defined from the RFP
 
@@ -80,7 +80,7 @@ Repository: [romulospl/stellytics](https://github.com/romulospl/stellytics/issue
 | [#4 E4](https://github.com/romulospl/stellytics/issues/4) | #28, #29 | Web analytics dashboards | Closed |
 | [#5 E5](https://github.com/romulospl/stellytics/issues/5) | #30–#36 | API analytics pipeline (OpenTelemetry) | Closed |
 | [#6 E6](https://github.com/romulospl/stellytics/issues/6) | #37, #38 | API analytics dashboards | Closed |
-| [#7 E7](https://github.com/romulospl/stellytics/issues/7) | #39–#43, #138, #139, #154 | Documentation, privacy and compliance | Open: #42, #43 |
+| [#7 E7](https://github.com/romulospl/stellytics/issues/7) | #39–#43, #138, #139, #154 | Documentation, privacy and compliance | Open: #43 |
 | [#8 E8](https://github.com/romulospl/stellytics/issues/8) | #44–#47 | Pilots and proof of adoption | Open: all |
 | [#9 E9](https://github.com/romulospl/stellytics/issues/9) | #48–#54, #133–#137, #174 | Post-MVP | Open: #174 |
 | [#63 E10](https://github.com/romulospl/stellytics/issues/63) | #64, #65 | Proposal and SCF submission | Open: all |
@@ -139,7 +139,7 @@ Tenant API dashboard at `/services/[serviceId]` (#37) and SCF API overview at `/
 - **#138:** vulnerability and support commitments set in `SECURITY.md` and [`suporte.md`](suporte.md) (PR #161).
 - **#139:** license exceptions: `caniuse-lite` (CC-BY-4.0) accepted as a build-only exception, attributed in [`avisos-de-terceiros.md`](avisos-de-terceiros.md); `@img/sharp-libvips-*` (LGPL-3.0) not distributed, because the portal's image optimizer is off and the image ships no native `*.node` module.
 - **#154:** right to erasure: account deletion in `/settings`, erasure of a removed project by the operator, Umami event retention in `services/rollup` (`UMAMI_RETENTION_DAYS`, default 183) and `audit_log` anonymization (`actor_user_id` becomes `[apagado]`). Individual data subject requests (rectification, portability, one visitor) follow the manual procedure in [`privacidade.md`](privacidade.md).
-- **Open: #42** ([`deploy.md`](deploy.md)) until an operator who did not write it follows it on a real account; PR #176 recorded a team rehearsal on a clean Ubuntu 24.04 container. **Open: #43** ([`onboarding-de-tenant.md`](onboarding-de-tenant.md)) until a real pilot uses it (#45, #46). Validation scripts for both: [`validation/`](validation/deploy.md) (PR #171).
+- **Closed: #42** ([`deploy.md`](deploy.md)) on 2026-11-19, after a team rehearsal on a clean Ubuntu 24.04 container (PR #176) and a simulated run of the whole validation script on throwaway VMs (PR #178, [report](validation/reports/deploy-2026-11-19-simulation.md)); the backup of the current production moved to [#182](https://github.com/romulospl/stellytics/issues/182), and an outside-operator run is optional, for later. **Open: #43** ([`onboarding-de-tenant.md`](onboarding-de-tenant.md)) until a real pilot uses it (#45, #46). Validation scripts for both: [`validation/`](validation/deploy.md) (PR #171).
 
 ### E8: pilots (open)
 
@@ -181,8 +181,9 @@ MVP, in dependency order:
 1. **[#44](https://github.com/romulospl/stellytics/issues/44):** recruit and confirm SCF-funded projects as pilots and get letters of interest. Depends on no code.
 2. **[#45](https://github.com/romulospl/stellytics/issues/45) and [#46](https://github.com/romulospl/stellytics/issues/46):** onboard 3 web pilots and 1 API pilot. They also validate the onboarding guide, [#43](https://github.com/romulospl/stellytics/issues/43).
 3. **[#47](https://github.com/romulospl/stellytics/issues/47):** demonstrate the global view live and record the tenant experience.
-4. **[#42](https://github.com/romulospl/stellytics/issues/42):** an operator who did not write [`deploy.md`](deploy.md) follows it on a real account, using [`validation/deploy.md`](validation/deploy.md).
-5. **[#140](https://github.com/romulospl/stellytics/issues/140):** account action: enable private vulnerability reporting and install the Renovate app.
+4. **[#140](https://github.com/romulospl/stellytics/issues/140):** account action: enable private vulnerability reporting and install the Renovate app.
+
+Before the 12-month hosting window (not needed for the POC): **[#182](https://github.com/romulospl/stellytics/issues/182)**, production backup and a restore rehearsal.
 
 Proposal: [#63](https://github.com/romulospl/stellytics/issues/63) with [#64](https://github.com/romulospl/stellytics/issues/64) (eligibility, referral code and interest form) and [#65](https://github.com/romulospl/stellytics/issues/65) (write the proposal).
 
