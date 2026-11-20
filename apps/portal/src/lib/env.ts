@@ -1,5 +1,5 @@
-// No `next build` os módulos são avaliados sem as variáveis de produção.
-// Nessa fase usamos valores inertes; nada conecta ao banco durante o build.
+// During `next build` the modules are evaluated without the production variables.
+// In that phase we use inert values; nothing connects to the database during the build.
 const isBuild = process.env.NEXT_PHASE === "phase-production-build";
 
 const buildPlaceholders: Record<string, string> = {
@@ -13,7 +13,7 @@ function required(name: string): string {
   if (value) return value;
   const placeholder = buildPlaceholders[name];
   if (isBuild && placeholder) return placeholder;
-  throw new Error(`Variável de ambiente ${name} não definida`);
+  throw new Error(`Environment variable ${name} is not set`);
 }
 
 export const env = {
@@ -26,7 +26,7 @@ export const env = {
   get authUrl() {
     return process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
   },
-  // Umami interno, lido só por src/lib/umami/ (ADR 0003).
+  // Internal Umami, read only by src/lib/umami/ (ADR 0003).
   get umamiUrl() {
     return (process.env.UMAMI_URL ?? "http://127.0.0.1:3001").replace(/\/$/, "");
   },
@@ -41,23 +41,29 @@ export const env = {
   get collectorUrl() {
     return (process.env.COLLECTOR_URL ?? "http://127.0.0.1:4318").replace(/\/$/, "");
   },
-  // Cadastro com aprovação prévia (#49, ADR 0007): com `true` ou `1`, projeto
-  // novo nasce `pending` até um operador aprovar. Desligado por padrão. Lido a
-  // cada cadastro; mudar o valor exige reiniciar o portal.
+  // Sign-up with prior approval (#49, ADR 0007): with `true` or `1`, a new
+  // project starts as `pending` until an operator approves it. Off by default.
+  // Read on every sign-up; changing the value requires restarting the portal.
   get signupApproval() {
     return ["1", "true"].includes((process.env.SIGNUP_APPROVAL ?? "").trim().toLowerCase());
   },
-  // SMTP para os e-mails de confirmação e de redefinição de senha (#60), ex.:
-  // smtp://mailpit:1025 no Compose ou smtps://usuario:senha@host:465 em produção.
-  // Lido só ao enviar, então o portal sobe sem ele.
+  // Public demo (/demo, /demo/operator and the tracker tag on the home page):
+  // slug of the one tenant those pages read. Empty (the default): the demo
+  // shows sample data (src/lib/demo-sample.ts) and the home page carries no tracker.
+  get demoTenantSlug() {
+    return (process.env.DEMO_TENANT_SLUG ?? "").trim();
+  },
+  // SMTP for the confirmation and password reset e-mails (#60), e.g.
+  // smtp://mailpit:1025 in Compose or smtps://user:password@host:465 in production.
+  // Read only when sending, so the portal starts without it.
   get smtpUrl() {
     return required("SMTP_URL");
   },
   get mailFrom() {
     return process.env.MAIL_FROM ?? "stellytics <no-reply@stellytics.localhost>";
   },
-  // Chave de API da conta de serviço (scripts/umami-service-account.mjs).
-  // Lida só quando o portal chama o Umami, então o portal sobe sem ela.
+  // API key of the service account (scripts/umami-service-account.mjs).
+  // Read only when the portal calls Umami, so the portal starts without it.
   get umamiApiKey() {
     return required("UMAMI_API_KEY");
   },

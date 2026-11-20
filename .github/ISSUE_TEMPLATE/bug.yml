@@ -1,53 +1,53 @@
 name: Bug
-description: Algo não funciona como deveria na plataforma, no script ou na ingestão de API.
+description: Something does not work as it should in the platform, the script or API ingestion.
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Obrigado por relatar. **Falhas de segurança não vão aqui**: use o relato privado descrito no `SECURITY.md`.
-        Não cole chaves de ingestão, senhas nem dados pessoais.
+        Thanks for reporting. **Security flaws do not go here**: use the private reporting described in `SECURITY.md`.
+        Do not paste ingest keys, passwords or personal data.
   - type: dropdown
-    id: componente
+    id: component
     attributes:
-      label: Componente
+      label: Component
       options:
-        - Portal (cadastro, login, painéis)
-        - Script de rastreamento web
-        - Ingestão de API (OpenTelemetry)
-        - Documentação
-        - Não sei
+        - Portal (sign-up, login, dashboards)
+        - Web tracking script
+        - API ingestion (OpenTelemetry)
+        - Documentation
+        - I don't know
     validations:
       required: true
   - type: textarea
-    id: o-que-aconteceu
+    id: what-happened
     attributes:
-      label: O que aconteceu
-      description: O comportamento observado, com mensagens de erro se houver.
+      label: What happened
+      description: The observed behavior, with error messages if any.
     validations:
       required: true
   - type: textarea
-    id: esperado
+    id: expected
     attributes:
-      label: O que era esperado
+      label: What was expected
     validations:
       required: true
   - type: textarea
-    id: passos
+    id: steps
     attributes:
-      label: Como reproduzir
+      label: How to reproduce
       placeholder: |
         1. ...
         2. ...
     validations:
       required: true
   - type: input
-    id: versao
+    id: version
     attributes:
-      label: Versão
-      description: Versão do script (`/s/vX.Y.Z/`), SDK do OpenTelemetry, navegador ou commit, conforme o caso.
+      label: Version
+      description: Version of the script (`/s/vX.Y.Z/`), OpenTelemetry SDK, browser or commit, as applicable.
   - type: textarea
-    id: contexto
+    id: context
     attributes:
-      label: Contexto adicional
-      description: Framework do site (HTML, SPA, SSR), linguagem da API, capturas de tela.
+      label: Additional context
+      description: Site framework (HTML, SPA, SSR), API language, screenshots.

@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// pgStore lê a visão ingest_key_active (spec do E2, seção 4) com o usuário
-// stellytics_collector, que só tem SELECT nela.
+// pgStore reads the ingest_key_active view (E2 spec, section 4) with the
+// stellytics_collector user, which only has SELECT on it.
 type pgStore struct {
 	pool *pgxpool.Pool
 }
@@ -28,9 +28,9 @@ func (s pgStore) Lookup(ctx context.Context, prefix string) (Key, bool, error) {
 	return k, true, nil
 }
 
-// Touch chama ingest_key_touch (migração 0008), a única escrita que o
-// stellytics_collector pode fazer em ingest_key: grava o dia de hoje (UTC) em
-// last_used_on, só para chave ativa e só se a data mudou.
+// Touch calls ingest_key_touch (migration 0008), the only write
+// stellytics_collector can make to ingest_key: it stores today's date (UTC) in
+// last_used_on, only for an active key and only if the date changed.
 func (s pgStore) Touch(ctx context.Context, prefix string) error {
 	var updated bool
 	return s.pool.QueryRow(ctx, `SELECT ingest_key_touch($1)`, prefix).Scan(&updated)

@@ -15,18 +15,18 @@ var (
 )
 
 func TestOf(t *testing.T) {
-	base := Of("Mozilla/5.0 Firefox", "pt-BR", "pt-BR", "1920x1080")
-	if base != Of("Mozilla/5.0 Firefox", "pt-BR", "pt-BR", "1920x1080") {
-		t.Error("mesma entrada, fingerprints diferentes")
+	base := Of("Mozilla/5.0 Firefox", "de-DE", "de-DE", "1920x1080")
+	if base != Of("Mozilla/5.0 Firefox", "de-DE", "de-DE", "1920x1080") {
+		t.Error("same input, different fingerprints")
 	}
 	for name, fp := range map[string]uint64{
-		"outro UA":                      Of("Mozilla/5.0 Chrome", "pt-BR", "pt-BR", "1920x1080"),
-		"outro idioma":                  Of("Mozilla/5.0 Firefox", "en-US", "pt-BR", "1920x1080"),
-		"outra tela":                    Of("Mozilla/5.0 Firefox", "pt-BR", "pt-BR", "390x844"),
-		"campos colados de outro jeito": Of("Mozilla/5.0 Firefoxp", "t-BR", "pt-BR", "1920x1080"),
+		"another UA":                Of("Mozilla/5.0 Chrome", "de-DE", "de-DE", "1920x1080"),
+		"another language":          Of("Mozilla/5.0 Firefox", "en-US", "de-DE", "1920x1080"),
+		"another screen":            Of("Mozilla/5.0 Firefox", "de-DE", "de-DE", "390x844"),
+		"fields joined another way": Of("Mozilla/5.0 Firefoxd", "e-DE", "de-DE", "1920x1080"),
 	} {
 		if fp == base {
-			t.Errorf("%s: mesma fingerprint", name)
+			t.Errorf("%s: same fingerprint", name)
 		}
 	}
 }
@@ -41,38 +41,40 @@ func TestAllow(t *testing.T) {
 
 	for fp := uint64(1); fp <= 3; fp++ {
 		if !c.Allow(ip, site, fp) {
-			t.Fatalf("fingerprint %d dentro do limite recusada", fp)
+			t.Fatalf("fingerprint %d within the limit refused", fp)
 		}
 	}
 	if c.Allow(ip, site, 4) {
-		t.Error("quarta fingerprint no mesmo IP aceita")
+		t.Error("fourth fingerprint on the same IP accepted")
 	}
-	// As já vistas continuam passando, e outro IP ou outro site têm a própria
-	// conta: lotar a cota de um site não tira as vagas dos outros.
+	// Those already seen keep passing, and another IP or another site have
+	// their own count: filling the quota of one site does not take the slots of
+	// the others.
 	if !c.Allow(ip, site, 2) {
-		t.Error("fingerprint conhecida recusada")
+		t.Error("known fingerprint refused")
 	}
 	if !c.Allow(otherIP, site, 4) {
-		t.Error("outro IP recusado")
+		t.Error("another IP refused")
 	}
 	for fp := uint64(1); fp <= 3; fp++ {
 		if !c.Allow(ip, otherSite, 100+fp) {
-			t.Errorf("outro site no mesmo IP recusado (fingerprint %d)", 100+fp)
+			t.Errorf("another site on the same IP refused (fingerprint %d)", 100+fp)
 		}
 	}
 
-	// Passada a janela sem eventos das antigas, cabem fingerprints novas.
+	// Once the window passes with no events from the old ones, new fingerprints
+	// fit.
 	clk.t = clk.t.Add(5 * time.Minute)
-	c.Allow(ip, site, 3) // a 3 continua ativa
+	c.Allow(ip, site, 3) // 3 stays active
 	clk.t = clk.t.Add(6 * time.Minute)
 	if !c.Allow(ip, site, 5) {
-		t.Error("fingerprint nova recusada depois que as antigas saíram da janela")
+		t.Error("new fingerprint refused after the old ones left the window")
 	}
 	if !c.Allow(ip, site, 6) {
-		t.Error("segunda vaga liberada recusada")
+		t.Error("second freed slot refused")
 	}
 	if c.Allow(ip, site, 7) {
-		t.Error("limite ignorado: 3, 5 e 6 ainda estão na janela")
+		t.Error("limit ignored: 3, 5 and 6 are still in the window")
 	}
 }
 
@@ -80,11 +82,11 @@ func TestDisabled(t *testing.T) {
 	c := New(0, time.Minute)
 	for fp := uint64(0); fp < 100; fp++ {
 		if !c.Allow(ip, site, fp) {
-			t.Fatal("limite 0 deveria desligar a checagem")
+			t.Fatal("limit 0 should turn the check off")
 		}
 	}
 	if c.Len() != 0 {
-		t.Error("checagem desligada guardou IP")
+		t.Error("check turned off stored an IP")
 	}
 }
 
@@ -98,7 +100,7 @@ func TestSweep(t *testing.T) {
 	clk.t = clk.t.Add(6 * time.Minute)
 	c.Sweep()
 	if c.Len() != 1 {
-		t.Errorf("Len = %d, quero 1 (só o IP com fingerprint recente)", c.Len())
+		t.Errorf("Len = %d, want 1 (only the IP with a recent fingerprint)", c.Len())
 	}
 }
 
@@ -108,18 +110,18 @@ func TestFullAccountKeepsNoNewState(t *testing.T) {
 	c.Allow(ip, site, 2)
 	for fp := uint64(3); fp < 100; fp++ {
 		if c.Allow(ip, site, fp) {
-			t.Fatalf("fingerprint %d aceita com a conta cheia", fp)
+			t.Fatalf("fingerprint %d accepted with the count full", fp)
 		}
 	}
 	c.mu.Lock()
 	n := len(c.keys[key{ip, site}])
 	c.mu.Unlock()
 	if n != 2 {
-		t.Errorf("conta cheia guardou %d fingerprints, quero 2", n)
+		t.Errorf("full count stored %d fingerprints, want 2", n)
 	}
 }
 
-// Rode com -race: Allow e Sweep ao mesmo tempo.
+// Run with -race: Allow and Sweep at the same time.
 func TestConcurrentAllowAndSweep(t *testing.T) {
 	c := New(10, time.Minute)
 	var wg sync.WaitGroup
@@ -142,23 +144,23 @@ func TestAdmitAndForget(t *testing.T) {
 	c := New(2, time.Minute)
 	ip := netip.MustParseAddr("192.0.2.0")
 	if ok, fresh := c.Admit(ip, "s", 1); !ok || !fresh {
-		t.Fatalf("primeira: ok=%v fresh=%v", ok, fresh)
+		t.Fatalf("first: ok=%v fresh=%v", ok, fresh)
 	}
 	if ok, fresh := c.Admit(ip, "s", 1); !ok || fresh {
-		t.Fatalf("repetida: ok=%v fresh=%v", ok, fresh)
+		t.Fatalf("repeated: ok=%v fresh=%v", ok, fresh)
 	}
 	c.Admit(ip, "s", 2)
 	if ok, _ := c.Admit(ip, "s", 3); ok {
-		t.Fatal("a terceira deveria ser recusada")
+		t.Fatal("the third should be refused")
 	}
-	c.Forget(ip, "s", 2) // desfaz a admissão de uma fingerprint nova
+	c.Forget(ip, "s", 2) // undoes the admission of a new fingerprint
 	if ok, fresh := c.Admit(ip, "s", 3); !ok || !fresh {
-		t.Fatalf("depois do Forget: ok=%v fresh=%v", ok, fresh)
+		t.Fatalf("after Forget: ok=%v fresh=%v", ok, fresh)
 	}
 	c.Forget(ip, "s", 1)
 	c.Forget(ip, "s", 3)
 	if c.Len() != 0 {
-		t.Errorf("conta vazia deveria sair da memória: %d", c.Len())
+		t.Errorf("an empty count should leave memory: %d", c.Len())
 	}
-	c.Forget(ip, "outro", 9) // conta inexistente não faz nada
+	c.Forget(ip, "other", 9) // a nonexistent count does nothing
 }

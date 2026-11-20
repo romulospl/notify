@@ -1,4 +1,4 @@
-"""Umami falso do teste de HA: aceita POST /api/send e grava o website de cada evento."""
+"""Fake Umami for the HA test: accepts POST /api/send and records the website of each event."""
 import json
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer

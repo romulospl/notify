@@ -1,12 +1,12 @@
-# Configuração do coletor (spec do E5). Os valores vêm do ambiente.
+# Collector configuration (E5 spec). The values come from the environment.
 #
-# Toda requisição OTLP, em gRPC (4317) ou HTTP (4318), passa pela extensão
-# ingestkeyauth: sem chave de ingestão válida, 401 / Unauthenticated. O
-# processor tenantattr carimba o tenant e o serviço da chave em cada recurso e
-# precisa vir antes do batch, que perde o contexto do pedido. O exporter
-# stellyticspg (#31) transforma spans de servidor HTTP e o histograma
-# http.server.request.duration em pontos de 1 minuto em api_metric_1m; o resto
-# dos traces e das métricas, e todos os logs, são descartados.
+# Every OTLP request, over gRPC (4317) or HTTP (4318), goes through the
+# ingestkeyauth extension: without a valid ingest key, 401 / Unauthenticated.
+# The tenantattr processor stamps the key's tenant and service on each resource
+# and must come before batch, which loses the request context. The
+# stellyticspg exporter (#31) turns HTTP server spans and the
+# http.server.request.duration histogram into 1-minute points in
+# api_metric_1m; the rest of the traces and metrics, and all logs, are dropped.
 extensions:
   ingestkeyauth:
     database_url: ${env:DATABASE_URL}

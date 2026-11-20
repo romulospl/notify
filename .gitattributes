@@ -1,2 +1,2 @@
-# Versões publicadas do script são servidas byte a byte e conferidas por SRI.
+# Published script versions are served byte for byte and checked by SRI.
 packages/tracker/published/** -text

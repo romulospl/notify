@@ -14,11 +14,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Gravação de sessão (replays) e heatmaps do Umami 3.4.1 (#62, docs/umami.md):
-// só são gravados pela rota /api/record, e só para website com recorder_enabled.
-// O teste cria o site como o portal cria, manda page views reais pelo gateway,
-// tenta gravar replay e heatmap pelo gateway e direto no Umami, e confere que
-// as tabelas session_replay, session_replay_saved e heatmap_event ficam vazias.
+// Session recording (replays) and heatmaps of Umami 3.4.1 (#62, docs/umami.md):
+// they are only written through the /api/record route, and only for a website
+// with recorder_enabled. The test creates the site the way the portal does,
+// sends real page views through the gateway, tries to record a replay and a
+// heatmap through the gateway and directly in Umami, and checks that the
+// session_replay, session_replay_saved and heatmap_event tables stay empty.
 func TestRecorderRecordsNothing(t *testing.T) {
 	ctx := context.Background()
 
@@ -32,7 +33,7 @@ func TestRecorderRecordsNothing(t *testing.T) {
 	}
 	umamiDo(t, token, http.MethodGet, "/api/websites/"+websiteID, nil, &site)
 	if site.RecorderEnabled || site.ReplayConfig != nil {
-		t.Fatalf("site novo com gravação ligada: recorderEnabled=%v replayConfig=%v",
+		t.Fatalf("new site with recording on: recorderEnabled=%v replayConfig=%v",
 			site.RecorderEnabled, site.ReplayConfig)
 	}
 
@@ -42,32 +43,34 @@ func TestRecorderRecordsNothing(t *testing.T) {
 
 	for _, path := range []string{"/", "/docs", "/docs/replay"} {
 		if code := sendEvent(t, websiteID, path); code != http.StatusNoContent {
-			t.Fatalf("page view %s: status = %d, quero 204", path, code)
+			t.Fatalf("page view %s: status = %d, want 204", path, code)
 		}
 	}
 
-	// O gateway só tem /e, /c, /s/ e /healthz: a rota de gravação não existe nele.
+	// The gateway only has /e, /c, /s/ and /healthz: the recording route does
+	// not exist in it.
 	for _, path := range []string{"/api/record", "/record"} {
 		if code := post(t, gatewayURL+path, recordBody(websiteID), nil); code != http.StatusNotFound {
-			t.Errorf("gateway POST %s = %d, quero 404", path, code)
+			t.Errorf("gateway POST %s = %d, want 404", path, code)
 		}
 	}
 
-	// Mesmo com acesso direto ao Umami (só na rede interna), o site não grava:
-	// o /api/send devolve o token de sessão que o /api/record exige.
+	// Even with direct access to Umami (internal network only), the site does
+	// not record: /api/send returns the session token that /api/record
+	// requires.
 	cache := umamiSessionToken(t, websiteID)
 	for _, body := range []string{recordBody(websiteID), heatmapBody(websiteID)} {
 		var out map[string]any
 		code := post(t, umamiURL+"/api/record", body, map[string]string{"x-umami-cache": cache}, &out)
 		if code != http.StatusOK || out["ok"] != false || out["reason"] != "recorder_disabled" {
-			t.Errorf("Umami /api/record = %d %v, quero 200 recorder_disabled", code, out)
+			t.Errorf("Umami /api/record = %d %v, want 200 recorder_disabled", code, out)
 		}
 	}
 
 	deadline := time.Now().Add(90 * time.Second)
 	for umamiPageviews(t, token, websiteID, start) < 3 {
 		if time.Now().After(deadline) {
-			t.Fatal("os page views não apareceram no Umami")
+			t.Fatal("the page views did not show up in Umami")
 		}
 		time.Sleep(time.Second)
 	}
@@ -77,7 +80,7 @@ func TestRecorderRecordsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close(ctx)
-	// Só o site do teste: um volume local pode ter outros sites com gravação.
+	// Only the test's site: a local volume may have other sites with recording.
 	for _, q := range []string{
 		`SELECT count(*) FROM session_replay WHERE website_id = $1`,
 		`SELECT count(*) FROM session_replay_saved WHERE website_id = $1`,
@@ -89,17 +92,17 @@ func TestRecorderRecordsNothing(t *testing.T) {
 			t.Fatal(err)
 		}
 		if n != 0 {
-			t.Errorf("%s = %d, quero 0", q, n)
+			t.Errorf("%s = %d, want 0", q, n)
 		}
 	}
 }
 
-// umamiSessionToken manda um page view direto ao /api/send do Umami e devolve o
-// token de sessão (cache) da resposta.
+// umamiSessionToken sends a page view directly to Umami's /api/send and returns
+// the session token (cache) from the response.
 func umamiSessionToken(t *testing.T, websiteID string) string {
 	t.Helper()
-	body := fmt.Sprintf(`{"type":"event","payload":{"website":%q,"hostname":"e2e.example","url":"/direto",`+
-		`"language":"pt-BR","screen":"1920x1080"}}`, websiteID)
+	body := fmt.Sprintf(`{"type":"event","payload":{"website":%q,"hostname":"e2e.example","url":"/direct",`+
+		`"language":"de-DE","screen":"1920x1080"}}`, websiteID)
 	var out struct {
 		Cache string `json:"cache"`
 	}
@@ -120,8 +123,8 @@ func heatmapBody(websiteID string) string {
 		`{"type":"scroll","url":"https://e2e.example/","scrollPct":50}]}}`, websiteID)
 }
 
-// post manda um JSON com User-Agent de navegador e decodifica a resposta em
-// out, se houver.
+// post sends a JSON with a browser User-Agent and decodes the response into
+// out, if there is one.
 func post(t *testing.T, url, body string, headers map[string]string, out ...any) int {
 	t.Helper()
 	req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(body))

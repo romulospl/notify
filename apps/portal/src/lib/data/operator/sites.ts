@@ -1,18 +1,18 @@
 import "server-only";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import type { OperatorContext } from "../../access";
+import type { DemoContext, OperatorContext } from "../../access";
 import { db } from "../../db";
 import { site, tenant } from "../../db/schema";
 
-// Funções do operador SCF (spec do E2, seção 4): recebem OperatorContext e são
-// somente leitura, com exceção de remover e reativar tenant (#20).
+// SCF operator functions (E2 spec, section 4): they take OperatorContext and
+// are read-only, except for removing and reactivating a tenant (#20).
 
-// Vínculos portal → Umami de todos os tenants, inclusive sites arquivados.
-// Usado pela checagem de consistência com o Umami.
+// Portal → Umami links of all tenants, including archived sites.
+// Used by the consistency check against Umami.
 export async function listUmamiLinks(
   ctx: OperatorContext,
 ): Promise<{ siteId: string; umamiWebsiteId: string }[]> {
-  // O contexto não filtra nada aqui: exigi-lo prova que quem chama é operador.
+  // The context filters nothing here: requiring it proves that the caller is an operator.
   void ctx;
   return db.select({ siteId: site.id, umamiWebsiteId: site.umamiWebsiteId }).from(site);
 }
@@ -24,11 +24,21 @@ export type ActiveTenantSites = {
   sites: { siteId: string; umamiWebsiteId: string }[];
 };
 
-// Projetos ativos com os sites não arquivados, para os painéis globais (#29).
-// Projeto removido ou pendente não entra nas comparações (spec do E2, seção 6);
-// projeto ativo sem site entra com a lista vazia.
+// Active projects with their non-archived sites, for the global dashboards (#29).
+// A removed or pending project is left out of the comparisons (E2 spec, section 6);
+// an active project with no site is included with an empty list.
 export async function listActiveTenantSites(ctx: OperatorContext): Promise<ActiveTenantSites[]> {
   void ctx;
+  return activeTenantSites();
+}
+
+// Same shape for the public demo's operator view, restricted to the demo
+// tenant: no other project is read.
+export async function listDemoTenantSites(ctx: DemoContext): Promise<ActiveTenantSites[]> {
+  return activeTenantSites(ctx.tenantId);
+}
+
+async function activeTenantSites(onlyTenantId?: string): Promise<ActiveTenantSites[]> {
   const rows = await db
     .select({
       tenantId: tenant.id,
@@ -39,7 +49,7 @@ export async function listActiveTenantSites(ctx: OperatorContext): Promise<Activ
     })
     .from(tenant)
     .leftJoin(site, and(eq(site.tenantId, tenant.id), isNull(site.archivedAt)))
-    .where(eq(tenant.status, "active"))
+    .where(and(eq(tenant.status, "active"), onlyTenantId ? eq(tenant.id, onlyTenantId) : undefined))
     .orderBy(asc(tenant.name), asc(site.createdAt));
 
   const byTenant = new Map<string, ActiveTenantSites>();

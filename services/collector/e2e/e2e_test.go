@@ -1,15 +1,16 @@
 //go:build e2e
 
-// Teste ponta a ponta do coletor (#30) contra o ambiente do Docker Compose:
+// End-to-end test of the collector (#30) against the Docker Compose environment:
 //
 //	docker compose up -d --build --wait
 //	cd services && go test -tags e2e ./collector/e2e/...
 //
-// Cria no banco stellytics um tenant ativo e um removido, cada um com uma chave de
-// ingestão no formato do portal (#59), e manda OTLP ao contêiner do coletor por
-// HTTP e gRPC. A chave do tenant ativo passa; a do removido, uma chave errada e
-// a falta de chave recebem 401 / Unauthenticated. Os endereços podem ser
-// trocados por COLLECTOR_HTTP_URL, COLLECTOR_GRPC_ADDR e STELLYTICS_DATABASE_URL.
+// It creates in the stellytics database an active tenant and a removed one, each
+// with an ingest key in the portal's format (#59), and sends OTLP to the
+// collector container over HTTP and gRPC. The active tenant's key passes; the
+// removed one's, a wrong key and a missing key get 401 / Unauthenticated. The
+// addresses can be changed with COLLECTOR_HTTP_URL, COLLECTOR_GRPC_ADDR and
+// STELLYTICS_DATABASE_URL.
 package e2e
 
 import (
@@ -65,11 +66,11 @@ func TestCollectorAuth(t *testing.T) {
 		auth string
 		ok   bool
 	}{
-		"sem chave":         {"", false},
-		"chave errada":      {"Bearer " + wrong, false},
-		"tenant removido":   {"Bearer " + ofRemoved, false},
-		"chave válida":      {"Bearer " + good, true},
-		"esquema minúsculo": {"bearer " + good, true},
+		"no key":           {"", false},
+		"wrong key":        {"Bearer " + wrong, false},
+		"removed tenant":   {"Bearer " + ofRemoved, false},
+		"valid key":        {"Bearer " + good, true},
+		"lowercase scheme": {"bearer " + good, true},
 	} {
 		t.Run("HTTP/"+name, func(t *testing.T) {
 			want := http.StatusUnauthorized
@@ -77,27 +78,27 @@ func TestCollectorAuth(t *testing.T) {
 				want = http.StatusOK
 			}
 			if code := postHTTP(t, c.auth); code != want {
-				t.Errorf("status = %d, quero %d", code, want)
+				t.Errorf("status = %d, want %d", code, want)
 			}
 		})
 		t.Run("gRPC/"+name, func(t *testing.T) {
 			err := exportGRPC(t, c.auth)
 			if c.ok && err != nil {
-				t.Errorf("chave válida recusada: %v", err)
+				t.Errorf("valid key refused: %v", err)
 			}
 			if !c.ok && status.Code(err) != codes.Unauthenticated {
-				t.Errorf("err = %v, quero Unauthenticated", err)
+				t.Errorf("err = %v, want Unauthenticated", err)
 			}
 		})
 	}
 
-	// As quatro chamadas aceitas (HTTP e gRPC, "Bearer" e "bearer") viram uma
-	// linha só, somada. Esperar por ela também evita a limpeza do teste rodar
-	// antes de o batch do coletor gravar.
+	// The four accepted calls (HTTP and gRPC, "Bearer" and "bearer") become a
+	// single row, summed. Waiting for it also keeps the test cleanup from
+	// running before the collector's batch writes.
 	wantRows(t, db, goodTenant, goodService, []row{{"/ledgers/{id}", "GET", 200, 4}})
 }
 
-// metrics monta um ponto de http.server.request.duration, como um SDK manda.
+// metrics builds a point of http.server.request.duration, as an SDK sends it.
 func metrics() pmetric.Metrics {
 	md := pmetric.NewMetrics()
 	rm := md.ResourceMetrics().AppendEmpty()
@@ -131,7 +132,7 @@ func postHTTP(t *testing.T, auth string) int {
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("coletor fora do ar: %v", err)
+		t.Fatalf("collector down: %v", err)
 	}
 	resp.Body.Close()
 	return resp.StatusCode
@@ -153,8 +154,8 @@ func exportGRPC(t *testing.T, auth string) error {
 	return err
 }
 
-// createKey cria um tenant com o status dado, um serviço e uma chave no
-// formato do portal (#59), e devolve a chave completa, o tenant e o serviço.
+// createKey creates a tenant with the given status, a service and a key in the
+// portal's format (#59), and returns the full key, the tenant and the service.
 func createKey(t *testing.T, db *pgx.Conn, user, tenantStatus string) (key, tenantID, serviceID string) {
 	t.Helper()
 	ctx := context.Background()

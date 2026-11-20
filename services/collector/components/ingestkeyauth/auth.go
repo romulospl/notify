@@ -1,13 +1,13 @@
-// Package ingestkeyauth é a extensão de autenticação do coletor (#30).
+// Package ingestkeyauth is the collector's authentication extension (#30).
 //
-// Contrato no spec do E2, seção 5, e no spec do E5, seção 1. O cliente manda a
-// chave de ingestão em "Authorization: Bearer ntf_<prefixo>_<segredo>" no OTLP
-// (HTTP ou gRPC). A extensão busca a chave pelo prefixo na visão
-// ingest_key_active (usuário stellytics_collector), compara o SHA-256 em tempo
-// constante e põe o tenant e o serviço da chave no contexto do pedido. Nenhum
-// atributo enviado pelo cliente muda isso. Chave inválida, revogada, de
-// serviço arquivado ou de tenant que não está ativo é recusada: o receiver
-// responde 401 (HTTP) ou Unauthenticated (gRPC).
+// Contract in the E2 spec, section 5, and in the E5 spec, section 1. The client
+// sends the ingest key in "Authorization: Bearer ntf_<prefix>_<secret>" over
+// OTLP (HTTP or gRPC). The extension looks the key up by prefix in the
+// ingest_key_active view (user stellytics_collector), compares the SHA-256 in
+// constant time and puts the key's tenant and service in the request context.
+// No attribute sent by the client changes that. A key that is invalid, revoked,
+// of an archived service or of a tenant that is not active is refused: the
+// receiver answers 401 (HTTP) or Unauthenticated (gRPC).
 package ingestkeyauth
 
 import (
@@ -26,50 +26,50 @@ import (
 	"go.uber.org/zap"
 )
 
-// Atributos que a extensão põe em client.Info.Auth.
+// Attributes the extension puts in client.Info.Auth.
 const (
 	AttrTenantID  = "tenant.id"
 	AttrServiceID = "api_service.id"
 	AttrPrefix    = "ingest_key.prefix"
 )
 
-// keyPattern é o formato da chave (spec do E2, seção 5).
+// keyPattern is the key format (E2 spec, section 5).
 var keyPattern = regexp.MustCompile(`^ntf_([a-z2-7]{8})_[A-Za-z0-9_-]{43}$`)
 
-// errUnauthenticated é a única resposta de recusa, para não dar pista de qual
-// parte da chave estava errada.
-var errUnauthenticated = errors.New("chave de ingestão inválida")
+// errUnauthenticated is the only refusal response, so as not to hint at which
+// part of the key was wrong.
+var errUnauthenticated = errors.New("invalid ingest key")
 
-// maxCached limita o cache, que também guarda respostas negativas.
+// maxCached limits the cache, which also holds negative answers.
 const maxCached = 10_000
 
-// Key é uma chave ativa como a visão ingest_key_active a devolve.
+// Key is an active key as the ingest_key_active view returns it.
 type Key struct {
 	Hash      []byte
 	TenantID  string
 	ServiceID string
 }
 
-// Store busca a chave ativa pelo prefixo. ok é falso quando não há chave
-// ativa com esse prefixo.
+// Store looks up the active key by prefix. ok is false when there is no
+// active key with that prefix.
 type Store interface {
 	Lookup(ctx context.Context, prefix string) (key Key, ok bool, err error)
 }
 
-// Toucher registra o último uso de uma chave ativa (ingest_key.last_used_on).
-// O Store do Postgres o implementa; um Store sem Touch simplesmente não grava.
+// Toucher records the last use of an active key (ingest_key.last_used_on).
+// The Postgres Store implements it; a Store without Touch simply does not write.
 type Toucher interface {
 	Touch(ctx context.Context, prefix string) error
 }
 
 const (
-	// touchTimeout limita a escrita em segundo plano.
+	// touchTimeout limits the background write.
 	touchTimeout = 5 * time.Second
-	// touchRetry é quanto esperar antes de tentar de novo depois de uma falha.
+	// touchRetry is how long to wait before trying again after a failure.
 	touchRetry = 5 * time.Minute
 )
 
-// authenticator implementa extensionauth.Server.
+// authenticator implements extensionauth.Server.
 type authenticator struct {
 	store  Store
 	ttl    time.Duration
@@ -78,10 +78,10 @@ type authenticator struct {
 
 	mu    sync.Mutex
 	cache map[[sha256.Size]byte]entry
-	// nextTouch guarda, por prefixo, quando o próximo registro de último uso é
-	// permitido: o começo do dia UTC seguinte depois de um sucesso, ou
-	// touchRetry depois de uma falha. Só chaves autenticadas entram aqui, então
-	// o mapa não cresce com tráfego inválido.
+	// nextTouch holds, per prefix, when the next last-use record is allowed:
+	// the start of the next UTC day after a success, or touchRetry after a
+	// failure. Only authenticated keys get in here, so the map does not grow
+	// with invalid traffic.
 	nextTouch map[string]time.Time
 }
 
@@ -91,8 +91,8 @@ type entry struct {
 	expires time.Time
 }
 
-// NewAuthenticator cria o autenticador sobre um Store qualquer. A extensão usa
-// o Store do Postgres; os testes, um Store em memória.
+// NewAuthenticator creates the authenticator over any Store. The extension
+// uses the Postgres Store; the tests, an in-memory Store.
 func NewAuthenticator(store Store, ttl time.Duration, logger *zap.Logger) extensionauth.Server {
 	return newAuthenticator(store, ttl, logger)
 }
@@ -101,7 +101,7 @@ func newAuthenticator(store Store, ttl time.Duration, logger *zap.Logger) *authe
 	return &authenticator{store: store, ttl: ttl, now: time.Now, logger: logger, cache: make(map[[sha256.Size]byte]entry), nextTouch: make(map[string]time.Time)}
 }
 
-// Authenticate valida a chave e devolve o contexto com o tenant e o serviço.
+// Authenticate validates the key and returns the context with the tenant and the service.
 func (a *authenticator) Authenticate(ctx context.Context, headers map[string][]string) (context.Context, error) {
 	raw, ok := bearer(headers)
 	if !ok {
@@ -116,8 +116,8 @@ func (a *authenticator) Authenticate(ctx context.Context, headers map[string][]s
 
 	key, ok, err := a.lookup(ctx, prefix, hash)
 	if err != nil {
-		// Só o prefixo vai para o log; a chave completa nunca.
-		a.logger.Error("consulta à ingest_key_active falhou", zap.String("prefix", prefix), zap.Error(err))
+		// Only the prefix goes to the log; the full key never does.
+		a.logger.Error("ingest_key_active lookup failed", zap.String("prefix", prefix), zap.Error(err))
 		return ctx, errUnauthenticated
 	}
 	if !ok {
@@ -131,10 +131,10 @@ func (a *authenticator) Authenticate(ctx context.Context, headers map[string][]s
 	return client.NewContext(ctx, info), nil
 }
 
-// touch registra o último uso da chave em segundo plano, no máximo uma vez por
-// chave e por dia UTC neste processo. Fora do caminho do pedido: o pedido não
-// espera nem vê o resultado. Falha só vira log com o nome do erro (nunca a
-// chave, nem a mensagem do driver) e uma nova tentativa depois de touchRetry.
+// touch records the key's last use in the background, at most once per key
+// and per UTC day in this process. Off the request path: the request neither
+// waits for nor sees the result. A failure only becomes a log with the error
+// name (never the key, nor the driver's message) and a retry after touchRetry.
 func (a *authenticator) touch(prefix string) {
 	toucher, ok := a.store.(Toucher)
 	if !ok {
@@ -156,7 +156,7 @@ func (a *authenticator) touch(prefix string) {
 		ctx, cancel := context.WithTimeout(context.Background(), touchTimeout)
 		defer cancel()
 		if err := toucher.Touch(ctx, prefix); err != nil {
-			a.logger.Warn("registro do último uso da chave falhou", zap.String("prefix", prefix), zap.String("erro", fmt.Sprintf("%T", err)))
+			a.logger.Warn("recording the key's last use failed", zap.String("prefix", prefix), zap.String("error", fmt.Sprintf("%T", err)))
 			a.mu.Lock()
 			a.nextTouch[prefix] = now.Add(touchRetry)
 			a.mu.Unlock()
@@ -164,14 +164,14 @@ func (a *authenticator) touch(prefix string) {
 	}()
 }
 
-// nextUTCDay é o começo do dia UTC depois de t.
+// nextUTCDay is the start of the UTC day after t.
 func nextUTCDay(t time.Time) time.Time {
 	y, m, d := t.UTC().Date()
 	return time.Date(y, m, d+1, 0, 0, 0, 0, time.UTC)
 }
 
-// lookup consulta o cache pelo hash da chave completa e, sem resposta válida
-// em cache, o banco. Erros do banco não ficam em cache.
+// lookup checks the cache by the hash of the full key and, without a valid
+// cached answer, the database. Database errors are not cached.
 func (a *authenticator) lookup(ctx context.Context, prefix string, hash [sha256.Size]byte) (Key, bool, error) {
 	now := a.now()
 	a.mu.Lock()
@@ -206,8 +206,8 @@ func (a *authenticator) lookup(ctx context.Context, prefix string, hash [sha256.
 	return key, ok, nil
 }
 
-// bearer acha o "Authorization: Bearer <chave>". No HTTP o header vem com a
-// grafia canônica; no gRPC, a metadata vem em minúsculas.
+// bearer finds the "Authorization: Bearer <key>". Over HTTP the header comes
+// in canonical form; over gRPC, the metadata comes in lowercase.
 func bearer(headers map[string][]string) (string, bool) {
 	for name, values := range headers {
 		if !strings.EqualFold(name, "authorization") || len(values) != 1 {
@@ -221,7 +221,7 @@ func bearer(headers map[string][]string) (string, bool) {
 	return "", false
 }
 
-// authData é o que fica em client.Info.Auth para os componentes seguintes.
+// authData is what stays in client.Info.Auth for the following components.
 type authData struct {
 	tenantID, serviceID, prefix string
 }

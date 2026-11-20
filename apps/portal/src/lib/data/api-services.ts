@@ -1,12 +1,12 @@
 import "server-only";
 import { and, asc, count, desc, eq, isNull } from "drizzle-orm";
-import type { TenantContext } from "../access";
+import type { TenantContext, TenantReadContext } from "../access";
 import { db } from "../db";
 import { apiService, auditLog, ingestKey } from "../db/schema";
 import { generateIngestKey } from "../ingest-key";
 
-// Serviços de API e chaves de ingestão do tenant (#59, spec do E2, seção 5).
-// Toda função recebe o contexto e filtra por ctx.tenantId.
+// The tenant's API services and ingest keys (#59, E2 spec, section 5).
+// Every function takes the context and filters by ctx.tenantId.
 
 export const MAX_ACTIVE_KEYS = 5;
 
@@ -14,7 +14,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 export type ApiService = typeof apiService.$inferSelect;
 
-// O que as telas mostram de uma chave: nunca o hash nem a chave.
+// What the screens show of a key: never the hash or the key.
 export type IngestKeySummary = {
   id: string;
   prefix: string;
@@ -23,7 +23,7 @@ export type IngestKeySummary = {
   lastUsedOn: string | null;
 };
 
-// A chave completa só existe neste valor, devolvido uma vez na criação.
+// The full key exists only in this value, returned once on creation.
 export type CreatedIngestKey = { key: string; summary: IngestKeySummary };
 
 export class ApiServiceError extends Error {
@@ -47,18 +47,18 @@ const keySummary = {
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 function assertCanWrite(ctx: TenantContext) {
-  // Spec do E2, seção 6: tenant removido não cadastra serviço nem chave.
+  // E2 spec, section 6: a removed tenant registers no service or key.
   if (ctx.tenantStatus === "removed") {
     throw new ApiServiceError("tenant_removed", "This project was removed.");
   }
-  // Cadastro com aprovação (#49): projeto pendente não cadastra serviço nem chave.
+  // Sign-up with approval (#49): a pending project registers no service or key.
   if (ctx.tenantStatus === "pending") {
     throw new ApiServiceError("tenant_pending", "This project is awaiting approval.");
   }
 }
 
-// Cria a chave dentro de uma transação que já travou a linha do serviço, para
-// o limite de chaves ativas valer mesmo com pedidos simultâneos.
+// Creates the key inside a transaction that already locked the service row, so
+// the active key limit holds even with simultaneous requests.
 async function insertKey(tx: Tx, ctx: TenantContext, serviceId: string): Promise<CreatedIngestKey> {
   const [{ active }] = (await tx
     .select({ active: count() })
@@ -84,7 +84,7 @@ async function insertKey(tx: Tx, ctx: TenantContext, serviceId: string): Promise
   return { key, summary: summary! };
 }
 
-// Cria o serviço já com a primeira chave (spec do E2, seção 7).
+// Creates the service already with the first key (E2 spec, section 7).
 export async function createApiService(
   ctx: TenantContext,
   input: { name: string },
@@ -107,8 +107,8 @@ export async function createApiService(
     const firstKey = await insertKey(tx, ctx, service!.id);
     return { service: service!, firstKey };
   }).catch((error: unknown) => {
-    // Corrida entre dois cadastros com o mesmo nome: vale o índice único. O
-    // Drizzle embrulha o erro do Postgres, que fica em `cause`.
+    // Race between two registrations with the same name: the unique index
+    // decides. Drizzle wraps the Postgres error, which ends up in `cause`.
     const pg = (error as { cause?: { constraint_name?: string } }).cause;
     if (pg?.constraint_name === "api_service_tenant_id_name_key") {
       throw new ApiServiceError("duplicate_name", "There is already a service with this name.");
@@ -117,7 +117,7 @@ export async function createApiService(
   });
 }
 
-export async function listApiServices(ctx: TenantContext): Promise<ApiService[]> {
+export async function listApiServices(ctx: TenantReadContext): Promise<ApiService[]> {
   return db
     .select()
     .from(apiService)
@@ -125,9 +125,9 @@ export async function listApiServices(ctx: TenantContext): Promise<ApiService[]>
     .orderBy(asc(apiService.name));
 }
 
-// Nulo quando o serviço não existe, está arquivado ou é de outro tenant: a
-// página responde 404 nos três casos.
-export async function getApiService(ctx: TenantContext, serviceId: string): Promise<ApiService | null> {
+// Null when the service does not exist, is archived or belongs to another
+// tenant: the page answers 404 in all three cases.
+export async function getApiService(ctx: TenantReadContext, serviceId: string): Promise<ApiService | null> {
   if (!UUID_REGEX.test(serviceId)) return null;
   const [found] = await db
     .select()
@@ -139,8 +139,8 @@ export async function getApiService(ctx: TenantContext, serviceId: string): Prom
   return found ?? null;
 }
 
-// Chaves do serviço, ativas e revogadas, da mais nova para a mais antiga.
-// Nulo para serviço de outro tenant.
+// The service's keys, active and revoked, from newest to oldest.
+// Null for another tenant's service.
 export async function listIngestKeys(
   ctx: TenantContext,
   serviceId: string,
@@ -153,7 +153,7 @@ export async function listIngestKeys(
     .orderBy(desc(ingestKey.createdAt));
 }
 
-// Nulo para serviço de outro tenant.
+// Null for another tenant's service.
 export async function createIngestKey(
   ctx: TenantContext,
   serviceId: string,
@@ -161,7 +161,7 @@ export async function createIngestKey(
   assertCanWrite(ctx);
   if (!UUID_REGEX.test(serviceId)) return null;
   return db.transaction(async (tx) => {
-    // Trava o serviço: dois pedidos ao mesmo tempo não passam do limite.
+    // Locks the service: two requests at the same time do not go over the limit.
     const [service] = await tx
       .select({ id: apiService.id, archivedAt: apiService.archivedAt })
       .from(apiService)
@@ -175,11 +175,11 @@ export async function createIngestKey(
   });
 }
 
-// Revoga a chave. O coletor deixa de aceitá-la em até 60 segundos (cache dele).
-// Verdadeiro: revogou agora. Falso: a chave é do tenant, mas já estava
-// revogada (um clique duplo, por exemplo). Nulo: a chave não existe ou é de
-// outro tenant, e quem chama responde 404. Tenant removido ainda pode
-// revogar: só reduz o acesso.
+// Revokes the key. The collector stops accepting it within 60 seconds (its cache).
+// True: revoked now. False: the key belongs to the tenant, but was already
+// revoked (a double click, for example). Null: the key does not exist or
+// belongs to another tenant, and the caller answers 404. A removed tenant can
+// still revoke: it only reduces access.
 export async function revokeIngestKey(ctx: TenantContext, keyId: string): Promise<boolean | null> {
   if (!UUID_REGEX.test(keyId)) return null;
   return db.transaction(async (tx) => {

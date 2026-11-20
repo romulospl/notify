@@ -1,7 +1,7 @@
-// Package clientip descobre o IP do cliente e o trunca antes de qualquer uso.
+// Package clientip finds the client's IP and truncates it before any use.
 //
-// O IP completo só existe na memória do request: o que sai do gateway (para o
-// Umami ou para o limite de taxa) é sempre o resultado de Truncate.
+// The full IP only exists in the request's memory: what leaves the gateway (to
+// Umami or to the rate limit) is always the result of Truncate.
 package clientip
 
 import (
@@ -12,8 +12,8 @@ import (
 	"strings"
 )
 
-// Truncate zera o último octeto do IPv4 e tudo depois do /48 no IPv6.
-// Um IPv4 mapeado em IPv6 (::ffff:a.b.c.d) é tratado como IPv4.
+// Truncate zeroes the last IPv4 octet and everything after the /48 in IPv6. An
+// IPv4 mapped into IPv6 (::ffff:a.b.c.d) is treated as IPv4.
 func Truncate(a netip.Addr) netip.Addr {
 	a = a.Unmap()
 	bits := 48
@@ -27,21 +27,22 @@ func Truncate(a netip.Addr) netip.Addr {
 	return p.Addr()
 }
 
-// Resolver acha o IP do cliente a partir do request.
+// Resolver finds the client's IP from the request.
 type Resolver struct {
-	// Trusted são as redes dos proxies (o Caddy) cujo X-Forwarded-For vale.
+	// Trusted are the networks of the proxies (Caddy) whose X-Forwarded-For is
+	// honoured.
 	Trusted []netip.Prefix
 }
 
-// ErrNoIP indica que o RemoteAddr não tem um IP válido.
-var ErrNoIP = errors.New("clientip: endereço remoto inválido")
+// ErrNoIP means RemoteAddr does not hold a valid IP.
+var ErrNoIP = errors.New("clientip: invalid remote address")
 
-// FromRequest devolve o IP do cliente, ainda completo. Quem chama deve passar
-// o resultado por Truncate antes de usá-lo fora do request.
+// FromRequest returns the client's IP, still complete. The caller must pass the
+// result through Truncate before using it outside the request.
 //
-// O X-Forwarded-For só é lido quando a conexão vem de um proxy confiável. Nele,
-// o cliente é o primeiro endereço da direita para a esquerda que não é de um
-// proxy confiável; entradas à esquerda dele podem ter sido forjadas.
+// X-Forwarded-For is only read when the connection comes from a trusted proxy.
+// In it, the client is the first address from right to left that does not
+// belong to a trusted proxy; entries to its left may have been forged.
 func (r Resolver) FromRequest(req *http.Request) (netip.Addr, error) {
 	remote, err := parseHostPort(req.RemoteAddr)
 	if err != nil {

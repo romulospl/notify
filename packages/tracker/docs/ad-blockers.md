@@ -1,76 +1,75 @@
-# Script e endpoints contra ad blockers (#23)
+# Script and endpoints against ad blockers (#23)
 
-O script e os endpoints do gateway não podem ser bloqueados pelas listas que vêm ligadas por padrão no uBlock Origin. Esta página registra como isso é testado, o último resultado e o roteiro para conferir à mão no navegador.
+The script and the gateway endpoints must not be blocked by the lists that come enabled by default in uBlock Origin. This page records how that is tested, the latest result and the steps to check it by hand in the browser.
 
-## O que é testado
+## What is tested
 
-Três requisições, feitas pela página de um tenant:
+Three requests, made by a tenant's page:
 
-| Requisição | Tipo | Quem faz |
+| Request | Type | Who makes it |
 | --- | --- | --- |
-| `GET https://<gateway>/s/vX.Y.Z/n.js` (todas as versões de `published/sri.json`) | `script` | a tag `<script>` do tenant |
-| `POST https://<gateway>/e` | `xmlhttprequest` (`fetch`) | o script, a cada evento |
-| `GET https://<gateway>/c?s=<website-id>` | `xmlhttprequest` (`fetch`) | o script, para pegar o desafio da prova de JS |
+| `GET https://<gateway>/s/vX.Y.Z/n.js` (all versions in `published/sri.json`) | `script` | the tenant's `<script>` tag |
+| `POST https://<gateway>/e` | `xmlhttprequest` (`fetch`) | the script, on every event |
+| `GET https://<gateway>/c?s=<website-id>` | `xmlhttprequest` (`fetch`) | the script, to get the JS proof challenge |
 
-Cada uma é avaliada a partir de uma página de terceiro (`www.tenant-site.example.net`, o caso comum) e de uma página no mesmo domínio do gateway (`www.example.com`).
+Each one is evaluated from a third-party page (`www.tenant-site.example.net`, the common case) and from a page on the same domain as the gateway (`www.example.com`).
 
-## Listas
+## Lists
 
-As listas ligadas por padrão no uBlock Origin, baixadas na hora em cada execução (nada é commitado):
+The lists enabled by default in uBlock Origin, downloaded on the spot on every run (nothing is committed):
 
 - EasyList — `https://easylist.to/easylist/easylist.txt`
 - EasyPrivacy — `https://easylist.to/easylist/easyprivacy.txt`
-- uBlock filters (com os `!#include`), privacy, badware, quick-fixes e unbreak — `https://ublockorigin.github.io/uAssets/filters/*.txt`
+- uBlock filters (with the `!#include` lines), privacy, badware, quick-fixes and unbreak — `https://ublockorigin.github.io/uAssets/filters/*.txt`
 - Peter Lowe's Ad and tracking server list — `https://pgl.yoyo.org/adservers/`
 
-A Online Malicious URL Blocklist, também ligada por padrão, fica de fora: só tem domínios de malware.
+The Online Malicious URL Blocklist, also enabled by default, is left out: it only has malware domains.
 
-## Como roda
+## How it runs
 
 ```bash
-pnpm --filter @stellytics/tracker check:adblock                    # host de exemplo gw.example.com
-pnpm --filter @stellytics/tracker check:adblock e.seu-dominio.org  # também confere um host real
+pnpm --filter @stellytics/tracker check:adblock                    # example host gw.example.com
+pnpm --filter @stellytics/tracker check:adblock e.your-domain.org  # also checks a real host
 ```
 
-O script (`scripts/check-adblock.ts`) usa o matcher de regras de rede do [`@ghostery/adblocker`](https://github.com/ghostery/adblocker) (MPL-2.0), que entende a sintaxe do uBlock Origin e da Adblock Plus. Só as regras de rede importam aqui; as cosméticas escondem elementos da página e não afetam requisições.
+The script (`scripts/check-adblock.ts`) uses the network rule matcher of [`@ghostery/adblocker`](https://github.com/ghostery/adblocker) (MPL-2.0), which understands the uBlock Origin and Adblock Plus syntax. Only network rules matter here; cosmetic ones hide page elements and do not affect requests.
 
-O veredito vem de todas as listas juntas, como no navegador (uma exceção de uma lista vale para as outras); quando algo é bloqueado, a saída mostra a regra e a lista de origem. Antes de valer, o resultado passa por controles que precisam ser bloqueados (`/umami.js` e `/api/collect` no host do gateway e o `analytics.js` do Google). Se algum controle passar, o matcher ou as listas quebraram e o check falha. Ele também falha se uma lista vier vazia ou não baixar.
+The verdict comes from all lists together, as in the browser (an exception in one list applies to the others); when something is blocked, the output shows the rule and the source list. Before it counts, the result goes through controls that must be blocked (`/umami.js` and `/api/collect` on the gateway host and Google's `analytics.js`). If any control passes, the matcher or the lists are broken and the check fails. It also fails if a list comes back empty or does not download.
 
-O workflow `.github/workflows/adblock.yml` roda o check nos PRs que mexem no script ou nas rotas do gateway, em todo push na `main` que mexa nisso e uma vez por dia. Ele fica fora do agregador `ci` de propósito: as listas mudam todo dia, e uma regra nova não pode deixar vermelho um PR que não tem nada com isso. Uma falha sem mudança no código quer dizer que uma regra nova pegou o script ou um endpoint: veja a regra na saída e decida entre pedir a correção na lista ou trocar o nome.
+The `.github/workflows/adblock.yml` workflow runs the check on PRs that touch the script or the gateway routes, on every push to `main` that touches them and once a day. It is kept out of the `ci` aggregator on purpose: the lists change every day, and a new rule must not turn red a PR that has nothing to do with it. A failure with no code change means a new rule caught the script or an endpoint: look at the rule in the output and decide between asking for a fix in the list or changing the name.
 
-Cada lista precisa virar pelo menos 20 regras de rede depois de interpretada; uma página de erro ou captcha devolvida com `200` falha o check em vez de passar em branco. O check carrega as regras de todos os ramos `!#if` (Firefox, mobile etc.), então é um pouco mais rígido que o uBlock Origin num navegador só: pode dar um falso vermelho, nunca um falso verde.
+Each list must turn into at least 20 network rules once parsed; an error or captcha page returned with `200` fails the check instead of passing unnoticed. The check loads the rules from all `!#if` branches (Firefox, mobile etc.), so it is a little stricter than uBlock Origin in a single browser: it may give a false red, never a false green.
 
-## Resultado
+## Result
 
-Execução de 14/11/2026 (listas: EasyList 202611140151, EasyPrivacy 202611140158, uBlock filters de 09/11/2026, privacy, badware e quick-fixes de 13/11/2026, unbreak de 06/11/2026), matcher `@ghostery/adblocker` 2.20.3:
+Run of 14 November 2026 (lists: EasyList 202611140151, EasyPrivacy 202611140158, uBlock filters of 9 November 2026, privacy, badware and quick-fixes of 13 November 2026, unbreak of 6 November 2026), matcher `@ghostery/adblocker` 2.20.3:
 
-- **Nenhuma das três requisições é bloqueada** em `gw.example.com`, nas duas versões publicadas (v1.0.0 e v1.1.0), de página de terceiro ou do mesmo domínio.
-- Os caminhos padrão do Umami são bloqueados no mesmo host: `/umami.js` pela regra `/umami.js` e `/api/collect` pela regra `/api/collect|$ping,xhr`. Por isso o gateway usa `/s/`, `/e` e `/c`, e repassa ao `/api/send` do Umami só do lado do servidor.
-- Hoje nenhuma lista padrão bloqueia pelo nome do subdomínio: `analytics.`, `track.`, `tracking.`, `collect.`, `umami.`, `stats.`, `metrics.`, `telemetry.`, `insights.`, `events.`, `ingest.` e `stellytics.` em `example.com` passam.
+- **None of the three requests is blocked** on `gw.example.com`, in the two published versions (v1.0.0 and v1.1.0), from a third-party page or from the same domain.
+- Umami's default paths are blocked on the same host: `/umami.js` by the rule `/umami.js` and `/api/collect` by the rule `/api/collect|$ping,xhr`. That is why the gateway uses `/s/`, `/e` and `/c`, and relays to Umami's `/api/send` only on the server side.
+- Today no default list blocks by subdomain name: `analytics.`, `track.`, `tracking.`, `collect.`, `umami.`, `stats.`, `metrics.`, `telemetry.`, `insights.`, `events.`, `ingest.` and `stellytics.` on `example.com` pass.
 
-## Recomendação de host
+## Host recommendation
 
-Use um subdomínio neutro e curto para o gateway, sem `analytics`, `track`, `tracking`, `collect`, `umami`, `stats`, `metrics` ou `telemetry` (por exemplo `e.<domínio>` ou `gw.<domínio>`). As listas padrão não bloqueiam esses nomes hoje, mas:
+Use a short, neutral subdomain for the gateway, without `analytics`, `track`, `tracking`, `collect`, `umami`, `stats`, `metrics` or `telemetry` (for example `e.<domain>` or `gw.<domain>`). The default lists do not block these names today, but:
 
-- listas que muita gente liga além das padrão (AdGuard Tracking Protection, filtros de DNS como os do Pi-hole e NextDNS) não foram testadas aqui e podem bloquear por padrão de hostname, e esses termos seriam os primeiros alvos;
-- uma regra genérica nova nas listas padrão pegaria todos os tenants de uma vez, e trocar o host exige mudar o HTML de cada site.
+- lists that many people enable beyond the default ones (AdGuard Tracking Protection, DNS filters such as Pi-hole's and NextDNS's) were not tested here and may block by hostname pattern, and these terms would be the first targets;
+- a new generic rule in the default lists would catch all tenants at once, and changing the host requires changing the HTML of every site.
 
-O mesmo vale para o domínio registrável: ele entra nas listas assim que for associado a rastreamento, independentemente do subdomínio. Ao escolher o host de produção, rode o check com ele como argumento.
+The same goes for the registrable domain: it enters the lists as soon as it is associated with tracking, regardless of the subdomain. When choosing the production host, run the check with it as an argument.
 
-## Roteiro manual com uBlock Origin
+## Manual steps with uBlock Origin
 
-Para conferir no navegador, com o ambiente local (`docker compose up -d --wait`) ou com o gateway de produção:
+To check in the browser, with the local environment (`docker compose up -d --wait`) or with the production gateway:
 
-1. Instale o uBlock Origin num perfil limpo do Firefox ou do Chrome e deixe as listas padrão (no painel, aba "Filter lists", clique em "Update now").
-2. Cadastre um site no portal e copie o snippet de instalação.
-3. Sirva uma página HTML com o snippet num host diferente do gateway (por exemplo `python3 -m http.server 8080` e abra `http://localhost:8080`; a prova de JS exige HTTPS ou `localhost`).
-4. Abra o logger do uBlock Origin (ícone do uBO → ícone de lista, "Open the logger") e recarregue a página.
-5. Confira que `n.js`, `/c?s=...` e `/e` aparecem sem fundo vermelho (bloqueado) e, na aba Network das ferramentas de desenvolvedor, que `/e` respondeu `204`.
-6. Confira que o pageview aparece no painel do site no portal.
+1. Install uBlock Origin in a clean Firefox or Chrome profile and keep the default lists (in the dashboard, "Filter lists" tab, click "Update now").
+2. Register a site in the portal and copy the installation snippet.
+3. Serve an HTML page with the snippet on a host different from the gateway (for example `python3 -m http.server 8080` and open `http://localhost:8080`; the JS proof requires HTTPS or `localhost`).
+4. Open the uBlock Origin logger (uBO icon → list icon, "Open the logger") and reload the page.
+5. Check that `n.js`, `/c?s=...` and `/e` show up without a red background (blocked) and, in the Network tab of the developer tools, that `/e` answered `204`.
+6. Check that the pageview shows up in the site's dashboard in the portal.
 
-Anote a data, o navegador e a versão do uBlock Origin ao registrar o resultado aqui.
+Write down the date, the browser and the uBlock Origin version when recording the result here.
 
-## Não use `sendBeacon`
+## Do not use `sendBeacon`
 
-O navegador classifica o `navigator.sendBeacon` como requisição do tipo `ping`, e a EasyPrivacy bloqueia todo `ping` de terceiro (regra `$ping,3p`). Por isso o script manda os eventos com `fetch` e `keepalive: true`, que é do tipo `xmlhttprequest` e passa. O check mostra esse caso na parte informativa da saída. Se alguém trocar o envio para `sendBeacon`, os eventos de quem usa uBlock Origin somem.
-
+The browser classifies `navigator.sendBeacon` as a request of type `ping`, and EasyPrivacy blocks every third-party `ping` (rule `$ping,3p`). That is why the script sends events with `fetch` and `keepalive: true`, which is of type `xmlhttprequest` and passes. The check shows this case in the informational part of the output. If someone switches the sending to `sendBeacon`, the events of everyone using uBlock Origin disappear.

@@ -11,11 +11,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Tenant removido (#20, #21; spec do E2, seções 6 e 8): o gateway continua
-// respondendo 204, mas o evento não chega ao Umami. Depois de reativado, volta
-// a chegar. O status muda direto no banco, como faz a ação do operador no
-// portal (testada em apps/portal/test/isolation.test.ts); aqui o que importa é
-// o caminho do gateway até o Umami, com o cache de SITE_CACHE_TTL.
+// Removed tenant (#20, #21; E2 spec, sections 6 and 8): the gateway keeps
+// answering 204, but the event does not reach Umami. Once reactivated, it
+// reaches it again. The status changes directly in the database, as the
+// operator action in the portal does (tested in
+// apps/portal/test/isolation.test.ts); what matters here is the path from the
+// gateway to Umami, with the SITE_CACHE_TTL cache.
 func TestRemovedTenantIsDropped(t *testing.T) {
 	token := umamiLogin(t)
 	websiteID := umamiCreateWebsite(t, token)
@@ -29,27 +30,27 @@ func TestRemovedTenantIsDropped(t *testing.T) {
 	send := func(path string) {
 		t.Helper()
 		if code := sendEvent(t, websiteID, path); code != http.StatusNoContent {
-			t.Fatalf("page view %s: status = %d, quero 204", path, code)
+			t.Fatalf("page view %s: status = %d, want 204", path, code)
 		}
 	}
 
-	send("/ativo")
+	send("/active")
 	waitPageviews(t, token, websiteID, start, 1)
 
 	setTenantStatus(t, db, websiteID, "removed")
 	time.Sleep(siteCacheTTL + time.Second)
-	// Mesma resposta do sucesso, para não dar pista a quem testa IDs.
-	send("/removido")
+	// Same response as success, to give no hint to whoever probes IDs.
+	send("/removed")
 
 	setTenantStatus(t, db, websiteID, "active")
 	time.Sleep(siteCacheTTL + time.Second)
-	send("/reativado")
+	send("/reactivated")
 
-	// Os dois eventos aceitos chegam; o do tenant removido não.
+	// The two accepted events arrive; the removed tenant's one does not.
 	waitPageviews(t, token, websiteID, start, 2)
 	time.Sleep(3 * time.Second)
 	if views := umamiPageviews(t, token, websiteID, start); views != 2 {
-		t.Fatalf("pageviews = %d, quero 2 (o evento do tenant removido chegou ao Umami?)", views)
+		t.Fatalf("pageviews = %d, want 2 (did the removed tenant's event reach Umami?)", views)
 	}
 }
 
@@ -62,11 +63,12 @@ func setTenantStatus(t *testing.T, db *pgx.Conn, websiteID, status string) {
 		t.Fatal(err)
 	}
 	if tag.RowsAffected() != 1 {
-		t.Fatalf("tenant do site %s não encontrado", websiteID)
+		t.Fatalf("tenant of site %s not found", websiteID)
 	}
 }
 
-// waitPageviews espera o Umami contar `want` page views; falha se passar disso.
+// waitPageviews waits for Umami to count `want` page views; it fails if it goes
+// past that.
 func waitPageviews(t *testing.T, token, websiteID string, since time.Time, want int) {
 	t.Helper()
 	deadline := time.Now().Add(90 * time.Second)
@@ -76,10 +78,10 @@ func waitPageviews(t *testing.T, token, websiteID string, since time.Time, want 
 			return
 		}
 		if views > want {
-			t.Fatalf("pageviews = %d, quero %d", views, want)
+			t.Fatalf("pageviews = %d, want %d", views, want)
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("pageviews = %d depois de 90 s, quero %d", views, want)
+			t.Fatalf("pageviews = %d after 90 s, want %d", views, want)
 		}
 		time.Sleep(time.Second)
 	}

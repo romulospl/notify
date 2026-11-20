@@ -1,9 +1,9 @@
-# Alertas do monitoramento externo (#15). Textos em inglês, como a interface.
+# Alerts of the external monitoring (#15). Texts in English, like the UI.
 groups:
   - name: stellytics-endpoints
     rules:
-      # Portal, ingestão web ou ingestão de API sem resposta 2xx por 1 minuto.
-      # O ingest-web só responde 2xx com o Postgres e o Umami no ar.
+      # Portal, web ingestion or API ingestion without a 2xx answer for 1 minute.
+      # ingest-web only answers 2xx with Postgres and Umami up.
       - alert: EndpointDown
         expr: probe_success{job="endpoints", component!="stack"} == 0
         for: 1m
@@ -13,10 +13,10 @@ groups:
           summary: "{{ $labels.component }} is down"
           description: "{{ $labels.instance }} has not answered with 2xx for over a minute."
 
-      # A checagem interna da VPS (infra/scripts/stack-check.py, a cada minuto)
-      # falhou: contêiner parado ou unhealthy (o rollup fica unhealthy quando a
-      # consolidação para), WAL sem arquivar, backup base com mais de 26 h ou
-      # disco acima do limite. Os 5 minutos absorvem as recriações de um deploy.
+      # The VPS internal check (infra/scripts/stack-check.py, every minute)
+      # failed: container stopped or unhealthy (rollup turns unhealthy when the
+      # rollup stops), WAL not archived, base backup older than 26 h or
+      # disk above the limit. The 5 minutes absorb the recreations of a deploy.
       - alert: StackUnhealthy
         expr: probe_success{job="endpoints", component="stack"} == 0
         for: 5m
@@ -26,8 +26,8 @@ groups:
           summary: "The production stack check is failing"
           description: "Run `journalctl -u stellytics-check -n 20` on the VPS to see which check failed (containers, WAL archiving, base backup or disk)."
 
-      # O certificado do Caddy renova sozinho ~30 dias antes; 14 dias quer dizer
-      # que a renovação está falhando (DNS, porta 80 ou Let's Encrypt).
+      # The Caddy certificate renews by itself ~30 days before; 14 days means
+      # that the renewal is failing (DNS, port 80 or Let's Encrypt).
       - alert: TLSCertificateExpiringSoon
         expr: probe_ssl_earliest_cert_expiry{job="endpoints"} - time() < 14 * 86400
         for: 1h
@@ -37,9 +37,9 @@ groups:
           summary: "TLS certificate of {{ $labels.component }} expires in less than 14 days"
           description: "{{ $labels.instance }}: the automatic renewal is probably failing."
 
-      # O Prometheus não conseguiu nem pedir o teste ao blackbox (módulo
-      # inexistente, blackbox sem responder em /probe): probe_success some em
-      # vez de ir a 0, e o EndpointDown não dispararia.
+      # Prometheus could not even request the test from the blackbox (missing
+      # module, blackbox not answering at /probe): probe_success disappears instead
+      # of going to 0, and EndpointDown would not fire.
       - alert: ProbeFailing
         expr: up{job="endpoints"} == 0
         for: 2m
@@ -49,7 +49,7 @@ groups:
           summary: "{{ $labels.component }} is not being checked"
           description: "The probe request for {{ $labels.instance }} itself fails, so its availability is unknown."
 
-      # Sem o blackbox, nenhum alvo é testado e nenhum EndpointDown dispara.
+      # Without the blackbox, no target is tested and no EndpointDown fires.
       - alert: ProberDown
         expr: up{job="blackbox"} == 0
         for: 2m
@@ -59,8 +59,8 @@ groups:
           summary: "The blackbox prober is down"
           description: "Endpoints are not being checked."
 
-      # Sempre ativo: vai para o sinal de vida externo (se configurado). Se ele
-      # parar de chegar, quem cai é o próprio monitoramento.
+      # Always active: goes to the external heartbeat (if configured). If it
+      # stops arriving, it is the monitoring itself that is down.
       - alert: Watchdog
         expr: vector(1)
         labels:

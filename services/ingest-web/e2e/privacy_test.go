@@ -2,10 +2,10 @@
 
 package e2e
 
-// #24: o IP completo nunca é persistido, e a geolocalização do Umami usa o IP
-// truncado. O teste manda o IP do visitante no X-Forwarded-For, como o Caddy
-// faria; para isso o gateway precisa confiar na conexão do teste
-// (INGEST_TRUSTED_PROXIES no Compose).
+// #24: the full IP is never persisted, and Umami's geolocation uses the
+// truncated IP. The test sends the visitor's IP in X-Forwarded-For, as Caddy
+// would; for that the gateway needs to trust the test's connection
+// (INGEST_TRUSTED_PROXIES in Compose).
 
 import (
 	"context"
@@ -18,8 +18,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Endereços públicos do Google, que a base GeoLite2 do Umami põe nos EUA,
-// inclusive depois de truncados (8.8.8.0 e 2001:4860:4860::).
+// Public Google addresses, which Umami's GeoLite2 database places in the US,
+// even after being truncated (8.8.8.0 and 2001:4860:4860::).
 var visitors = []struct{ ip, truncated string }{
 	{"8.8.8.77", "8.8.8.0"},
 	{"2001:4860:4860::8888", "2001:4860:4860::"},
@@ -36,13 +36,13 @@ func TestFullIPNeverPersisted(t *testing.T) {
 	registerSite(t, stellytics, websiteID)
 
 	for _, v := range visitors {
-		if code := sendEvent(t, websiteID, "/privacidade", "X-Forwarded-For", v.ip); code != http.StatusNoContent {
-			t.Fatalf("evento de %s: status = %d, quero 204", v.ip, code)
+		if code := sendEvent(t, websiteID, "/privacy", "X-Forwarded-For", v.ip); code != http.StatusNoContent {
+			t.Fatalf("event from %s: status = %d, want 204", v.ip, code)
 		}
 	}
 
-	// Um visitante por IP vira uma sessão no Umami, geolocalizada pelo IP
-	// truncado.
+	// One visitor per IP becomes one session in Umami, geolocated by the
+	// truncated IP.
 	deadline := time.Now().Add(60 * time.Second)
 	var countries []string
 	for {
@@ -67,19 +67,19 @@ func TestFullIPNeverPersisted(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 	if len(countries) != len(visitors) {
-		t.Fatalf("sessões no Umami = %d, quero %d (o gateway confia no X-Forwarded-For do teste?)", len(countries), len(visitors))
+		t.Fatalf("sessions in Umami = %d, want %d (does the gateway trust the test's X-Forwarded-For?)", len(countries), len(visitors))
 	}
 	for _, c := range countries {
 		if c != "US" {
-			t.Errorf("país da sessão = %q, quero US (geolocalização pelo IP truncado)", c)
+			t.Errorf("session country = %q, want US (geolocation by the truncated IP)", c)
 		}
 	}
 
-	// Nenhuma coluna de nenhuma tabela, nos dois bancos, guarda o IP completo.
+	// No column of any table, in either database, stores the full IP.
 	for name, db := range map[string]*pgx.Conn{"umami": umami, "stellytics": stellytics} {
 		for _, v := range visitors {
 			for _, hit := range findText(t, db, v.ip) {
-				t.Errorf("IP completo %s gravado no banco %s, em %s", v.ip, name, hit)
+				t.Errorf("full IP %s written to database %s, in %s", v.ip, name, hit)
 			}
 		}
 	}
@@ -95,8 +95,8 @@ func connect(t *testing.T, url string) *pgx.Conn {
 	return db
 }
 
-// findText procura needle em toda coluna de texto, JSON ou endereço das tabelas
-// do usuário e devolve "tabela.coluna" de cada achado.
+// findText looks for needle in every text, JSON or address column of the user's
+// tables and returns "table.column" for each hit.
 func findText(t *testing.T, db *pgx.Conn, needle string) []string {
 	t.Helper()
 	ctx := context.Background()
@@ -115,7 +115,7 @@ func findText(t *testing.T, db *pgx.Conn, needle string) []string {
 		t.Fatal(err)
 	}
 	if len(cols) == 0 {
-		t.Fatal("nenhuma coluna de texto encontrada; o usuário enxerga as tabelas?")
+		t.Fatal("no text column found; can the user see the tables?")
 	}
 
 	var hits []string

@@ -10,7 +10,7 @@ import (
 const site = "6f1c2b9e-3a4d-4c8e-9f00-1234567890ab"
 
 func newIssuer(now time.Time) *Issuer {
-	i := New([]byte("chave-de-teste-com-pelo-menos-32-bytes"), 10*time.Minute, 8)
+	i := New([]byte("test-key-with-at-least-32-bytes-long"), 10*time.Minute, 8)
 	i.now = func() time.Time { return now }
 	return i
 }
@@ -25,15 +25,15 @@ func TestVerify(t *testing.T) {
 	nonce := Solve(c.Token, c.Bits)
 
 	if err := issuer.Verify(site, c.Token, nonce); err != nil {
-		t.Fatalf("prova válida recusada: %v", err)
+		t.Fatalf("valid proof refused: %v", err)
 	}
 
-	// Achar um nonce que não resolve.
+	// Find a nonce that does not solve it.
 	bad := "0"
 	for Solved(c.Token, bad, c.Bits) {
 		bad += "1"
 	}
-	other := New([]byte("outra-chave-com-pelo-menos-32-bytes!!"), 10*time.Minute, 8)
+	other := New([]byte("another-key-with-at-least-32-bytes!!"), 10*time.Minute, 8)
 	other.now = issuer.now
 	forged := other.Challenge(site)
 
@@ -46,25 +46,25 @@ func TestVerify(t *testing.T) {
 		website, token, nonce string
 		want                  error
 	}{
-		{"sem prova", site, "", "", ErrMissing},
-		{"sem nonce", site, c.Token, "", ErrMalformed},
-		{"nonce não numérico", site, c.Token, "abc", ErrMalformed},
-		{"nonce longo", site, c.Token, "123456789012345678901", ErrMalformed},
-		{"token curto", site, "abc", nonce, ErrMalformed},
-		{"token de outra chave", site, forged.Token, Solve(forged.Token, 8), ErrSignature},
-		{"token alterado", site, tampered, Solve(tampered, 8), ErrSignature},
-		{"outro site", "0a0b0c0d-0e0f-4000-8000-000000000001", c.Token, nonce, ErrSignature},
-		{"trabalho insuficiente", site, c.Token, bad, ErrWork},
+		{"no proof", site, "", "", ErrMissing},
+		{"no nonce", site, c.Token, "", ErrMalformed},
+		{"non-numeric nonce", site, c.Token, "abc", ErrMalformed},
+		{"long nonce", site, c.Token, "123456789012345678901", ErrMalformed},
+		{"short token", site, "abc", nonce, ErrMalformed},
+		{"token from another key", site, forged.Token, Solve(forged.Token, 8), ErrSignature},
+		{"tampered token", site, tampered, Solve(tampered, 8), ErrSignature},
+		{"another site", "0a0b0c0d-0e0f-4000-8000-000000000001", c.Token, nonce, ErrSignature},
+		{"insufficient work", site, c.Token, bad, ErrWork},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := issuer.Verify(tc.website, tc.token, tc.nonce); !errors.Is(err, tc.want) {
-				t.Errorf("Verify = %v, quero %v", err, tc.want)
+				t.Errorf("Verify = %v, want %v", err, tc.want)
 			}
 		})
 	}
 
-	t.Run("site em maiúsculas", func(t *testing.T) {
+	t.Run("uppercase site", func(t *testing.T) {
 		if err := issuer.Verify("6F1C2B9E-3A4D-4C8E-9F00-1234567890AB", c.Token, nonce); err != nil {
 			t.Errorf("Verify = %v", err)
 		}
@@ -80,15 +80,15 @@ func TestVerifyExpiry(t *testing.T) {
 		at   time.Time
 		want error
 	}{
-		"dentro do prazo":   {now.Add(9 * time.Minute), nil},
-		"expirado":          {now.Add(11 * time.Minute), ErrExpired},
-		"emitido no futuro": {now.Add(-2 * time.Minute), ErrExpired},
-		"relógio adiantado": {now.Add(-30 * time.Second), nil},
+		"within the deadline":  {now.Add(9 * time.Minute), nil},
+		"expired":              {now.Add(11 * time.Minute), ErrExpired},
+		"issued in the future": {now.Add(-2 * time.Minute), ErrExpired},
+		"clock ahead":          {now.Add(-30 * time.Second), nil},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			if err := newIssuer(tc.at).Verify(site, c.Token, nonce); !errors.Is(err, tc.want) {
-				t.Errorf("Verify = %v, quero %v", err, tc.want)
+				t.Errorf("Verify = %v, want %v", err, tc.want)
 			}
 		})
 	}
@@ -106,7 +106,7 @@ func TestLeadingZeros(t *testing.T) {
 	}
 	for _, c := range cases {
 		if got := LeadingZeros(c.in); got != c.want {
-			t.Errorf("LeadingZeros(%x) = %d, quero %d", c.in, got, c.want)
+			t.Errorf("LeadingZeros(%x) = %d, want %d", c.in, got, c.want)
 		}
 	}
 }

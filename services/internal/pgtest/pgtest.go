@@ -1,6 +1,7 @@
-// Package pgtest reúne o que os testes de integração Go precisam do banco
-// stellytics: um banco com as migrações do portal, sem nunca migrar o banco de
-// DATABASE_URL por fora do Drizzle, e conexões como os usuários de ingestão.
+// Package pgtest gathers what the Go integration tests need from the
+// stellytics database: a database with the portal's migrations, without ever
+// migrating the DATABASE_URL database outside Drizzle, and connections as the
+// ingestion users.
 package pgtest
 
 import (
@@ -20,9 +21,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// Database devolve a URL do banco onde o teste roda: um banco temporário
-// com as migrações do portal, quando o usuário pode criar bancos, ou o próprio
-// banco de adminURL, quando o portal já o migrou.
+// Database returns the URL of the database where the test runs: a temporary
+// database with the portal's migrations, when the user can create databases,
+// or the adminURL database itself, when the portal has already migrated it.
 func Database(t *testing.T, adminURL string) string {
 	t.Helper()
 	ctx := context.Background()
@@ -38,12 +39,12 @@ func Database(t *testing.T, adminURL string) string {
 		t.Fatal(err)
 	}
 	if !canCreate {
-		// Sem banco temporário, só vale o banco que o portal já migrou por inteiro.
+		// Without a temporary database, only the database the portal has fully migrated will do.
 		var applied int
 		_ = conn.QueryRow(ctx, `SELECT count(*) FROM drizzle.__drizzle_migrations`).Scan(&applied)
 		if total := len(migrationFiles(t)); applied < total {
-			t.Skipf("o banco de DATABASE_URL tem %d de %d migrações do portal e o usuário não pode criar um banco "+
-				"temporário: rode pnpm --filter @stellytics/portal db:migrate (ou suba o portal) ou use um usuário com CREATEDB",
+			t.Skipf("the DATABASE_URL database has %d of %d portal migrations and the user cannot create a temporary "+
+				"database: run pnpm --filter @stellytics/portal db:migrate (or start the portal) or use a user with CREATEDB",
 				applied, total)
 		}
 		return adminURL
@@ -61,12 +62,12 @@ func Database(t *testing.T, adminURL string) string {
 		ctx := context.Background()
 		conn, err := pgx.Connect(ctx, adminURL)
 		if err != nil {
-			t.Errorf("apagando %s: %v", name, err)
+			t.Errorf("dropping %s: %v", name, err)
 			return
 		}
 		defer conn.Close(ctx)
 		if _, err := conn.Exec(ctx, "DROP DATABASE "+pgx.Identifier{name}.Sanitize()+" WITH (FORCE)"); err != nil {
-			t.Errorf("apagando %s: %v", name, err)
+			t.Errorf("dropping %s: %v", name, err)
 		}
 	})
 
@@ -84,7 +85,7 @@ func Database(t *testing.T, adminURL string) string {
 	return u.String()
 }
 
-// applyMigrations aplica as migrações do portal, em ordem, num banco vazio.
+// applyMigrations applies the portal's migrations, in order, to an empty database.
 func applyMigrations(t *testing.T, db *pgx.Conn) {
 	t.Helper()
 	ctx := context.Background()
@@ -98,14 +99,14 @@ func applyMigrations(t *testing.T, db *pgx.Conn) {
 				continue
 			}
 			if _, err := db.Exec(ctx, stmt); err != nil {
-				t.Fatalf("%s: %v (rodou infra/compose/postgres/init/02-ingest-roles.sh?)", filepath.Base(f), err)
+				t.Fatalf("%s: %v (did infra/compose/postgres/init/02-ingest-roles.sh run?)", filepath.Base(f), err)
 			}
 		}
 	}
 }
 
-// RoleURL troca o usuário e a senha da URL por role/role, como no Compose e
-// no CI, ou usa a URL de envVar quando ela existir.
+// RoleURL replaces the URL's user and password with role/role, as in Compose
+// and in CI, or uses the envVar URL when it exists.
 func RoleURL(t *testing.T, adminURL, role, envVar string) string {
 	t.Helper()
 	if s := os.Getenv(envVar); s != "" {
@@ -119,16 +120,16 @@ func RoleURL(t *testing.T, adminURL, role, envVar string) string {
 	return u.String()
 }
 
-// AssertDenied confere que err é permission denied (42501).
+// AssertDenied checks that err is permission denied (42501).
 func AssertDenied(t *testing.T, what string, err error) {
 	t.Helper()
 	pgErr, ok := errors.AsType[*pgconn.PgError](err)
 	if !ok || pgErr.Code != "42501" {
-		t.Errorf("%s: quero permission denied (42501), veio %v", what, err)
+		t.Errorf("%s: want permission denied (42501), got %v", what, err)
 	}
 }
 
-// NewUUID gera um UUID v4.
+// NewUUID generates a UUID v4.
 func NewUUID(t *testing.T) string {
 	t.Helper()
 	b := make([]byte, 16)
@@ -140,13 +141,13 @@ func NewUUID(t *testing.T) string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
-// migrationFiles devolve as migrações do portal, em ordem.
+// migrationFiles returns the portal's migrations, in order.
 func migrationFiles(t *testing.T) []string {
 	t.Helper()
 	_, here, _, _ := runtime.Caller(0)
 	files, err := filepath.Glob(filepath.Join(filepath.Dir(here), "../../../apps/portal/drizzle/*.sql"))
 	if err != nil || len(files) == 0 {
-		t.Fatalf("migrações do portal não encontradas: %v", err)
+		t.Fatalf("portal migrations not found: %v", err)
 	}
 	sort.Strings(files)
 	return files

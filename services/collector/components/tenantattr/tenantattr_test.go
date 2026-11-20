@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/collector/processor/processortest"
 )
 
-// Sem passar pela extensão de autenticação, nada segue no pipeline.
+// Without going through the authentication extension, nothing moves on in the pipeline.
 func TestRejectsUnauthenticated(t *testing.T) {
 	sink := new(consumertest.MetricsSink)
 	p, err := NewFactory().CreateMetrics(context.Background(), processortest.NewNopSettings(Type), &Config{}, sink)
@@ -18,12 +18,12 @@ func TestRejectsUnauthenticated(t *testing.T) {
 		t.Fatal(err)
 	}
 	md := pmetric.NewMetrics()
-	md.ResourceMetrics().AppendEmpty().Resource().Attributes().PutStr(AttrTenantID, "forjado")
+	md.ResourceMetrics().AppendEmpty().Resource().Attributes().PutStr(AttrTenantID, "forged")
 	err = p.ConsumeMetrics(context.Background(), md)
 	if !consumererror.IsPermanent(err) {
-		t.Fatalf("err = %v, quero erro permanente", err)
+		t.Fatalf("err = %v, want permanent error", err)
 	}
 	if sink.DataPointCount() != 0 || len(sink.AllMetrics()) != 0 {
-		t.Error("dado sem autenticação seguiu no pipeline")
+		t.Error("unauthenticated data moved on in the pipeline")
 	}
 }

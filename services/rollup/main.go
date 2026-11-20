@@ -1,16 +1,16 @@
-// Comando rollup: job de consolidação e retenção das métricas de API (#34).
+// Command rollup: rollup and retention job for the API metrics (#34).
 //
-// A cada ROLLUP_INTERVAL chama api_metric_maintain(ROLLUP_LOOKBACK) no banco
-// stellytics, que cria as partições futuras, consolida api_metric_1m em
-// api_metric_1h e api_metric_1d e apaga as partições vencidas (spec do E5,
-// seção 5). Toda a lógica fica na migração 0005 do portal; este processo só
-// agenda. Expõe GET /healthz, que responde 200 enquanto a última execução
-// bem-sucedida tiver no máximo dois intervalos.
+// Every ROLLUP_INTERVAL it calls api_metric_maintain(ROLLUP_LOOKBACK) in the
+// stellytics database, which creates the future partitions, rolls up
+// api_metric_1m into api_metric_1h and api_metric_1d and drops the expired
+// partitions (E5 spec, section 5). All the logic lives in the portal's
+// migration 0005; this process only schedules. It exposes GET /healthz, which
+// answers 200 while the last successful run is at most two intervals old.
 //
-// Com UMAMI_DATABASE_URL definida, a mesma execução também aplica a retenção
-// dos eventos web no banco umami (#154): apaga eventos e sessões mais antigos
-// que UMAMI_RETENTION_DAYS (padrão 183, cerca de seis meses). O Umami 3.4.1
-// não tem configuração de retenção própria; quem poda é este job.
+// With UMAMI_DATABASE_URL set, the same run also applies the retention of the
+// web events in the umami database (#154): it deletes events and sessions
+// older than UMAMI_RETENTION_DAYS (default 183, about six months). Umami
+// 3.4.1 has no retention setting of its own; this job does the pruning.
 package main
 
 import (
@@ -36,14 +36,14 @@ type config struct {
 	ListenAddr  string
 	Interval    time.Duration
 	Lookback    time.Duration
-	// Banco e retenção do Umami. Sem UMAMI_DATABASE_URL a poda fica desligada
-	// (o resto do job segue normal).
+	// Umami database and retention. Without UMAMI_DATABASE_URL the pruning is
+	// off (the rest of the job carries on as normal).
 	UmamiDatabaseURL   string
 	UmamiRetentionDays int
 }
 
-// Padrão da retenção dos eventos do Umami, em dias: cerca de seis meses.
-// Valor e justificativa em docs/umami.md e docs/privacidade.md (seção 6).
+// Default retention of the Umami events, in days: about six months.
+// Value and rationale in docs/umami.md and docs/privacy.md (section 6).
 const defaultUmamiRetentionDays = 183
 
 func loadConfig(getenv func(string) string) (config, error) {
@@ -56,7 +56,7 @@ func loadConfig(getenv func(string) string) (config, error) {
 		UmamiRetentionDays: defaultUmamiRetentionDays,
 	}
 	if c.DatabaseURL == "" {
-		return c, errors.New("DATABASE_URL vazia")
+		return c, errors.New("DATABASE_URL is empty")
 	}
 	if c.ListenAddr == "" {
 		c.ListenAddr = ":8080"
@@ -65,29 +65,29 @@ func loadConfig(getenv func(string) string) (config, error) {
 		if v := getenv(name); v != "" {
 			d, err := time.ParseDuration(v)
 			if err != nil || d <= 0 {
-				return c, fmt.Errorf("%s inválida: %q", name, v)
+				return c, fmt.Errorf("invalid %s: %q", name, v)
 			}
 			*dst = d
 		}
 	}
 	if c.Lookback < 2*time.Hour {
-		return c, errors.New("ROLLUP_LOOKBACK precisa ser de pelo menos 2h")
+		return c, errors.New("ROLLUP_LOOKBACK must be at least 2h")
 	}
 	if v := getenv("UMAMI_RETENTION_DAYS"); v != "" {
 		d, err := strconv.Atoi(v)
 		if err != nil || d < 0 {
-			return c, fmt.Errorf("UMAMI_RETENTION_DAYS inválida: %q", v)
+			return c, fmt.Errorf("invalid UMAMI_RETENTION_DAYS: %q", v)
 		}
 		c.UmamiRetentionDays = d
 	}
 	if c.UmamiDatabaseURL == "" && getenv("UMAMI_RETENTION_DAYS") != "" {
-		return c, errors.New("UMAMI_RETENTION_DAYS sem UMAMI_DATABASE_URL não tem efeito")
+		return c, errors.New("UMAMI_RETENTION_DAYS without UMAMI_DATABASE_URL has no effect")
 	}
 	return c, nil
 }
 
 func main() {
-	healthcheck := flag.Bool("healthcheck", false, "consulta o /healthz local e sai (para o healthcheck do contêiner)")
+	healthcheck := flag.Bool("healthcheck", false, "queries the local /healthz and exits (for the container healthcheck)")
 	flag.Parse()
 
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
@@ -95,24 +95,24 @@ func main() {
 		os.Exit(checkHealth(os.Getenv("LISTEN_ADDR")))
 	}
 	if err := run(log); err != nil {
-		log.Error("rollup parou", "err", err)
+		log.Error("rollup stopped", "err", err)
 		os.Exit(1)
 	}
 }
 
-// maintain roda uma execução do job.
+// maintain runs one run of the job.
 func maintain(ctx context.Context, pool *pgxpool.Pool, lookback time.Duration) error {
 	_, err := pool.Exec(ctx, "SELECT api_metric_maintain(make_interval(secs => $1))", lookback.Seconds())
 	return err
 }
 
-// pruneUmami aplica a retenção dos eventos web (#154): apaga os eventos mais
-// antigos que a retenção e depois as sessões da mesma idade que não sustentam
-// mais nenhum evento — a sessão de um visitante que continua voltando fica,
-// para que os eventos recentes dela continuem com navegador, sistema e
-// localização. O schema do Umami 3.4.1 não tem chaves estrangeiras, então a
-// ordem é só uma escolha; duas execuções no mesmo instante são idempotentes.
-// Devolve eventos e sessões apagados.
+// pruneUmami applies the retention of the web events (#154): it deletes the
+// events older than the retention and then the sessions of the same age that
+// no longer back any event — the session of a visitor who keeps coming back
+// stays, so that its recent events keep their browser, system and location.
+// The Umami 3.4.1 schema has no foreign keys, so the order is only a choice;
+// two runs at the same instant are idempotent. It returns the events and
+// sessions deleted.
 func pruneUmami(ctx context.Context, pool *pgxpool.Pool, days int) (events, sessions int64, err error) {
 	tag, err := pool.Exec(ctx, "DELETE FROM website_event WHERE created_at < now() - make_interval(days => $1)", days)
 	if err != nil {
@@ -142,7 +142,7 @@ func run(log *slog.Logger) error {
 	}
 	defer pool.Close()
 
-	// Pool do banco umami, só quando a retenção está ligada.
+	// Pool of the umami database, only when the retention is on.
 	var umamiPool *pgxpool.Pool
 	if cfg.UmamiDatabaseURL != "" && cfg.UmamiRetentionDays > 0 {
 		umamiPool, err = pgxpool.New(ctx, cfg.UmamiDatabaseURL)
@@ -150,16 +150,16 @@ func run(log *slog.Logger) error {
 			return fmt.Errorf("UMAMI_DATABASE_URL: %w", err)
 		}
 		defer umamiPool.Close()
-		log.Info("retenção do Umami no ar", "days", cfg.UmamiRetentionDays)
+		log.Info("Umami retention running", "days", cfg.UmamiRetentionDays)
 	} else {
-		log.Info("retenção do Umami desligada")
+		log.Info("Umami retention off")
 	}
 
 	var lastOK atomic.Int64
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		if time.Since(time.Unix(0, lastOK.Load())) > 2*cfg.Interval {
-			http.Error(w, "sem execução recente", http.StatusServiceUnavailable)
+			http.Error(w, "no recent run", http.StatusServiceUnavailable)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -169,25 +169,25 @@ func run(log *slog.Logger) error {
 	go func() { errc <- srv.ListenAndServe() }()
 	defer srv.Close()
 
-	log.Info("rollup no ar", "interval", cfg.Interval.String(), "lookback", cfg.Lookback.String())
+	log.Info("rollup running", "interval", cfg.Interval.String(), "lookback", cfg.Lookback.String())
 	for {
 		start := time.Now()
 		runCtx, cancel := context.WithTimeout(ctx, cfg.Interval)
 		err := maintain(runCtx, pool, cfg.Lookback)
 		cancel()
 		if err != nil {
-			log.Error("execução falhou", "err", err)
+			log.Error("run failed", "err", err)
 		} else {
 			lastOK.Store(time.Now().UnixNano())
-			log.Info("execução concluída", "duration", time.Since(start).String())
+			log.Info("run finished", "duration", time.Since(start).String())
 			if umamiPool != nil {
 				umamiCtx, umamiCancel := context.WithTimeout(ctx, cfg.Interval)
 				events, sessions, umamiErr := pruneUmami(umamiCtx, umamiPool, cfg.UmamiRetentionDays)
 				umamiCancel()
 				if umamiErr != nil {
-					log.Error("retenção do Umami falhou", "err", umamiErr)
+					log.Error("Umami retention failed", "err", umamiErr)
 				} else {
-					log.Info("retenção do Umami concluída", "events", events, "sessions", sessions)
+					log.Info("Umami retention finished", "events", events, "sessions", sessions)
 				}
 			}
 		}
@@ -204,13 +204,13 @@ func run(log *slog.Logger) error {
 	}
 }
 
-// retryDelay é a espera depois de uma execução que falhou.
+// retryDelay is the wait after a run that failed.
 const retryDelay = 30 * time.Second
 
-// nextRun diz quanto esperar até a próxima execução. Depois de uma falha (o
-// banco reiniciando, as migrações ainda não aplicadas) tenta de novo logo, em
-// vez de ficar um intervalo inteiro sem consolidar e com o healthcheck
-// vermelho. O job é idempotente, então repetir não tem custo.
+// nextRun tells how long to wait until the next run. After a failure (the
+// database restarting, the migrations not yet applied) it tries again soon,
+// instead of spending a whole interval without rolling up and with the
+// healthcheck red. The job is idempotent, so repeating has no cost.
 func nextRun(interval time.Duration, failed bool) time.Duration {
 	if failed && retryDelay < interval {
 		return retryDelay
@@ -218,7 +218,7 @@ func nextRun(interval time.Duration, failed bool) time.Duration {
 	return interval
 }
 
-// checkHealth faz o papel de curl/wget na imagem sem shell.
+// checkHealth plays the role of curl/wget in the shell-less image.
 func checkHealth(listen string) int {
 	if listen == "" {
 		listen = ":8080"

@@ -1,20 +1,21 @@
 import { createHash, randomBytes } from "node:crypto";
 
-// Formato da chave de ingestão (spec do E2, seção 5). É o contrato com o
-// coletor (#30), que valida a chave pelo mesmo hash.
+// Ingest key format (E2 spec, section 5). It is the contract with the
+// collector (#30), which validates the key with the same hash.
 //
-//   ntf_<prefixo>_<segredo>
-//   prefixo: 8 caracteres base32 minúsculos (40 bits), público
-//   segredo: 32 bytes do gerador criptográfico, em base64url (43 caracteres)
+//   ntf_<prefix>_<secret>
+//   prefix: 8 lowercase base32 characters (40 bits), public
+//   secret: 32 bytes from the cryptographic generator, in base64url (43 characters)
 //
-// O banco guarda só o prefixo e o SHA-256 da chave completa. A chave completa
-// existe só na resposta da criação: nunca vai para log, banco ou erro.
+// The database stores only the prefix and the SHA-256 of the full key. The
+// full key exists only in the creation response: it never goes to a log, the
+// database or an error.
 
 const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
 
 export const KEY_PATTERN = /^ntf_([a-z2-7]{8})_([A-Za-z0-9_-]{43})$/;
 
-// 5 bytes = 40 bits = exatamente 8 dígitos base32.
+// 5 bytes = 40 bits = exactly 8 base32 digits.
 function randomPrefix(): string {
   const bytes = randomBytes(5);
   let bits = 0n;

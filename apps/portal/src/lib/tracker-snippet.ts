@@ -23,6 +23,12 @@ function newest(versions: string[]): string {
 export const TRACKER_VERSION = newest(Object.keys(hashes));
 const integrity = hashes[TRACKER_VERSION]!;
 
+// Attributes of the pinned script tag, for pages of the portal itself that
+// install the tracker (the public home page).
+export function trackerScript(): { src: string; integrity: string } {
+  return { src: `${env.ingestUrl}/s/v${TRACKER_VERSION}/n.js`, integrity };
+}
+
 export type TrackerSnippets = { html: string; nextjs: string };
 
 export function trackerSnippets(websiteId: string): TrackerSnippets {

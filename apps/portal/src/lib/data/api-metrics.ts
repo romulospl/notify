@@ -1,25 +1,25 @@
 import "server-only";
-import type { TenantContext } from "../access";
+import type { TenantReadContext } from "../access";
 import { sql } from "../db";
 import type { Period } from "../period";
 import { getApiService } from "./api-services";
 
-// Painel de API do tenant (#37): volume, status e latência p50/p95 por
-// endpoint de um serviço num período. Lê as tabelas do spec do E5 (seção 4)
-// direto do banco stellytics, sempre filtrando pelo tenant do contexto e pelo
-// serviço já conferido (ADR 0003): serviço de outro tenant devolve nulo sem
-// nenhuma leitura de métricas.
+// Tenant API dashboard (#37): volume, status and p50/p95 latency per endpoint
+// of a service in a period. Reads the tables of the E5 spec (section 4)
+// directly from the stellytics database, always filtering by the context's
+// tenant and by the already checked service (ADR 0003): another tenant's
+// service returns null with no metrics read.
 
-// Endpoints na tabela, os de mais requisições primeiro. O coletor limita a 500
-// rotas por serviço e dia (D4 do spec do E5), então o resto é cauda.
+// Endpoints in the table, those with the most requests first. The collector
+// limits to 500 routes per service and day (D4 of the E5 spec), so the rest is tail.
 export const ENDPOINT_LIMIT = 100;
 
 export type ApiCounts = {
   requests: number;
   clientErrors: number; // 4xx
   serverErrors: number; // 5xx
-  // Percentis em segundos, nulos sem requisições. 10 quer dizer "10 s ou mais"
-  // (o último bucket do histograma não tem limite superior).
+  // Percentiles in seconds, null with no requests. 10 means "10 s or more"
+  // (the last histogram bucket has no upper bound).
   p50: number | null;
   p95: number | null;
 };
@@ -28,7 +28,7 @@ export type ApiEndpoint = ApiCounts & { method: string; route: string };
 
 export type ApiServiceDashboard = {
   totals: ApiCounts;
-  // Um ponto por balde do período, inclusive os vazios.
+  // One point per bucket of the period, including the empty ones.
   series: (ApiCounts & { at: Date })[];
   endpoints: ApiEndpoint[];
   endpointCount: number;
@@ -45,18 +45,18 @@ function floorDay(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
-// De qual tabela vem cada trecho do período. O job da #34 consolida a cada
-// 15 minutos as horas que terminaram há pelo menos 5 minutos, e o dia a partir
-// das horas, na mesma execução. O que começou antes de `hourCut` vem de
-// api_metric_1h, os dias antes de `dayCut`, de api_metric_1d, e o resto, de
-// api_metric_1m. Os trechos não se sobrepõem, então nada conta duas vezes.
+// Which table each stretch of the period comes from. The #34 job rolls up,
+// every 15 minutes, the hours that ended at least 5 minutes ago, and the day
+// from the hours, in the same run. What started before `hourCut` comes from
+// api_metric_1h, the days before `dayCut`, from api_metric_1d, and the rest,
+// from api_metric_1m. The stretches do not overlap, so nothing counts twice.
 //
-// `hourCut` é o menor entre:
-// - a hora corrente menos uma (folga sobre o job, para lotes atrasados do
-//   coletor entrarem antes de o painel trocar de tabela);
-// - o fim da última hora consolidada do tenant (`consolidatedUntil`): se o job
-//   parar ou atrasar, as horas ainda não consolidadas continuam vindo do 1m,
-//   em vez de sumirem. Nulo (nada consolidado ainda) põe tudo no 1m.
+// `hourCut` is the smaller of:
+// - the current hour minus one (slack over the job, so late batches from the
+//   collector get in before the dashboard switches tables);
+// - the end of the tenant's last rolled-up hour (`consolidatedUntil`): if the
+//   job stops or runs late, the hours not yet rolled up keep coming from 1m,
+//   instead of disappearing. Null (nothing rolled up yet) puts everything in 1m.
 export function metricSources(
   period: Pick<Period, "unit" | "startAt" | "endAt">,
   consolidatedUntil: Date | null,
@@ -67,7 +67,7 @@ export function metricSources(
   const { startAt: start, endAt: end } = period;
   const max = (a: Date, b: Date) => (a > b ? a : b);
   const min = (a: Date, b: Date) => (a < b ? a : b);
-  // Período por hora não pode usar o balde de um dia.
+  // An hourly period cannot use the one-day bucket.
   const daily = period.unit !== "hour";
   return {
     day: daily ? { from: start, to: min(dayCut, end) } : null,
@@ -80,7 +80,7 @@ type Row = {
   g_bucket: number;
   g_route: number;
   g_status: number;
-  bucket: Date | string | null; // o driver pode devolver texto para a expressão
+  bucket: Date | string | null; // the driver may return text for the expression
   route: string | null;
   method: string | null;
   status_code: number | null;
@@ -103,23 +103,23 @@ function counts(r: Row): ApiCounts {
 
 const EMPTY: ApiCounts = { requests: 0, clientErrors: 0, serverErrors: 0, p50: null, p95: null };
 
-// Nulo quando o serviço não é do tenant do contexto (ou está arquivado).
+// Null when the service does not belong to the context's tenant (or is archived).
 export async function getServiceDashboard(
-  ctx: TenantContext,
+  ctx: TenantReadContext,
   serviceId: string,
   period: Period,
 ): Promise<ApiServiceDashboard | null> {
   const service = await getApiService(ctx, serviceId);
   if (!service) return null;
-  // Fim da última hora consolidada do tenant; o índice (tenant_id, bucket_start) atende.
+  // End of the tenant's last rolled-up hour; the (tenant_id, bucket_start) index serves it.
   const [last] = await sql<{ until: Date | string | null }[]>`
     SELECT max(bucket_start) + interval '1 hour' AS until FROM api_metric_1h WHERE tenant_id = ${ctx.tenantId}`;
   const src = metricSources(period, last?.until ? new Date(last.until) : null);
-  // Trecho vazio (from >= to) não devolve linha; o de dias some no período por hora.
+  // An empty stretch (from >= to) returns no row; the days one disappears in an hourly period.
   const day = src.day ?? { from: period.startAt, to: period.startAt };
 
-  // Uma leitura só: GROUPING SETS dá a série, os endpoints, os status e o total.
-  // As datas vão como texto ISO com cast: o driver não serializa Date aqui.
+  // A single read: GROUPING SETS gives the series, the endpoints, the statuses and the total.
+  // The dates go as ISO text with a cast: the driver does not serialize Date here.
   const rows = await sql<Row[]>`
     WITH r AS (
       SELECT bucket_start, route, method, status_code, request_count, duration_buckets FROM api_metric_1d

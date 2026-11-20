@@ -19,10 +19,10 @@ function script(attrs: Record<string, string>): HTMLScriptElement {
   return el;
 }
 
-const TOKEN = "dGVzdGUtZGUtdG9rZW4tY29tLTMyLWJ5dGVzLWV4YXRvcw";
+const TOKEN = "dGVzdC10b2tlbi13aXRoLTMyLWJ5dGVzLWluLWxlbmd0aA";
 const BITS = 6;
 
-// Gateway falso: GET /c devolve o desafio; POST /e aceita o evento.
+// Fake gateway: GET /c returns the challenge; POST /e accepts the event.
 function gateway(challenge: Response | (() => Response) = () => Response.json({ t: TOKEN, d: BITS })) {
   return vi.fn(async (url: string, init?: RequestInit) => {
     if (init?.method === "POST") return new Response(null, { status: 204 });
@@ -43,16 +43,16 @@ function sha256(text: string): Uint8Array {
 }
 
 describe("pageUrl", () => {
-  it("mantém só os parâmetros utm_*", () => {
+  it("keeps only the utm_* parameters", () => {
     expect(pageUrl(new URL("https://a.example/docs?email=x@y.z&utm_source=news&token=1"))).toBe(
       "/docs?utm_source=news",
     );
     expect(pageUrl(new URL("https://a.example/docs?q=1#sec"))).toBe("/docs");
   });
 
-  it("mantém rotas de SPA no fragmento, sem query", () => {
-    expect(pageUrl(new URL("https://a.example/?utm_source=x#/conta/1?token=2"))).toBe(
-      "/?utm_source=x#/conta/1",
+  it("keeps SPA routes in the fragment, without query", () => {
+    expect(pageUrl(new URL("https://a.example/?utm_source=x#/account/1?token=2"))).toBe(
+      "/?utm_source=x#/account/1",
     );
     expect(pageUrl(new URL("https://a.example/#!/docs"))).toBe("/#/docs");
     expect(pageUrl(new URL("https://a.example/app#access_token=abc"))).toBe("/app");
@@ -60,26 +60,26 @@ describe("pageUrl", () => {
 });
 
 describe("cleanReferrer", () => {
-  it("remove query string e fragmento", () => {
+  it("removes query string and fragment", () => {
     expect(cleanReferrer("https://ref.example/p?q=1#x", "a.example")).toBe("https://ref.example/p");
   });
 
-  it("ignora o próprio site e valores inválidos", () => {
-    expect(cleanReferrer("https://a.example/outra", "a.example")).toBe("");
-    expect(cleanReferrer("não é url", "a.example")).toBe("");
+  it("ignores the site itself and invalid values", () => {
+    expect(cleanReferrer("https://a.example/other", "a.example")).toBe("");
+    expect(cleanReferrer("not a url", "a.example")).toBe("");
     expect(cleanReferrer("", "a.example")).toBe("");
   });
 });
 
-describe("prova de execução de JS", () => {
-  it("conta os bits zero do começo", () => {
+describe("JS execution proof", () => {
+  it("counts the leading zero bits", () => {
     expect(leadingZeroBits(new Uint8Array([0x80]))).toBe(0);
     expect(leadingZeroBits(new Uint8Array([0x01]))).toBe(7);
     expect(leadingZeroBits(new Uint8Array([0x00, 0x10]))).toBe(11);
     expect(leadingZeroBits(new Uint8Array([0x00, 0x00]))).toBe(16);
   });
 
-  it("acha um nonce com a dificuldade pedida", async () => {
+  it("finds a nonce with the requested difficulty", async () => {
     const nonce = await solve(TOKEN, 10);
     expect(nonce).toMatch(/^\d+$/);
     expect(leadingZeroBits(sha256(`${TOKEN}:${nonce}`))).toBeGreaterThanOrEqual(10);
@@ -95,8 +95,8 @@ describe("start", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     fetchMock = gateway();
     vi.stubGlobal("fetch", fetchMock);
-    history.replaceState(null, "", "/inicio?utm_campaign=lancamento&email=x@y.z");
-    document.title = "Início";
+    history.replaceState(null, "", "/home?utm_campaign=launch&email=x@y.z");
+    document.title = "Home";
   });
 
   afterEach(() => {
@@ -105,7 +105,7 @@ describe("start", () => {
     vi.unstubAllGlobals();
   });
 
-  it("resolve o desafio e envia o page view ao gateway de onde o script veio", async () => {
+  it("solves the challenge and sends the page view to the gateway the script came from", async () => {
     stop = start(script({ src: SRC, "data-site": SITE }));
     await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
 
@@ -120,9 +120,9 @@ describe("start", () => {
     expect(event.payload).toEqual({
       website: SITE,
       hostname: location.hostname,
-      url: "/inicio?utm_campaign=lancamento",
+      url: "/home?utm_campaign=launch",
       referrer: "",
-      title: "Início",
+      title: "Home",
       language: navigator.language,
       screen: `${screen.width}x${screen.height}`,
     });
@@ -130,7 +130,7 @@ describe("start", () => {
     expect(leadingZeroBits(sha256(`${TOKEN}:${event.p.n}`))).toBeGreaterThanOrEqual(BITS);
   });
 
-  it("window.stellytics.event envia um evento customizado com nome e propriedades", async () => {
+  it("window.stellytics.event sends a custom event with name and properties", async () => {
     stop = start(script({ src: SRC, "data-site": SITE }));
     await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
     const api = (window as unknown as { stellytics: { event: (n: string, d?: object) => void } }).stellytics;
@@ -139,19 +139,19 @@ describe("start", () => {
     const event = sent(fetchMock)[1]!;
     expect(event.payload).toMatchObject({
       website: SITE,
-      url: "/inicio?utm_campaign=lancamento",
+      url: "/home?utm_campaign=launch",
       name: "signup_clicked",
       data: { plan: "pro", seats: 3, trial: true },
     });
-    // O page view não leva nome nem dados.
+    // The page view carries no name or data.
     expect(sent(fetchMock)[0]!.payload).not.toHaveProperty("name");
   });
 
-  it("window.stellytics.event ignora evento fora do contrato e some ao parar", async () => {
+  it("window.stellytics.event ignores an event outside the contract and is gone on stop", async () => {
     stop = start(script({ src: SRC, "data-site": SITE }));
     await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
     const w = window as unknown as { stellytics?: { event: (n: string, d?: object) => void } };
-    w.stellytics!.event("nome inválido");
+    w.stellytics!.event("invalid name");
     w.stellytics!.event("ok", { nested: { a: 1 } });
     await vi.advanceTimersByTimeAsync(50);
     expect(posts(fetchMock)).toHaveLength(1);
@@ -159,11 +159,11 @@ describe("start", () => {
     expect(w.stellytics).toBeUndefined();
   });
 
-  describe("window.stellytics.wallets (kit falso)", () => {
+  describe("window.stellytics.wallets (fake kit)", () => {
     const Types = { STATE_UPDATED: "STATE_UPDATE", WALLET_SELECTED: "WALLET_SELECTED", DISCONNECT: "DISCONNECT" };
     const ADDRESS = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7";
 
-    // Kit falso com a forma da documentação: on(tipo, handler) devolve a função de cancelar.
+    // Fake kit shaped like the documentation: on(type, handler) returns the cancel function.
     function fakeKit() {
       const handlers = new Map<string, Set<(e: unknown) => void>>();
       const unsub = vi.fn();
@@ -183,7 +183,7 @@ describe("start", () => {
     const wallets = () =>
       (window as unknown as { stellytics: { wallets: (k: unknown, t: unknown) => () => void } }).stellytics.wallets;
 
-    it("assina só WALLET_SELECTED e DISCONNECT e manda só o id do módulo", async () => {
+    it("subscribes only to WALLET_SELECTED and DISCONNECT and sends only the module id", async () => {
       stop = start(script({ src: SRC, "data-site": SITE }));
       await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
       const f = fakeKit();
@@ -227,7 +227,7 @@ describe("start", () => {
       expect(sent(fetchMock)[1]!.payload).toMatchObject({ name: "wallet_selected", data: { wallet: "albedo" } });
     });
 
-    it("ignora id ausente, inválido ou parecido com endereço", async () => {
+    it("ignores a missing, invalid or address-like id", async () => {
       stop = start(script({ src: SRC, "data-site": SITE }));
       await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
       const f = fakeKit();
@@ -240,7 +240,7 @@ describe("start", () => {
       expect(posts(fetchMock)).toHaveLength(1);
     });
 
-    it("é idempotente por kit e o cancelamento remove as assinaturas", async () => {
+    it("is idempotent per kit and cancelling removes the subscriptions", async () => {
       stop = start(script({ src: SRC, "data-site": SITE }));
       await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
       const f = fakeKit();
@@ -256,16 +256,16 @@ describe("start", () => {
       f.emit(Types.WALLET_SELECTED, { id: "albedo" });
       await vi.advanceTimersByTimeAsync(50);
       expect(posts(fetchMock)).toHaveLength(2);
-      // Depois de cancelar, pode assinar de novo.
+      // After cancelling, it can subscribe again.
       wallets()(f.kit, Types);
       expect(f.on).toHaveBeenCalledTimes(4);
     });
 
-    it("kit ou enum inválidos não lançam nem assinam", async () => {
+    it("an invalid kit or enum neither throws nor subscribes", async () => {
       stop = start(script({ src: SRC, "data-site": SITE }));
       await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
       const w = wallets();
-      const boom = { on: () => { throw new Error("quebrado"); } };
+      const boom = { on: () => { throw new Error("broken"); } };
       const f = fakeKit();
       for (const [kit, types] of [
         [undefined, Types], [null, Types], ["x", Types], [{}, Types], [boom, Types],
@@ -277,7 +277,7 @@ describe("start", () => {
       expect(f.on).not.toHaveBeenCalled();
     });
 
-    it("falha da segunda assinatura desfaz a primeira; handler que lança não propaga", async () => {
+    it("a failed second subscription undoes the first; a throwing handler does not propagate", async () => {
       stop = start(script({ src: SRC, "data-site": SITE }));
       await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
       const off = vi.fn();
@@ -291,7 +291,7 @@ describe("start", () => {
       expect(() => f.emit(Types.WALLET_SELECTED, null)).not.toThrow();
     });
 
-    it("on que não devolve função: cancelar silencia o handler antigo e reassinar não duplica", async () => {
+    it("on that returns no function: cancelling silences the old handler and resubscribing does not duplicate", async () => {
       stop = start(script({ src: SRC, "data-site": SITE }));
       await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
       for (const ret of [undefined, Promise.resolve(() => {})]) {
@@ -302,24 +302,24 @@ describe("start", () => {
         const old = handlers.slice();
         cancel();
         wallets()(kit, Types);
-        // Os handlers do primeiro ciclo continuam vivos no kit, mas não enviam.
+        // The handlers from the first cycle stay alive in the kit, but do not send.
         for (const h of old) h({ eventType: Types.WALLET_SELECTED, payload: { id: "freighter" } });
         await vi.advanceTimersByTimeAsync(50);
         expect(posts(fetchMock)).toHaveLength(before);
-        // Só o handler novo envia, uma vez.
+        // Only the new handler sends, once.
         handlers.slice(old.length)[0]!({ eventType: Types.WALLET_SELECTED, payload: { id: "freighter" } });
         await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(before + 1));
       }
     });
 
-    it("payload com getter que lança, id objeto e off que lança não propagam", async () => {
+    it("a payload with a throwing getter, an object id and a throwing off do not propagate", async () => {
       stop = start(script({ src: SRC, "data-site": SITE }));
       await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
       const handlers: ((e: unknown) => void)[] = [];
       const kit = {
         on: (_t: string, h: (e: unknown) => void) => {
           handlers.push(h);
-          return () => { throw new Error("off quebrado"); };
+          return () => { throw new Error("broken off"); };
         },
       };
       const cancel = wallets()(kit, Types);
@@ -332,7 +332,7 @@ describe("start", () => {
       expect(() => cancel()).not.toThrow();
     });
 
-    it("não usa cookie nem storage", async () => {
+    it("uses no cookie or storage", async () => {
       stop = start(script({ src: SRC, "data-site": SITE }));
       await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
       const f = fakeKit();
@@ -345,7 +345,7 @@ describe("start", () => {
     });
   });
 
-  it("não faz nada sem data-site válido", async () => {
+  it("does nothing without a valid data-site", async () => {
     start(script({ src: SRC }));
     start(script({ src: SRC, "data-site": "abc" }));
     start(null);
@@ -353,7 +353,7 @@ describe("start", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("sem desafio, não envia evento e tenta de novo no próximo", async () => {
+  it("without a challenge, sends no event and tries again on the next one", async () => {
     let fail = true;
     fetchMock = gateway(() => (fail ? new Response(null, { status: 503 }) : Response.json({ t: TOKEN, d: BITS })));
     vi.stubGlobal("fetch", fetchMock);
@@ -370,7 +370,7 @@ describe("start", () => {
     expect(sent(fetchMock)[0]!.payload.url).toBe("/docs");
   });
 
-  it("usa um desafio por página e renova depois de 5 minutos", async () => {
+  it("uses one challenge per page and renews after 5 minutes", async () => {
     stop = start(script({ src: SRC, "data-site": SITE }));
     await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
 
@@ -386,52 +386,52 @@ describe("start", () => {
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method !== "POST")).toHaveLength(2);
   });
 
-  it("conta mudanças de rota em SPA, uma vez por rota", async () => {
+  it("counts SPA route changes, once per route", async () => {
     stop = start(script({ src: SRC, "data-site": SITE }));
     await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
 
     history.pushState(null, "", "/docs");
     document.title = "Docs";
     vi.advanceTimersByTime(NAVIGATION_DELAY_MS);
-    // replaceState na mesma rota (ex.: só o estado mudou) não conta.
-    history.replaceState({ aba: 2 }, "", "/docs");
+    // replaceState on the same route (e.g. only the state changed) does not count.
+    history.replaceState({ tab: 2 }, "", "/docs");
     vi.advanceTimersByTime(NAVIGATION_DELAY_MS);
-    // Voltar no navegador muda a URL sem passar por pushState e dispara popstate.
-    History.prototype.replaceState.call(history, null, "", "/inicio");
+    // Going back in the browser changes the URL without going through pushState and fires popstate.
+    History.prototype.replaceState.call(history, null, "", "/home");
     dispatchEvent(new PopStateEvent("popstate"));
     vi.advanceTimersByTime(NAVIGATION_DELAY_MS);
 
     await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(3));
     const events = sent(fetchMock).map((e) => e.payload);
-    expect(events.map((e) => e.url)).toEqual(["/inicio?utm_campaign=lancamento", "/docs", "/inicio"]);
-    expect(events[1]).toMatchObject({ title: "Docs", referrer: `${location.origin}/inicio` });
+    expect(events.map((e) => e.url)).toEqual(["/home?utm_campaign=launch", "/docs", "/home"]);
+    expect(events[1]).toMatchObject({ title: "Docs", referrer: `${location.origin}/home` });
     expect(events[2]).toMatchObject({ referrer: `${location.origin}/docs` });
   });
 
-  it("conta rotas de SPA por fragmento (hashchange)", async () => {
+  it("counts SPA routes by fragment (hashchange)", async () => {
     stop = start(script({ src: SRC, "data-site": SITE }));
     await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
 
-    History.prototype.replaceState.call(history, null, "", "/inicio#/docs");
+    History.prototype.replaceState.call(history, null, "", "/home#/docs");
     dispatchEvent(new HashChangeEvent("hashchange"));
     vi.advanceTimersByTime(NAVIGATION_DELAY_MS);
-    // Âncora na mesma página não é rota.
-    History.prototype.replaceState.call(history, null, "", "/inicio#secao");
+    // An anchor on the same page is not a route.
+    History.prototype.replaceState.call(history, null, "", "/home#section");
     dispatchEvent(new HashChangeEvent("hashchange"));
     vi.advanceTimersByTime(NAVIGATION_DELAY_MS);
 
     await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(3));
     const events = sent(fetchMock).map((e) => e.payload);
-    expect(events.map((e) => e.url)).toEqual(["/inicio?utm_campaign=lancamento", "/inicio#/docs", "/inicio"]);
-    expect(events[2]).toMatchObject({ referrer: `${location.origin}/inicio#/docs` });
+    expect(events.map((e) => e.url)).toEqual(["/home?utm_campaign=launch", "/home#/docs", "/home"]);
+    expect(events[2]).toMatchObject({ referrer: `${location.origin}/home#/docs` });
   });
 
-  it("não grava cookie nem storage", async () => {
+  it("writes no cookie or storage", async () => {
     const cookie = vi.spyOn(document, "cookie", "set");
     const setItem = vi.spyOn(Storage.prototype, "setItem");
 
     stop = start(script({ src: SRC, "data-site": SITE }));
-    history.pushState(null, "", "/outra");
+    history.pushState(null, "", "/other");
     vi.advanceTimersByTime(NAVIGATION_DELAY_MS);
     await vi.waitFor(() => expect(posts(fetchMock)).toHaveLength(2));
 
@@ -442,12 +442,12 @@ describe("start", () => {
 });
 
 describe("validateCustomEvent", () => {
-  it("aceita string, número e booleano", () => {
+  it("accepts string, number and boolean", () => {
     expect(validateCustomEvent("a.b-c_d:e", { x: "y", n: 1.5, b: false })).toEqual({ x: "y", n: 1.5, b: false });
     expect(validateCustomEvent("a")).toEqual({});
   });
 
-  it("recusa nome, chaves e valores fora do contrato", () => {
+  it("rejects a name, keys and values outside the contract", () => {
     expect(validateCustomEvent("", {})).toBeNull();
     expect(validateCustomEvent("a b")).toBeNull();
     expect(validateCustomEvent("a".repeat(51))).toBeNull();

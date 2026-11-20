@@ -1,9 +1,9 @@
-# Postgres de produção (#14, ADR 0004): a mesma versão do ambiente local
-# (17.11), na variante Debian, porque os binários do WAL-G usam glibc, mais o
-# WAL-G para o backup contínuo num armazenamento compatível com S3 (ADR 0016).
+# Production Postgres (#14, ADR 0004): the same version as the local environment
+# (17.11), in the Debian variant, because the WAL-G binaries use glibc, plus
+# WAL-G for continuous backup to S3-compatible storage (ADR 0016).
 #
-# Imagem e WAL-G fixados por digest e por hash. Para subir de versão, troque os
-# três valores juntos e confira os hashes na página da release do WAL-G.
+# Image and WAL-G pinned by digest and by hash. To upgrade, change the
+# three values together and check the hashes on the WAL-G release page.
 FROM postgres:17.11-bookworm@sha256:665dc7b37ac52a17e298511414c21d23ffa4e6a6ef6225b3e5d59c7afb35e994
 
 ARG WALG_VERSION=v3.0.9
@@ -15,7 +15,7 @@ RUN set -eux; \
     case "$TARGETARCH" in \
       amd64) arch=amd64; sum="$WALG_SHA256_AMD64" ;; \
       arm64) arch=aarch64; sum="$WALG_SHA256_ARM64" ;; \
-      *) echo "arquitetura sem WAL-G: $TARGETARCH" >&2; exit 1 ;; \
+      *) echo "no WAL-G for architecture: $TARGETARCH" >&2; exit 1 ;; \
     esac; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates curl; \

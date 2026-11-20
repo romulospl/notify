@@ -1,7 +1,7 @@
-// Cria um usuário comum (papel tenant) no banco `stellytics`, já com e-mail confirmado.
-// Uso: pnpm --filter @stellytics/portal user:create -- --email a@b.c --name "Nome"
-// A senha é lida da variável PORTAL_USER_PASSWORD (para não ficar no histórico do shell).
-// Operador SCF só pelo comando de administração: scripts/operator.mjs (#19).
+// Creates a regular user (tenant role) in the `stellytics` database, with the e-mail already confirmed.
+// Usage: pnpm --filter @stellytics/portal user:create -- --email a@b.c --name "Name"
+// The password is read from the PORTAL_USER_PASSWORD variable (so it does not stay in the shell history).
+// SCF operator only through the administration command: scripts/operator.mjs (#19).
 import { randomUUID } from "node:crypto";
 import { parseArgs } from "node:util";
 import { hashPassword } from "better-auth/crypto";
@@ -16,11 +16,11 @@ const { values } = parseArgs({
 
 const password = process.env.PORTAL_USER_PASSWORD;
 if (!values.email || !values.name || !password) {
-  console.error("Informe --email e --name, e a senha em PORTAL_USER_PASSWORD.");
+  console.error("Provide --email and --name, and the password in PORTAL_USER_PASSWORD.");
   process.exit(1);
 }
 if (password.length < 12) {
-  console.error("A senha precisa de pelo menos 12 caracteres.");
+  console.error("The password needs at least 12 characters.");
   process.exit(1);
 }
 
@@ -34,7 +34,7 @@ try {
     await tx`insert into account (id, account_id, provider_id, user_id, password)
              values (${randomUUID()}, ${userId}, 'credential', ${userId}, ${hash})`;
   });
-  console.log(`Usuário ${values.email} criado.`);
+  console.log(`User ${values.email} created.`);
 } finally {
   await sql.end();
 }

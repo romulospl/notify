@@ -1,5 +1,5 @@
-// Publica a versão do package.json em published/vX.Y.Z/n.js e registra o SRI em published/sri.json.
-// Versão publicada é imutável: o script se recusa a sobrescrever uma versão que já existe.
+// Publishes the package.json version to published/vX.Y.Z/n.js and records the SRI in published/sri.json.
+// A published version is immutable: the script refuses to overwrite a version that already exists.
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { bundle, currentVersion, fileName, publishedDir, readManifest, sri, sriFile } from "./bundle.ts";
@@ -9,7 +9,7 @@ const dir = join(publishedDir, `v${version}`);
 const manifest = existsSync(sriFile) ? readManifest() : {};
 
 if (existsSync(dir) || manifest[version]) {
-  console.error(`A versão ${version} já foi publicada e não pode mudar. Suba a versão no package.json.`);
+  console.error(`Version ${version} is already published and cannot change. Bump the version in package.json.`);
   process.exit(1);
 }
 

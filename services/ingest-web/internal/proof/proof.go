@@ -1,13 +1,14 @@
-// Package proof emite e confere a prova de execução de JavaScript (#25).
+// Package proof issues and verifies the JavaScript execution proof (#25).
 //
-// O script pede um desafio em GET /c, recebe um token assinado pelo gateway e
-// procura um nonce tal que SHA-256(token + ":" + nonce) comece com Bits bits
-// zero. Cada evento leva o token e o nonce. Um POST feito direto, sem passar
-// pelo desafio, não tem token válido e é descartado.
+// The script requests a challenge on GET /c, receives a token signed by the
+// gateway and looks for a nonce such that SHA-256(token + ":" + nonce) starts
+// with Bits zero bits. Each event carries the token and the nonce. A POST made
+// directly, without going through the challenge, has no valid token and is
+// dropped.
 //
-// Não é uma barreira impossível de contornar: quem reimplementar o fluxo fora
-// do navegador consegue a prova. O objetivo é tirar o tráfego barato (curl,
-// scripts que só repetem um POST) e encarecer o resto.
+// It is not a barrier that cannot be bypassed: whoever reimplements the flow
+// outside the browser gets the proof. The goal is to remove the cheap traffic
+// (curl, scripts that only repeat a POST) and make the rest more expensive.
 package proof
 
 import (
@@ -23,32 +24,32 @@ import (
 	"time"
 )
 
-// Limites de tamanho do que vem do cliente.
+// Size limits for what comes from the client.
 const (
-	tokenLen = 8 + 8 + 16 // timestamp, aleatório e HMAC truncado
+	tokenLen = 8 + 8 + 16 // timestamp, random bytes and truncated HMAC
 	maxNonce = 20
-	// clockSkew tolera um relógio do gateway levemente adiantado em outra réplica.
+	// clockSkew tolerates a gateway clock slightly ahead on another replica.
 	clockSkew = time.Minute
-	// domain separa este HMAC de qualquer outro uso da mesma chave.
+	// domain separates this HMAC from any other use of the same key.
 	domain = "stellytics-proof-v1"
 )
 
-// Erros de Verify. Todos levam ao descarte do evento.
+// Verify errors. All of them lead to the event being dropped.
 var (
-	ErrMissing   = errors.New("proof: sem prova")
-	ErrMalformed = errors.New("proof: prova mal formada")
-	ErrSignature = errors.New("proof: assinatura inválida")
-	ErrExpired   = errors.New("proof: token expirado")
-	ErrWork      = errors.New("proof: trabalho insuficiente")
+	ErrMissing   = errors.New("proof: no proof")
+	ErrMalformed = errors.New("proof: malformed proof")
+	ErrSignature = errors.New("proof: invalid signature")
+	ErrExpired   = errors.New("proof: token expired")
+	ErrWork      = errors.New("proof: insufficient work")
 )
 
-// Challenge é a resposta de GET /c.
+// Challenge is the response of GET /c.
 type Challenge struct {
 	Token string `json:"t"`
 	Bits  int    `json:"d"`
 }
 
-// Issuer emite e confere desafios com uma chave secreta.
+// Issuer issues and verifies challenges with a secret key.
 type Issuer struct {
 	key  []byte
 	ttl  time.Duration
@@ -56,18 +57,18 @@ type Issuer struct {
 	now  func() time.Time
 }
 
-// New cria um Issuer. key deve ter pelo menos 32 bytes.
+// New creates an Issuer. key must have at least 32 bytes.
 func New(key []byte, ttl time.Duration, bits int) *Issuer {
 	return &Issuer{key: key, ttl: ttl, bits: bits, now: time.Now}
 }
 
-// WithClock troca o relógio (para testes) e devolve o próprio Issuer.
+// WithClock replaces the clock (for tests) and returns the Issuer itself.
 func (i *Issuer) WithClock(now func() time.Time) *Issuer {
 	i.now = now
 	return i
 }
 
-// Challenge emite um token para website (UUID já em minúsculas).
+// Challenge issues a token for website (UUID already in lowercase).
 func (i *Issuer) Challenge(website string) Challenge {
 	raw := make([]byte, tokenLen)
 	binary.BigEndian.PutUint64(raw[0:8], uint64(i.now().Unix()))
@@ -76,7 +77,7 @@ func (i *Issuer) Challenge(website string) Challenge {
 	return Challenge{Token: base64.RawURLEncoding.EncodeToString(raw), Bits: i.bits}
 }
 
-// Verify confere o token e o nonce enviados com um evento de website.
+// Verify checks the token and the nonce sent with an event for website.
 func (i *Issuer) Verify(website, token, nonce string) error {
 	if token == "" && nonce == "" {
 		return ErrMissing
@@ -113,13 +114,14 @@ func (i *Issuer) mac(head []byte, website string) []byte {
 	return h.Sum(nil)[:16]
 }
 
-// Solved diz se SHA-256(token + ":" + nonce) começa com pelo menos n bits zero.
+// Solved says whether SHA-256(token + ":" + nonce) starts with at least n zero
+// bits.
 func Solved(token, nonce string, n int) bool {
 	sum := sha256.Sum256([]byte(token + ":" + nonce))
 	return LeadingZeros(sum[:]) >= n
 }
 
-// LeadingZeros conta os bits zero no começo de b.
+// LeadingZeros counts the zero bits at the start of b.
 func LeadingZeros(b []byte) int {
 	n := 0
 	for _, c := range b {
@@ -131,8 +133,8 @@ func LeadingZeros(b []byte) int {
 	return n
 }
 
-// Solve acha um nonce para token, como o script faz no navegador. Usado nos
-// testes e no teste ponta a ponta.
+// Solve finds a nonce for token, as the script does in the browser. Used in the
+// tests and in the end-to-end test.
 func Solve(token string, n int) string {
 	for i := uint64(0); ; i++ {
 		nonce := strconv.FormatUint(i, 10)

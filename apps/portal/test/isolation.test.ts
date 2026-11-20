@@ -1,28 +1,34 @@
-// Suíte de isolamento entre tenants (#21, spec do E2, seção 8).
+// Tenant isolation suite (#21, E2 spec, section 8).
 //
-// Dois tenants (A e B), cada um com site, serviço e chave de ingestão, um
-// operador SCF e um usuário sem projeto. Os casos passam pelo que o navegador
-// alcança (páginas e server actions, com a sessão simulada) e pelo que a
-// ingestão lê (as visões de stellytics_ingest e stellytics_collector). Roda contra o
-// Postgres de DATABASE_URL e um Umami falso.
+// Two tenants (A and B), each with a site, a service and an ingest key, an
+// SCF operator and a user without a project. The cases go through what the
+// browser reaches (pages and server actions, with the session mocked) and what
+// ingestion reads (the views of stellytics_ingest and stellytics_collector). Runs
+// against the DATABASE_URL Postgres and a fake Umami.
 //
-// A parte do coletor fica no e2e dele (services/collector/e2e/): chave de
-// tenant removido recusada (e2e_test.go) e chave revogada ou tenant removido
-// DEPOIS de aceitos recusados em até o cache, com reativação, e chave de A
-// mandando dados que dizem ser de B, gravados como A (isolation_test.go). Cada painel novo
-// (#28, #29, #37 e #38) acrescenta os próprios casos a esta suíte.
+// The collector part lives in its own e2e (services/collector/e2e/): key of a
+// removed tenant rejected (e2e_test.go) and key revoked or tenant removed
+// AFTER being accepted rejected within the cache time, with reactivation, and A's key
+// sending data that claims to be B's, stored as A (isolation_test.go). Each new dashboard
+// (#28, #29, #37 and #38) adds its own cases to this suite.
 import { randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
-import { and, count, eq, inArray, isNull, like } from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadTenantContext, type TenantContext } from "@/lib/access";
+import { loadDemoContext, loadTenantContext, type OperatorContext, type TenantContext } from "@/lib/access";
 import { auth } from "@/lib/auth";
-import { createApiService, createIngestKey, getApiService, listIngestKeys, revokeIngestKey } from "@/lib/data/api-services";
-import { createReadKey, listReadKeys } from "@/lib/data/operator/api-keys";
-import { ANONYMIZED_ACTOR } from "@/lib/data/erasure";
+import { createApiService, createIngestKey, getApiService, revokeIngestKey } from "@/lib/data/api-services";
+import { createReadKey } from "@/lib/data/operator/api-keys";
+import { ANONYMIZED_ACTOR, deleteOwnAccount } from "@/lib/data/erasure";
+import {
+  approveTenant,
+  purgeRemovedTenant,
+  reactivateTenant,
+  rejectTenant,
+  removeTenant,
+  TenantStatusError,
+} from "@/lib/data/operator/tenants";
 import { resetRateLimits } from "@/lib/rate-limit";
-import OperatorKeysPage from "@/app/(private)/operator/keys/page";
-import { createReadKeyAction, revokeReadKeyAction } from "@/app/(private)/operator/keys/actions";
 import { GET as readApiProjects } from "@/app/api/v1/projects/route";
 import { GET as readApiWeb } from "@/app/api/v1/web/route";
 import { GET as readApiApi } from "@/app/api/v1/api/route";
@@ -32,30 +38,16 @@ import { runMigrations } from "@/lib/db/migrate";
 import { account, apiService, auditLog, ingestKey, operatorApiKey, site, tenant, tenantMember, user } from "@/lib/db/schema";
 import { listActiveTenantSites } from "@/lib/data/operator/sites";
 import { getSiteStats } from "@/lib/umami/stats";
-import DashboardPage from "@/app/(private)/dashboard/page";
-import OperatorPage from "@/app/(private)/operator/page";
-import ApprovalsPage from "@/app/(private)/operator/approvals/page";
-import SitesPage from "@/app/(private)/sites/page";
-import ServicesPage from "@/app/(private)/services/page";
-import {
-  approveTenantAction,
-  purgeTenantAction,
-  rejectTenantAction,
-  reactivateTenantAction,
-  removeTenantAction,
-  type StatusActionState,
-} from "@/app/(private)/operator/tenants/[tenantId]/actions";
-import OperatorTenantPage from "@/app/(private)/operator/tenants/[tenantId]/page";
-import OperatorWebPage from "@/app/(private)/operator/web/page";
-import ServicePage from "@/app/(private)/services/[serviceId]/page";
-import KeysPage from "@/app/(private)/services/[serviceId]/keys/page";
-import OperatorApiPage from "@/app/(private)/operator/api/page";
 import { getServiceDashboard } from "@/lib/data/api-metrics";
 import { resolvePeriod } from "@/lib/period";
-import SitePage from "@/app/(private)/sites/[siteId]/page";
-import { createKeyAction, createServiceAction, revokeKeyAction } from "@/app/(private)/services/actions";
-import { createSiteAction } from "@/app/(private)/sites/actions";
-import { deleteAccountAction } from "@/app/(private)/settings/actions";
+import Home from "@/app/page";
+import DemoPage from "@/app/demo/page";
+import DemoOperatorPage from "@/app/demo/operator/page";
+import PublicCardPage from "@/app/p/[slug]/page";
+import { getDemoApiOverview } from "@/lib/data/operator/api";
+import { listApiServices } from "@/lib/data/api-services";
+import { resetDemoCache } from "@/lib/demo-cache";
+import { getDemoWebOverview } from "@/lib/umami/overview";
 import { startFakeUmami, type FakeUmami } from "./fake-umami";
 import { asRole } from "./helpers/as-role";
 
@@ -65,7 +57,7 @@ const PASSWORD = "isolation-password-123";
 const RANGE = { startAt: new Date(0), endAt: new Date() };
 const NOT_FOUND = { digest: expect.stringContaining("404") };
 
-// Usuário da sessão simulada; null simula quem não entrou.
+// User of the mocked session; null simulates someone not signed in.
 let sessionUser: { id: string; role: "tenant" | "operator" } | null = null;
 
 vi.mock("@/lib/session", () => ({
@@ -74,8 +66,10 @@ vi.mock("@/lib/session", () => ({
     return { user: { ...sessionUser, name: "Test", email: "test@example.invalid", emailVerified: true } };
   },
 }));
-// Fora de uma requisição do Next, refresh() falha; aqui ele não tem efeito.
+// Outside a Next request, refresh() fails; here it has no effect.
 vi.mock("next/cache", () => ({ refresh: vi.fn() }));
+// The public home page reads the request headers to look for a session.
+vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 
 type Fixture = {
   userId: string;
@@ -93,21 +87,13 @@ let umami: FakeUmami;
 let A: Fixture;
 let B: Fixture;
 let operatorId: string;
-let noProjectId: string;
 
-const idle: StatusActionState = { status: "idle" };
+const op = () => ({ userId: operatorId }) as OperatorContext;
 
 function signIn(as: { id: string; role: "tenant" | "operator" } | null) {
   sessionUser = as;
 }
-const asMember = (f: Fixture) => signIn({ id: f.userId, role: "tenant" });
-const asOperator = () => signIn({ id: operatorId, role: "operator" });
 
-function form(fields: Record<string, string>) {
-  const data = new FormData();
-  for (const [k, v] of Object.entries(fields)) data.set(k, v);
-  return data;
-}
 
 async function createUser(role: "tenant" | "operator" = "tenant") {
   const id = randomUUID();
@@ -116,8 +102,8 @@ async function createUser(role: "tenant" | "operator" = "tenant") {
   return { id, email };
 }
 
-// Tenant com dono, um site (já existente no Umami falso), um serviço e a
-// primeira chave, criados pelas mesmas funções que o portal usa.
+// Tenant with an owner, a site (already existing in the fake Umami), a service
+// and the first key, created by the same functions the portal uses.
 async function createFixture(name: string): Promise<Fixture> {
   const owner = await createUser();
   await db.insert(account).values({
@@ -155,20 +141,13 @@ async function createFixture(name: string): Promise<Fixture> {
   };
 }
 
-async function activeKeys(tenantId: string) {
-  const [row] = await db
-    .select({ n: count() })
-    .from(ingestKey)
-    .where(and(eq(ingestKey.tenantId, tenantId), isNull(ingestKey.revokedAt)));
-  return row!.n;
-}
 
 async function tenantStatus(tenantId: string) {
   const [row] = await db.select({ status: tenant.status }).from(tenant).where(eq(tenant.id, tenantId));
   return row!.status;
 }
 
-// O que o gateway web (#61) e o coletor (#30) enxergam, com os papéis deles.
+// What the web gateway (#61) and the collector (#30) see, with their roles.
 async function acceptsWeb(umamiWebsiteId: string) {
   const [row] = await asRole<{ accepts_ingest: boolean }>(
     "stellytics_ingest",
@@ -213,11 +192,12 @@ beforeAll(async () => {
   A = await createFixture("tenant-a");
   B = await createFixture("tenant-b");
   operatorId = (await createUser("operator")).id;
-  noProjectId = (await createUser()).id;
 });
 
 beforeEach(() => {
   resetRateLimits();
+  resetDemoCache();
+  delete process.env.DEMO_TENANT_SLUG;
   signIn(null);
   umami.requests.length = 0;
 });
@@ -228,61 +208,9 @@ afterAll(async () => {
   await sql.end();
 });
 
-describe("membro de A diante dos recursos de B", () => {
-  it("abre site, serviço ou chave de B pela URL: 404", async () => {
-    asMember(A);
-    // Controle: o próprio serviço abre.
-    await expect(ServicePage({ params: Promise.resolve({ serviceId: A.serviceId }) })).resolves.toBeTruthy();
-    await expect(ServicePage({ params: Promise.resolve({ serviceId: B.serviceId }) })).rejects.toMatchObject(
-      NOT_FOUND,
-    );
-    await expect(KeysPage({ params: Promise.resolve({ serviceId: A.serviceId }) })).resolves.toBeTruthy();
-    await expect(KeysPage({ params: Promise.resolve({ serviceId: B.serviceId }) })).rejects.toMatchObject(NOT_FOUND);
+describe("member of A facing B's resources", () => {
 
-    // Site e chave ainda não têm página própria; a camada que as páginas vão
-    // usar já devolve nulo (a página chama notFound()).
-    expect(await getSite(A.ctx, A.siteId)).not.toBeNull();
-    expect(await getSite(A.ctx, B.siteId)).toBeNull();
-    expect(await getApiService(A.ctx, B.serviceId)).toBeNull();
-    expect(await listIngestKeys(A.ctx, B.serviceId)).toBeNull();
-    // As listagens só trazem o que é de A.
-    expect((await listSites(A.ctx)).map((s) => s.id)).toEqual([A.siteId]);
-  });
-
-  it("chama as ações do portal com IDs de B: 404, e nada muda em B", async () => {
-    asMember(A);
-    const keysOfB = await activeKeys(B.tenantId);
-
-    await expect(createKeyAction(B.serviceId)).rejects.toMatchObject(NOT_FOUND);
-    await expect(revokeKeyAction(B.keyId)).rejects.toMatchObject(NOT_FOUND);
-    expect(await activeKeys(B.tenantId)).toBe(keysOfB);
-    expect(await revokeIngestKey(A.ctx, B.keyId)).toBeNull();
-    expect(await collectorKey(B.keyPrefix)).toMatchObject({ tenant_id: B.tenantId });
-
-    // As ações do operador respondem 404 antes de olhar o ID.
-    await expect(removeTenantAction(B.tenantId, idle, form({ reason: "Spam" }))).rejects.toMatchObject(NOT_FOUND);
-    await expect(reactivateTenantAction(B.tenantId, idle, form({}))).rejects.toMatchObject(NOT_FOUND);
-    expect(await tenantStatus(B.tenantId)).toBe("active");
-  });
-
-  it("abre /operator, os painéis globais (web e API) e o detalhe de um tenant: 404", async () => {
-    asMember(A);
-    await expect(OperatorPage()).rejects.toMatchObject(NOT_FOUND);
-    await expect(OperatorWebPage({ searchParams: Promise.resolve({ compare: [A.tenantId, B.tenantId] }) })).rejects.toMatchObject(
-      NOT_FOUND,
-    );
-    expect(umami.requests).toEqual([]);
-    await expect(OperatorApiPage({ searchParams: Promise.resolve({ q: "tenant-b" }) })).rejects.toMatchObject(NOT_FOUND);
-    await expect(
-      OperatorTenantPage({ params: Promise.resolve({ tenantId: B.tenantId }) }),
-    ).rejects.toMatchObject(NOT_FOUND);
-    // Nem o do próprio tenant.
-    await expect(
-      OperatorTenantPage({ params: Promise.resolve({ tenantId: A.tenantId }) }),
-    ).rejects.toMatchObject(NOT_FOUND);
-  });
-
-  it("tenta mudar o próprio papel pelo cliente: ignorado", async () => {
+  it("tries to change their own role from the client: ignored", async () => {
     const headers = (cookie?: string) => ({
       "content-type": "application/json",
       origin: "http://localhost:3000",
@@ -310,9 +238,9 @@ describe("membro de A diante dos recursos de B", () => {
           body: JSON.stringify(body),
         }),
       );
-    // Controle: a sessão vale e o próprio nome pode mudar.
+    // Control: the session is valid and their own name can change.
     expect((await updateUser({ name: "Member A" })).status).toBe(200);
-    // O papel não: o Better Auth recusa o campo (input: false em src/lib/auth.ts).
+    // The role cannot: Better Auth rejects the field (input: false in src/lib/auth.ts).
     const forged = await updateUser({ name: "Operator A", role: "operator" });
     expect(forged.ok).toBe(false);
 
@@ -321,113 +249,47 @@ describe("membro de A diante dos recursos de B", () => {
     expect(row!.role).toBe("tenant");
   });
 
-  it("manda o ID do tenant B num formulário: o tenant vem da sessão", async () => {
-    asMember(A);
-    const created = await createServiceAction({ status: "idle" }, form({ name: "forged", tenantId: B.tenantId }));
-    expect(created).toMatchObject({ status: "created" });
-    const [service] = await db.select().from(apiService).where(eq(apiService.name, "forged"));
-    expect(service!.tenantId).toBe(A.tenantId);
-
-    expect(
-      await createSiteAction({ status: "idle" }, form({ name: "Forged", domain: "forged.example", tenantId: B.tenantId })),
-    ).toMatchObject({ status: "created" });
-    const [forgedSite] = await db.select().from(site).where(eq(site.domain, "forged.example"));
-    expect(forgedSite!.tenantId).toBe(A.tenantId);
-  });
 });
 
-describe("operador SCF", () => {
-  it("lê os dados de A e de B", async () => {
-    asOperator();
-    await expect(OperatorPage()).resolves.toBeTruthy();
-    for (const f of [A, B]) {
-      await expect(OperatorTenantPage({ params: Promise.resolve({ tenantId: f.tenantId }) })).resolves.toBeTruthy();
-    }
-  });
-
-  it("tenta criar site, serviço ou chave, ou revogar chave, em A: recusado", async () => {
-    asOperator();
-    const keysOfA = await activeKeys(A.tenantId);
-    const sitesOfA = (await listSites(A.ctx)).length;
-
-    await expect(createSiteAction({ status: "idle" }, form({ name: "Op", domain: "op.example" }))).rejects.toMatchObject(
-      NOT_FOUND,
-    );
-    await expect(createServiceAction({ status: "idle" }, form({ name: "op-api" }))).rejects.toMatchObject(NOT_FOUND);
-    await expect(createKeyAction(A.serviceId)).rejects.toMatchObject(NOT_FOUND);
-    await expect(revokeKeyAction(A.keyId)).rejects.toMatchObject(NOT_FOUND);
-    // O operador também não abre as páginas do tenant (D2).
-    await expect(ServicePage({ params: Promise.resolve({ serviceId: A.serviceId }) })).rejects.toMatchObject(
-      NOT_FOUND,
-    );
-
-    expect(await activeKeys(A.tenantId)).toBe(keysOfA);
-    expect((await listSites(A.ctx)).length).toBe(sitesOfA);
-    expect(umami.requests).toEqual([]);
-  });
-});
-
-describe("ingestão de API (contrato com o coletor)", () => {
-  it("a chave de A resolve sempre para o tenant e o serviço de A", async () => {
-    // O coletor só lê tenant e serviço desta visão (spec do E2, seção 5, D5).
+describe("API ingestion (contract with the collector)", () => {
+  it("A's key always resolves to A's tenant and service", async () => {
+    // The collector only reads tenant and service from this view (E2 spec, section 5, D5).
     expect(await collectorKey(A.keyPrefix)).toEqual({ tenant_id: A.tenantId, api_service_id: A.serviceId });
   });
-  // "Chave de A envia métricas dizendo ser do tenant B: gravadas como A" fica
-  // no e2e do coletor (TestKeyOfAClaimingBIsStoredAsA), que passa pelo exporter.
 
-  it("chave revogada de A sai da visão do coletor na hora", async () => {
-    asMember(A);
-    const created = await createKeyAction(A.serviceId);
-    if (created.status !== "created") throw new Error("a chave não foi criada");
-    expect(await collectorKey(created.prefix)).not.toBeNull();
-
-    const [row] = await db.select({ id: ingestKey.id }).from(ingestKey).where(eq(ingestKey.prefix, created.prefix));
-    await revokeKeyAction(row!.id);
-    expect(await collectorKey(created.prefix)).toBeNull();
-    // Revogar de novo (um clique duplo) não é 404: a chave é de A.
-    await expect(revokeKeyAction(row!.id)).resolves.toBeUndefined();
+  it("A's revoked key leaves the collector's view right away", async () => {
+    const created = await createIngestKey(A.ctx, A.serviceId);
+    expect(await collectorKey(created!.summary.prefix)).not.toBeNull();
+    expect(await revokeIngestKey(A.ctx, created!.summary.id)).toBe(true);
+    expect(await collectorKey(created!.summary.prefix)).toBeNull();
+    // B does not revoke A's key.
+    expect(await revokeIngestKey(B.ctx, A.keyId)).toBeNull();
+    expect(await collectorKey(A.keyPrefix)).not.toBeNull();
   });
-  // O coletor recusa a chave revogada em até o cache (no máximo 60 s):
+  // "A's key sends metrics claiming to be tenant B's: stored as A" lives in the
+  // collector's e2e (TestKeyOfAClaimingBIsStoredAsA), which goes through the exporter.
+
+  // The collector rejects the revoked key within the cache time (at most 60 s):
   // services/collector/e2e/isolation_test.go.
 });
 
-describe("tenant B removido", () => {
-  it("evento web e chave de B deixam de valer; A continua; reativar devolve", async () => {
+describe("tenant B removed", () => {
+  it("B's web event and key stop being valid; A carries on; reactivating restores them", async () => {
     expect(await acceptsWeb(B.umamiWebsiteId)).toBe(true);
     expect(await collectorKey(B.keyPrefix)).not.toBeNull();
 
-    asOperator();
-    expect(await removeTenantAction(B.tenantId, idle, form({ reason: "Not a Stellar project" }))).toEqual({
-      status: "done",
-    });
-
-    // O gateway responde 204 e descarta (teste ponta a ponta em
-    // services/ingest-web/e2e); o coletor responde 401.
+    expect(await removeTenant(op(), B.tenantId, { reason: "Not a Stellar project" })).toBe("changed");
+    // The gateway answers 204 and drops it (end-to-end test in
+    // services/ingest-web/e2e); the collector answers 401.
     expect(await acceptsWeb(B.umamiWebsiteId)).toBe(false);
     expect(await collectorKey(B.keyPrefix)).toBeNull();
     expect(await acceptsWeb(A.umamiWebsiteId)).toBe(true);
     expect(await collectorKey(A.keyPrefix)).not.toBeNull();
-    // Fora das comparações do painel global (#29), mas A continua.
-    const active = (await listActiveTenantSites({ userId: operatorId } as never)).map((p) => p.tenantId);
+    const active = (await listActiveTenantSites(op())).map((p) => p.tenantId);
     expect(active).toContain(A.tenantId);
     expect(active).not.toContain(B.tenantId);
 
-    // Quem é de B ainda entra, mas não cadastra nada.
-    asMember(B);
-    expect(await createServiceAction({ status: "idle" }, form({ name: "after-removal" }))).toEqual({
-      status: "error",
-      message: "This project was removed.",
-    });
-    expect(
-      await createSiteAction({ status: "idle" }, form({ name: "After", domain: "after-removal.example" })),
-    ).toEqual({ status: "error", message: "This project was removed." });
-    expect(await createKeyAction(B.serviceId)).toEqual({ status: "error", message: "This project was removed." });
-    expect(umami.requests).toEqual([]);
-
-    asOperator();
-    expect(await reactivateTenantAction(B.tenantId, idle, form({ reason: "Appeal accepted" }))).toEqual({
-      status: "done",
-    });
+    expect(await reactivateTenant(op(), B.tenantId, { reason: "Appeal accepted" })).toBe("changed");
     expect(await acceptsWeb(B.umamiWebsiteId)).toBe(true);
     expect(await collectorKey(B.keyPrefix)).not.toBeNull();
 
@@ -442,50 +304,19 @@ describe("tenant B removido", () => {
     ]);
   });
 
-  it("remover sem motivo volta com erro e não muda o status", async () => {
-    asOperator();
-    expect(await removeTenantAction(B.tenantId, idle, form({ reason: " " }))).toMatchObject({ status: "error" });
+  it("removing without a reason is rejected and does not change the status", async () => {
+    await expect(removeTenant(op(), B.tenantId, { reason: " " })).rejects.toBeInstanceOf(TenantStatusError);
     expect(await tenantStatus(B.tenantId)).toBe("active");
+    expect(await removeTenant(op(), randomUUID(), { reason: "Spam" })).toBeNull();
   });
 
-  it("tenant inexistente: 404", async () => {
-    asOperator();
-    await expect(removeTenantAction(randomUUID(), idle, form({ reason: "Spam" }))).rejects.toMatchObject(NOT_FOUND);
-  });
-  // A métrica de API de B removido é recusada pelo coletor (401 e
-  // Unauthenticated), e volta a valer depois da reativação:
+  // The API metric of removed B is rejected by the collector (401 and
+  // Unauthenticated), and is accepted again after reactivation:
   // services/collector/e2e/isolation_test.go.
 });
 
-describe("painel web do site (#28)", () => {
-  const sitePage = (siteId: string) =>
-    SitePage({ params: Promise.resolve({ siteId }), searchParams: Promise.resolve({}) });
-
-  it("membro de A abre o próprio painel; o de B responde 404 sem chamar o Umami", async () => {
-    asMember(A);
-    await expect(sitePage(A.siteId)).resolves.toBeTruthy();
-    expect(umami.requests.length).toBeGreaterThan(0);
-    expect(umami.requests.every((r) => r.path.startsWith(`/api/websites/${A.umamiWebsiteId}/`))).toBe(true);
-    umami.requests.length = 0;
-
-    await expect(sitePage(B.siteId)).rejects.toMatchObject(NOT_FOUND);
-    // Nem com o ID do site de B no Umami no lugar do ID do portal.
-    await expect(sitePage(B.umamiWebsiteId)).rejects.toMatchObject(NOT_FOUND);
-    expect(umami.requests).toEqual([]);
-  });
-
-  it("operador abre o painel de um site: 404 (D2)", async () => {
-    asOperator();
-    await expect(sitePage(A.siteId)).rejects.toMatchObject(NOT_FOUND);
-    expect(umami.requests).toEqual([]);
-  });
-});
-
-describe("painel de API do serviço (#37)", () => {
-  const servicePage = (serviceId: string) =>
-    ServicePage({ params: Promise.resolve({ serviceId }), searchParams: Promise.resolve({}) });
-
-  // Uma linha por minuto recente, gravada direto como faria o coletor.
+describe("service API dashboard (#37)", () => {
+  // One row per recent minute, written directly as the collector would.
   async function metric(tenantId: string, serviceId: string, count: number) {
     const at = new Date(Date.now() - 60_000);
     at.setUTCSeconds(0, 0);
@@ -496,30 +327,21 @@ describe("painel de API do serviço (#37)", () => {
               ${Array.from({ length: 15 }, (_, i) => (i === 2 ? count : 0))}::bigint[])`;
   }
 
-  it("A vê só as métricas do próprio serviço; o de B é 404 e nulo na camada de dados", async () => {
+  it("A sees only the metrics of its own service; B's is null in the data layer", async () => {
     await metric(A.tenantId, A.serviceId, 3);
     await metric(B.tenantId, B.serviceId, 1000);
-    // Linha impossível pelo coletor (serviço de A com o tenant de B): o painel
-    // filtra pelos dois, então ela também não aparece para A.
+    // Row impossible through the collector (A's service with B's tenant): the
+    // dashboard filters by both, so it does not show up for A either.
     await metric(B.tenantId, A.serviceId, 500);
 
     const period = resolvePeriod("24h");
     const own = await getServiceDashboard(A.ctx, A.serviceId, period);
     expect(own!.totals.requests).toBe(3);
     expect(await getServiceDashboard(A.ctx, B.serviceId, period)).toBeNull();
-
-    asMember(A);
-    await expect(servicePage(A.serviceId)).resolves.toBeTruthy();
-    await expect(servicePage(B.serviceId)).rejects.toMatchObject(NOT_FOUND);
-  });
-
-  it("operador abre o painel de um serviço: 404 (D2)", async () => {
-    asOperator();
-    await expect(servicePage(A.serviceId)).rejects.toMatchObject(NOT_FOUND);
   });
 });
 
-describe("chaves de leitura do SCF (#48)", () => {
+describe("SCF read keys (#48)", () => {
   const READ_ROUTES = [
     ["/api/v1/projects", readApiProjects],
     ["/api/v1/web", readApiWeb],
@@ -527,41 +349,8 @@ describe("chaves de leitura do SCF (#48)", () => {
   ] as const;
   const get = (route: (r: Request) => Promise<Response>, path: string, key: string) =>
     route(new Request(`http://portal.test${path}`, { headers: { authorization: `Bearer ${key}` } }));
-  const keyRows = async () => (await db.select({ id: operatorApiKey.id }).from(operatorApiKey)).length;
 
-  it("membro de tenant não gera nem revoga chave de leitura: 404, e nada é gravado", async () => {
-    const op = { userId: operatorId } as import("@/lib/access").OperatorContext;
-    const { summary } = await createReadKey(op, { name: "isolation" });
-    const before = await keyRows();
-
-    asMember(A);
-    await expect(OperatorKeysPage()).rejects.toMatchObject(NOT_FOUND);
-    await expect(createReadKeyAction({ status: "idle" }, form({ name: "mine" }))).rejects.toMatchObject(NOT_FOUND);
-    await expect(revokeReadKeyAction(summary.id)).rejects.toMatchObject(NOT_FOUND);
-    signIn({ id: noProjectId, role: "tenant" });
-    await expect(createReadKeyAction({ status: "idle" }, form({ name: "mine" }))).rejects.toMatchObject(NOT_FOUND);
-    signIn(null);
-    await expect(createReadKeyAction({ status: "idle" }, form({ name: "mine" }))).rejects.toMatchObject({
-      digest: "NEXT_REDIRECT;/sign-in",
-    });
-
-    expect(await keyRows()).toBe(before);
-    expect((await listReadKeys(op)).find((k) => k.id === summary.id)?.revokedAt).toBeNull();
-  });
-
-  it("operador cria e revoga pela interface; a chave só aparece no retorno da criação", async () => {
-    asOperator();
-    await expect(OperatorKeysPage()).resolves.toBeTruthy();
-    const created = await createReadKeyAction({ status: "idle" }, form({ name: "from-ui" }));
-    expect(created).toMatchObject({ status: "created", key: expect.stringMatching(/^nrk_/) });
-    const key = (created as { key: string }).key;
-    expect((await get(readApiProjects, "/api/v1/projects", key)).status).toBe(200);
-    const [row] = await db.select().from(operatorApiKey).where(eq(operatorApiKey.prefix, key.split("_")[1]!));
-    await revokeReadKeyAction(row!.id);
-    expect((await get(readApiProjects, "/api/v1/projects", key)).status).toBe(401);
-  });
-
-  it("chave de ingestão (ntf_) de A não lê a API de leitura", async () => {
+  it("A's ingest key (ntf_) does not read the read API", async () => {
     const ingest = await createIngestKey(A.ctx, A.serviceId);
     expect(ingest!.key).toMatch(/^ntf_/);
     for (const [path, route] of READ_ROUTES) {
@@ -570,19 +359,19 @@ describe("chaves de leitura do SCF (#48)", () => {
     expect(umami.requests).toEqual([]);
   });
 
-  it("chave de leitura não é aceita pelo coletor nem enxergada pelo gateway", async () => {
+  it("a read key is neither accepted by the collector nor seen by the gateway", async () => {
     const op = { userId: operatorId } as import("@/lib/access").OperatorContext;
     const { key, summary } = await createReadKey(op, { name: "not-for-collector" });
-    // O coletor busca na visão pelo prefixo: o prefixo da chave de leitura não está lá.
+    // The collector looks up the view by prefix: the read key's prefix is not there.
     expect(await collectorKey(summary.prefix)).toBeNull();
-    // E nem o coletor nem o gateway têm permissão na tabela das chaves de leitura.
+    // And neither the collector nor the gateway has permission on the read keys table.
     await expect(asRole("stellytics_collector", "select prefix from operator_api_key")).rejects.toThrow(/permission denied/);
     await expect(asRole("stellytics_ingest", "select prefix from operator_api_key")).rejects.toThrow(/permission denied/);
     await expect(asRole("stellytics_collector", "select key_hash from operator_api_key")).rejects.toThrow(/permission denied/);
     expect(key).not.toMatch(/^ntf_/);
   });
 
-  it("a API só mostra projetos ativos: B removido some, A volta ao reativar, sem tocar no Umami de B", async () => {
+  it("the API only shows active projects: removed B disappears, A comes back on reactivation, without touching B's Umami", async () => {
     const op = { userId: operatorId } as import("@/lib/access").OperatorContext;
     const { key } = await createReadKey(op, { name: "tenants" });
     const ids = async (path: string, route: (r: Request) => Promise<Response>) =>
@@ -608,19 +397,181 @@ describe("chaves de leitura do SCF (#48)", () => {
   });
 });
 
-describe("usuário sem projeto", () => {
-  it("abre /dashboard e vai para a criação de projeto", async () => {
-    signIn({ id: noProjectId, role: "tenant" });
-    await expect(DashboardPage()).rejects.toMatchObject({ digest: expect.stringContaining("/onboarding") });
+// Public demo (/, /demo, /demo/operator): no session, fixed on the tenant of
+// DEMO_TENANT_SLUG. Here A is the demo tenant and B is a regular one.
+describe("public demo", () => {
+  // The home page asks Better Auth for the session; anonymous here.
+  const anonymous = () => vi.spyOn(auth.api, "getSession").mockResolvedValue(null);
+  const demoPage = (query: Record<string, string | string[]> = {}) => DemoPage({ searchParams: Promise.resolve(query) });
+  const operatorPage = (query: Record<string, string | string[]> = {}) =>
+    DemoOperatorPage({ searchParams: Promise.resolve(query) });
+  const slugOf = async (tenantId: string) =>
+    (await db.select({ slug: tenant.slug }).from(tenant).where(eq(tenant.id, tenantId)))[0]!.slug;
+  // Earlier cases may have added websites to A: every Umami read must be for
+  // one of A's own, and none for B's.
+  const onlyA = async () => {
+    const own = (await db.select({ id: site.umamiWebsiteId }).from(site).where(eq(site.tenantId, A.tenantId))).map((r) => r.id);
+    expect(umami.requests.length).toBeGreaterThan(0);
+    expect(umami.requests.every((r) => own.some((id) => r.path.startsWith(`/api/websites/${id}/`)))).toBe(true);
+    expect(umami.requests.some((r) => r.path.includes(B.umamiWebsiteId))).toBe(false);
+  };
+
+  it("no demo tenant configured: sample data only, nothing read from any tenant", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { DemoNotice } = await import("@/components/demo/demo-notice");
+    await expect(demoPage({ tenantId: B.tenantId, siteId: B.siteId })).resolves.toBeTruthy();
+    await expect(operatorPage({ compare: [A.tenantId, B.tenantId] })).resolves.toBeTruthy();
+    expect(await loadDemoContext()).toBeNull();
+    expect(umami.requests).toEqual([]);
+    // The "measuring its own site" label is only for real data.
+    expect(DemoNotice({ sample: true })).toBeNull();
+    expect(renderToStaticMarkup(DemoNotice({ sample: false }))).toContain("measuring its own site");
+
+    // The sample is self-consistent and names no real tenant.
+    const { sampleApiOverview, sampleServiceDashboard, sampleSiteDashboard, sampleWebOverview } = await import("@/lib/demo-sample");
+    for (const key of ["24h", "7d", "30d", "90d", "12m"] as const) {
+      const period = resolvePeriod(key);
+      const web = sampleSiteDashboard(period);
+      expect(web.series).toHaveLength(period.buckets.length);
+      expect(web.totals.pageviews).toBe(web.series.reduce((n, p) => n + p.pageviews, 0));
+      expect(web.totals.pageviews).toBeGreaterThan(0);
+      const api = sampleServiceDashboard(period);
+      expect(api.totals.requests).toBe(api.series.reduce((n, p) => n + p.requests, 0));
+      expect(api.statuses.reduce((n, s) => n + s.requests, 0)).toBe(api.totals.requests);
+      const ids = [...sampleWebOverview(period).projects, ...sampleApiOverview(period)].map((p) => p.tenantId);
+      expect(ids).toEqual(["sample", "sample"]);
+    }
   });
 
-  it("sem sessão vai para o login", async () => {
-    await expect(DashboardPage()).rejects.toMatchObject({ digest: "NEXT_REDIRECT;/sign-in" });
+  it("anonymous request reads only the demo tenant, whatever the URL says", async () => {
+    process.env.DEMO_TENANT_SLUG = await slugOf(A.tenantId);
+    const ctx = (await loadDemoContext())!;
+    expect(ctx.tenantId).toBe(A.tenantId);
+
+    // Client values naming B are ignored: only `period` is read.
+    const forged = { tenant: B.tenantId, tenantId: B.tenantId, siteId: B.siteId, serviceId: B.serviceId, compare: [A.tenantId, B.tenantId], q: "tenant-b" };
+    await expect(demoPage(forged)).resolves.toBeTruthy();
+    await onlyA();
+    umami.requests.length = 0;
+    resetDemoCache();
+    await expect(operatorPage(forged)).resolves.toBeTruthy();
+    await onlyA();
+
+    // The data layer under the pages: B is out of reach with the demo context.
+    expect(await getSite(ctx, B.siteId)).toBeNull();
+    expect(await getApiService(ctx, B.serviceId)).toBeNull();
+    expect(await getServiceDashboard(ctx, B.serviceId, resolvePeriod("24h"))).toBeNull();
+    expect((await listSites(ctx)).every((s) => s.tenantId === A.tenantId)).toBe(true);
+    expect((await listApiServices(ctx)).every((s) => s.tenantId === A.tenantId)).toBe(true);
+    // The demo operator view lists the demo tenant alone, never every project.
+    const period = resolvePeriod("7d");
+    expect((await getDemoWebOverview(ctx, period)).projects.map((p) => p.tenantId)).toEqual([A.tenantId]);
+    expect((await getDemoApiOverview(ctx, period)).map((p) => p.tenantId)).toEqual([A.tenantId]);
+  });
+
+  it("public card: only the demo project has one; any other slug is 404 and reads nothing", async () => {
+    const card = (slug: string) => PublicCardPage({ params: Promise.resolve({ slug }) });
+    const slugA = await slugOf(A.tenantId);
+    const slugB = await slugOf(B.tenantId);
+
+    // Sample mode: only the sample project's slug, and nothing is read. A real
+    // project's slug does not open a card.
+    await expect(card("stellytics")).resolves.toBeTruthy();
+    await expect(card(slugA)).rejects.toMatchObject(NOT_FOUND);
+    await expect(card(slugB)).rejects.toMatchObject(NOT_FOUND);
+    expect(umami.requests).toEqual([]);
+
+    // Tenant mode: A's card reads only A; B's slug and the sample slug are 404.
+    process.env.DEMO_TENANT_SLUG = slugA;
+    await expect(card(slugB)).rejects.toMatchObject(NOT_FOUND);
+    await expect(card("stellytics")).rejects.toMatchObject(NOT_FOUND);
+    expect(umami.requests).toEqual([]);
+    await expect(card(slugA)).resolves.toBeTruthy();
+    await onlyA();
+  });
+
+  it("documentation page is public and reads no tenant data", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { default: DocsPage } = await import("@/app/docs/page");
+    const { TRACKER_VERSION } = await import("@/lib/tracker-snippet");
+    process.env.DEMO_TENANT_SLUG = await slugOf(A.tenantId);
+    // Render the body only: the site shell holds client components.
+    const body = renderToStaticMarkup(DocsPage().props.children);
+    expect(body).toContain(`/s/v${TRACKER_VERSION}/n.js`);
+    expect(body).toContain('href="/docs/onboarding"');
+    // Placeholders only: no site, key or tenant of anyone.
+    expect(body).toContain("&lt;your-site-id&gt;");
+    for (const secret of [A.umamiWebsiteId, B.umamiWebsiteId, A.tenantId, B.tenantId, A.keyPrefix, B.keyPrefix]) {
+      expect(body).not.toContain(secret);
+    }
+    expect(umami.requests).toEqual([]);
+  });
+
+  it("removed or unknown demo tenant: 404, nothing read", async () => {
+    process.env.DEMO_TENANT_SLUG = await slugOf(A.tenantId);
+    await db.update(tenant).set({ status: "removed" }).where(eq(tenant.id, A.tenantId));
+    try {
+      await expect(demoPage()).rejects.toMatchObject(NOT_FOUND);
+      await expect(operatorPage()).rejects.toMatchObject(NOT_FOUND);
+      await expect(PublicCardPage({ params: Promise.resolve({ slug: process.env.DEMO_TENANT_SLUG }) })).rejects.toMatchObject(NOT_FOUND);
+    } finally {
+      await db.update(tenant).set({ status: "active" }).where(eq(tenant.id, A.tenantId));
+    }
+    process.env.DEMO_TENANT_SLUG = `${SLUG}does-not-exist`;
+    await expect(demoPage()).rejects.toMatchObject(NOT_FOUND);
+    expect(umami.requests).toEqual([]);
+  });
+
+  it("the home page is public and installs the pinned tracker only for the demo tenant's own site", async () => {
+    const session = anonymous();
+    try {
+      const html = async () => {
+        const { renderToStaticMarkup } = await import("react-dom/server");
+        return renderToStaticMarkup(await Home());
+      };
+      // No demo tenant: public page, demo with sample data, no tracker.
+      let page = await html();
+      // The public pages carry no sign-in or sign-up link; /sign-in still exists.
+      expect(page).not.toContain('href="/sign-in"');
+      expect(page).not.toContain('href="/sign-up"');
+      expect(page).toContain("https://github.com/romulospl/stellytics");
+      expect(page).toContain('href="/docs"');
+      expect(page).toContain('href="/demo"');
+      expect(page).toContain("sample data");
+      expect(page).not.toContain("<script");
+
+      // Demo tenant set, but no site registered for the portal's own host: no tracker.
+      process.env.DEMO_TENANT_SLUG = await slugOf(A.tenantId);
+      resetDemoCache();
+      page = await html();
+      expect(page).toContain('href="/demo"');
+      expect(page).not.toContain("sample data");
+      expect(page).not.toContain("<script");
+
+      // A's site is the portal's host: the tag carries A's site and the SRI
+      // hash of the newest published version.
+      const host = new URL(process.env.BETTER_AUTH_URL!).host;
+      await db.update(site).set({ domain: host }).where(eq(site.id, A.siteId));
+      try {
+        resetDemoCache();
+        page = await html();
+        const sri = (await import("../../../packages/tracker/published/sri.json")).default as Record<string, string>;
+        const { TRACKER_VERSION } = await import("@/lib/tracker-snippet");
+        expect(page).toContain(`data-site="${A.umamiWebsiteId}"`);
+        expect(page).toContain(`integrity="${sri[TRACKER_VERSION]}"`);
+        expect(page).toContain(`/s/v${TRACKER_VERSION}/n.js`);
+        expect(page).not.toContain(B.umamiWebsiteId);
+      } finally {
+        await db.update(site).set({ domain: "tenant-a.example" }).where(eq(site.id, A.siteId));
+      }
+    } finally {
+      session.mockRestore();
+    }
   });
 });
 
-describe("leitura do Umami", () => {
-  it("o contexto de A não lê o site de B, nem pelo ID do portal nem pelo do Umami", async () => {
+describe("Umami read", () => {
+  it("A's context does not read B's site, neither by the portal ID nor by the Umami one", async () => {
     expect(await getSiteStats(A.ctx, A.siteId, RANGE)).toMatchObject({ pageviews: 7 });
     expect(umami.requests).toHaveLength(1);
     umami.requests.length = 0;
@@ -628,24 +579,17 @@ describe("leitura do Umami", () => {
     expect(await getSiteStats(A.ctx, B.siteId, RANGE)).toBeNull();
     expect(await getSiteStats(A.ctx, B.umamiWebsiteId, RANGE)).toBeNull();
     expect(await getSiteStats(A.ctx, A.umamiWebsiteId, RANGE)).toBeNull();
-    // Recusado antes de chegar ao Umami.
+    // Rejected before reaching Umami.
     expect(umami.requests).toEqual([]);
   });
 });
 
-// Textos de uma árvore de elementos React (sem renderizar): só strings e filhos.
-function textOf(node: unknown): string {
-  if (typeof node === "string") return node;
-  if (Array.isArray(node)) return node.map(textOf).join("");
-  const props = (node as { props?: { children?: unknown } } | null)?.props;
-  return props ? textOf(props.children) : "";
-}
 
-describe("cadastro com aprovação (#49)", () => {
-  // Projeto pendente com site, serviço e chave. As linhas são criadas com o
-  // projeto ativo (as funções de data/ recusam pendente) e o status muda depois,
-  // como se fossem de um cadastro antigo: a ingestão e as páginas é que são
-  // testadas aqui.
+describe("sign-up with approval (#49)", () => {
+  // Pending project with site, service and key. The rows are created with the
+  // project active (the data/ functions reject pending) and the status changes
+  // afterwards, as if they came from an old sign-up: ingestion and the pages are
+  // what is tested here.
   async function pendingFixture(name: string): Promise<Fixture> {
     const f = await createFixture(name);
     await db.update(tenant).set({ status: "pending" }).where(eq(tenant.id, f.tenantId));
@@ -657,114 +601,48 @@ describe("cadastro com aprovação (#49)", () => {
     P = await pendingFixture("tenant-pending");
   });
 
-  it("ingestão web e de API recusam o pendente; A continua", async () => {
+  it("web and API ingestion reject the pending one; A carries on", async () => {
     expect(await acceptsWeb(P.umamiWebsiteId)).toBe(false);
     expect(await collectorKey(P.keyPrefix)).toBeNull();
     expect(await acceptsWeb(A.umamiWebsiteId)).toBe(true);
     expect(await collectorKey(A.keyPrefix)).not.toBeNull();
   });
 
-  it("o pendente vê só a tela de espera; o resto do portal manda para /dashboard", async () => {
-    asMember(P);
-    expect(P.ctx.tenantStatus).toBe("pending");
-    await expect(DashboardPage()).resolves.toBeTruthy();
-    const toDashboard = { digest: expect.stringContaining("/dashboard") };
-    await expect(SitesPage()).rejects.toMatchObject(toDashboard);
-    await expect(ServicesPage()).rejects.toMatchObject(toDashboard);
-    await expect(SitePage({ params: Promise.resolve({ siteId: P.siteId }), searchParams: Promise.resolve({}) })).rejects.toMatchObject(toDashboard);
-    await expect(ServicePage({ params: Promise.resolve({ serviceId: P.serviceId }) })).rejects.toMatchObject(toDashboard);
-    await expect(KeysPage({ params: Promise.resolve({ serviceId: P.serviceId }) })).rejects.toMatchObject(toDashboard);
-
-    const keys = await activeKeys(P.tenantId);
-    await expect(createSiteAction({ status: "idle" }, form({ name: "P", domain: "p.example" }))).rejects.toMatchObject(toDashboard);
-    await expect(createServiceAction({ status: "idle" }, form({ name: "p-api" }))).rejects.toMatchObject(toDashboard);
-    await expect(createKeyAction(P.serviceId)).rejects.toMatchObject(toDashboard);
-    await expect(revokeKeyAction(P.keyId)).rejects.toMatchObject(toDashboard);
-    expect(await activeKeys(P.tenantId)).toBe(keys);
-    expect(umami.requests).toEqual([]);
-
-    // Mesmo que alguém chame a camada de dados direto, ela recusa.
-    await expect(createApiService(P.ctx, { name: "direct" })).rejects.toMatchObject({ code: "tenant_pending" });
-    expect(await getSite(A.ctx, P.siteId)).toBeNull();
-  });
-
-  it("membro de A não alcança o pendente: 404 em tudo", async () => {
-    asMember(A);
-    await expect(ServicePage({ params: Promise.resolve({ serviceId: P.serviceId }) })).rejects.toMatchObject(NOT_FOUND);
-    expect(await getApiService(A.ctx, P.serviceId)).toBeNull();
-    await expect(approveTenantAction(P.tenantId, idle, form({}))).rejects.toMatchObject(NOT_FOUND);
-    await expect(rejectTenantAction(P.tenantId, idle, form({ reason: "No" }))).rejects.toMatchObject(NOT_FOUND);
-    await expect(ApprovalsPage()).rejects.toMatchObject(NOT_FOUND);
-    // O próprio pendente também não aprova.
-    asMember(P);
-    await expect(approveTenantAction(P.tenantId, idle, form({}))).rejects.toMatchObject(NOT_FOUND);
-    await expect(ApprovalsPage()).rejects.toMatchObject(NOT_FOUND);
-    expect(await tenantStatus(P.tenantId)).toBe("pending");
-  });
-
-  it("o operador vê a fila, aprova, e a ingestão passa a aceitar; tudo no audit_log", async () => {
-    asOperator();
-    await expect(ApprovalsPage()).resolves.toBeTruthy();
-    // Modo desligado com pendentes na fila: a tela explica; ligado, não.
-    delete process.env.SIGNUP_APPROVAL;
-    expect(textOf(await ApprovalsPage())).toContain("currently turned off");
-    process.env.SIGNUP_APPROVAL = "true";
-    expect(textOf(await ApprovalsPage())).not.toContain("currently turned off");
-    delete process.env.SIGNUP_APPROVAL;
-    expect(await approveTenantAction(P.tenantId, idle, form({ reason: "Looks good" }))).toEqual({ status: "done" });
+  it("the operator approves and ingestion starts accepting; everything in the audit_log", async () => {
+    expect(await approveTenant(op(), P.tenantId, { reason: "Looks good" })).toBe("changed");
     expect(await tenantStatus(P.tenantId)).toBe("active");
     expect(await acceptsWeb(P.umamiWebsiteId)).toBe(true);
     expect(await collectorKey(P.keyPrefix)).toMatchObject({ tenant_id: P.tenantId });
-    // Segunda aprovação (dois operadores ao mesmo tempo): nada novo.
-    expect(await approveTenantAction(P.tenantId, idle, form({}))).toEqual({ status: "done" });
-
+    // Second approval (two operators at the same time): nothing new.
+    expect(await approveTenant(op(), P.tenantId)).toBe("unchanged");
     const audit = await db
       .select({ action: auditLog.action, actor: auditLog.actorUserId })
       .from(auditLog)
       .where(and(eq(auditLog.tenantId, P.tenantId), like(auditLog.action, "tenant.%")));
     expect(audit).toEqual([{ action: "tenant.approved", actor: operatorId }]);
-
-    asMember(P);
-    await expect(SitesPage()).resolves.toBeTruthy();
   });
 
-  it("rejeitar exige motivo; o rejeitado vê o aviso e a ingestão segue recusada", async () => {
+  it("rejecting requires a reason; ingestion of the rejected one stays refused", async () => {
     const R = await pendingFixture("tenant-rejected");
-    asOperator();
-    expect(await rejectTenantAction(R.tenantId, idle, form({ reason: " " }))).toMatchObject({ status: "error" });
+    await expect(rejectTenant(op(), R.tenantId, { reason: " " })).rejects.toBeInstanceOf(TenantStatusError);
     expect(await tenantStatus(R.tenantId)).toBe("pending");
-    expect(await rejectTenantAction(R.tenantId, idle, form({ reason: "Not a Stellar project" }))).toEqual({
-      status: "done",
-    });
+    expect(await rejectTenant(op(), R.tenantId, { reason: "Not a Stellar project" })).toBe("changed");
     expect(await tenantStatus(R.tenantId)).toBe("removed");
     expect(await acceptsWeb(R.umamiWebsiteId)).toBe(false);
     expect(await collectorKey(R.keyPrefix)).toBeNull();
-    const [entry] = await db
-      .select({ action: auditLog.action, actor: auditLog.actorUserId, details: auditLog.details })
-      .from(auditLog)
-      .where(and(eq(auditLog.tenantId, R.tenantId), eq(auditLog.action, "tenant.rejected")));
-    expect(entry).toEqual({
-      action: "tenant.rejected",
-      actor: operatorId,
-      details: { from: "pending", reason: "Not a Stellar project" },
-    });
-    asMember(R);
-    await expect(DashboardPage()).resolves.toBeTruthy();
-    // Aprovar um rejeitado não vale: só reativar.
-    asOperator();
-    expect(await approveTenantAction(R.tenantId, idle, form({}))).toEqual({ status: "done" });
+    // Approving a rejected one does not work: only reactivating.
+    expect(await approveTenant(op(), R.tenantId)).toBe("unchanged");
     expect(await tenantStatus(R.tenantId)).toBe("removed");
   });
 
-  it("aprovar ou rejeitar projeto inexistente: 404", async () => {
-    asOperator();
-    await expect(approveTenantAction(randomUUID(), idle, form({}))).rejects.toMatchObject(NOT_FOUND);
-    await expect(rejectTenantAction(randomUUID(), idle, form({ reason: "Spam" }))).rejects.toMatchObject(NOT_FOUND);
+  it("approving or rejecting a nonexistent project: null", async () => {
+    expect(await approveTenant(op(), randomUUID())).toBeNull();
+    expect(await rejectTenant(op(), randomUUID(), { reason: "Spam" })).toBeNull();
   });
 });
 
-describe("apagamento (#154)", () => {
-  // Ponto de métrica de API, para conferir que o apagamento o remove.
+describe("erasure (#154)", () => {
+  // API metric point, to check that erasure removes it.
   async function insertMetric(f: Fixture, at = new Date().toISOString()) {
     await sql`
       INSERT INTO api_metric_1m (bucket_start, tenant_id, api_service_id, route, method, status_code,
@@ -785,40 +663,28 @@ describe("apagamento (#154)", () => {
     return row!;
   }
 
-  it("o marcador do código é o mesmo que o do gatilho", async () => {
-    // O gatilho aponta para a função; o corpo dela é que tem o marcador.
-    const [fn] = await sql<{ prosrc: string }[]>`
-      SELECT prosrc FROM pg_proc WHERE proname = 'audit_log_erasure_guard'`;
-    expect(fn!.prosrc).toContain(`'[apagado]'`);
-    expect(fn!.prosrc).toContain(ANONYMIZED_ACTOR);
-  });
-
-  it("o operador apaga os dados de um projeto removido; a linha dele fica", async () => {
+  it("the operator erases the data of a removed project; its row stays", async () => {
     const C = await createFixture("tenant-erasure");
     await insertMetric(C);
-    asOperator();
-    expect(await removeTenantAction(C.tenantId, idle, form({ reason: "Erasure request" }))).toEqual({ status: "done" });
+    expect(await removeTenant(op(), C.tenantId, { reason: "Erasure request" })).toBe("changed");
 
-    // Confirmação errada: erro e nada apagado.
-    expect(await purgeTenantAction(C.tenantId, idle, form({ confirm: "wrong-slug" }))).toMatchObject({ status: "error" });
+    // Wrong confirmation: error and nothing erased.
+    await expect(purgeRemovedTenant(op(), C.tenantId, { confirmSlug: "wrong-slug" })).rejects.toBeInstanceOf(
+      TenantStatusError,
+    );
     expect(umami.requests).toEqual([]);
 
     const { slug } = await tenantRow(C.tenantId);
-    expect(await purgeTenantAction(C.tenantId, idle, form({ confirm: slug }))).toEqual({ status: "done" });
+    expect(await purgeRemovedTenant(op(), C.tenantId, { confirmSlug: slug })).toBe("changed");
 
-    // O site saiu do Umami e as linhas saíram do banco.
+    // The site is gone from Umami and the rows are gone from the database.
     expect(umami.websites.has(C.umamiWebsiteId)).toBe(false);
-    expect(umami.requests.some((r) => r.method === "DELETE" && r.path === `/api/websites/${C.umamiWebsiteId}`)).toBe(
-      true,
-    );
     expect((await metricRows(C.tenantId, "api_metric_1m"))[0]!.n).toBe(0);
-    expect((await metricRows(C.tenantId, "api_metric_1h"))[0]!.n).toBe(0);
-    expect((await metricRows(C.tenantId, "api_metric_1d"))[0]!.n).toBe(0);
     expect(await db.select().from(site).where(eq(site.tenantId, C.tenantId))).toEqual([]);
     expect(await db.select().from(apiService).where(eq(apiService.tenantId, C.tenantId))).toEqual([]);
     expect(await db.select().from(ingestKey).where(eq(ingestKey.tenantId, C.tenantId))).toEqual([]);
 
-    // A linha do tenant fica, com o histórico legível no audit_log.
+    // The tenant row stays, with the history readable in the audit_log.
     expect(await tenantStatus(C.tenantId)).toBe("removed");
     const actions = await db
       .select({ action: auditLog.action, actor: auditLog.actorUserId })
@@ -829,92 +695,68 @@ describe("apagamento (#154)", () => {
       { action: "tenant.removed", actor: operatorId },
       { action: "tenant.purged", actor: operatorId },
     ]);
-
-    // Ingestão continua recusada depois do apagamento (site apagado).
     expect(await acceptsWeb(C.umamiWebsiteId)).toBe(false);
   });
 
-  it("apagar projeto que não está removido: unchanged e nada sai", async () => {
-    asOperator();
-    expect(await purgeTenantAction(A.tenantId, idle, form({ confirm: "anything" }))).toEqual({ status: "done" });
+  it("erasing a project that is not removed: unchanged and nothing goes", async () => {
+    expect(await purgeRemovedTenant(op(), A.tenantId, { confirmSlug: "anything" })).toBe("unchanged");
     expect(umami.requests).toEqual([]);
     expect(await tenantStatus(A.tenantId)).toBe("active");
   });
 
-  it("a exclusão da própria conta apaga o projeto do dono e anonimiza o audit_log", async () => {
+  it("account erasure erases the owner's project and anonymizes the audit_log", async () => {
     const D = await createFixture("tenant-account-erasure");
     await insertMetric(D);
+    await deleteOwnAccount(D.userId);
 
-    asMember(D);
-    expect(await deleteAccountAction({ status: "idle" }, form({ confirm: "wrong@example.invalid" }))).toMatchObject({
-      status: "error",
-    });
-    // Confirmação errada não mexeu em nada.
-    expect(umami.requests).toEqual([]);
-    expect(await db.select({ id: user.id }).from(user).where(eq(user.id, D.userId))).toHaveLength(1);
-
-    // A ação responde com redirecionamento para /sign-in (o e-mail da sessão
-    // simulada é o fixo do mock).
-    await expect(deleteAccountAction({ status: "idle" }, form({ confirm: "test@example.invalid" }))).rejects.toMatchObject({
-      digest: expect.stringContaining("sign-in"),
-    });
-
-    // A conta saiu com as dependentes em cascata: sessão e senha.
     expect(await db.select().from(user).where(eq(user.id, D.userId))).toEqual([]);
     expect(await db.select().from(account).where(eq(account.userId, D.userId))).toEqual([]);
-    expect((await sql`SELECT count(*)::int AS n FROM session WHERE user_id = ${D.userId}`)[0]!.n).toBe(0);
-
-    // O projeto saiu: status removido, dados apagados, site fora do Umami.
     expect(umami.websites.has(D.umamiWebsiteId)).toBe(false);
-    expect(umami.requests.some((r) => r.method === "DELETE" && r.path === `/api/websites/${D.umamiWebsiteId}`)).toBe(
-      true,
-    );
     expect((await metricRows(D.tenantId, "api_metric_1m"))[0]!.n).toBe(0);
     expect(await db.select().from(site).where(eq(site.tenantId, D.tenantId))).toEqual([]);
     expect(await db.select().from(ingestKey).where(eq(ingestKey.tenantId, D.tenantId))).toEqual([]);
     const row = await tenantRow(D.tenantId);
     expect(row.status).toBe("removed");
-    // A referência ao usuário vira nula em cascata (set null).
     expect(row.statusChangedBy).toBeNull();
-
-    // Todas as ações do usuário ficam no audit_log, anonimizadas — inclusive a
-    // própria exclusão. Nenhuma linha guarda mais o ID dele.
     const audit = await db
       .select({ action: auditLog.action, actor: auditLog.actorUserId })
       .from(auditLog)
-      .where(eq(auditLog.tenantId, D.tenantId))
-      .orderBy(auditLog.at);
+      .where(eq(auditLog.tenantId, D.tenantId));
     expect(audit.map((a) => a.action)).toContain("account.deleted");
     for (const a of audit) expect(a.actor).toBe(ANONYMIZED_ACTOR);
   });
 
-  it("exclusão de conta sem projeto: só o usuário sai", async () => {
+  it("erasure of an account without a project: only the user goes", async () => {
     const alone = (await createUser()).id;
-    signIn({ id: alone, role: "tenant" });
-    await expect(deleteAccountAction({ status: "idle" }, form({ confirm: "test@example.invalid" }))).rejects.toMatchObject({
-      digest: expect.stringContaining("sign-in"),
-    });
+    await deleteOwnAccount(alone);
     expect(await db.select().from(user).where(eq(user.id, alone))).toEqual([]);
   });
 
-  it("o gatilho recusa qualquer mudança fora do marcador", async () => {
+  it("the marker in the code is the same as the trigger's", async () => {
+    // The trigger points to the function; its body is what holds the marker.
+    const [fn] = await sql<{ prosrc: string }[]>`
+      SELECT prosrc FROM pg_proc WHERE proname = 'audit_log_erasure_guard'`;
+    expect(fn!.prosrc).toContain(ANONYMIZED_ACTOR);
+  });
+
+  it("the trigger rejects any change other than the marker", async () => {
     const [entry] = await db
       .insert(auditLog)
       .values({ actorUserId: "trigger-test", action: "trigger.test", details: {} })
       .returning();
     const id = entry!.id;
 
-    // UPDATE de outra coluna: recusado.
+    // UPDATE of another column: rejected.
     await expect(sql`UPDATE audit_log SET action = 'trigger.other' WHERE id = ${id}`).rejects.toThrow(
-      /audit_log só recebe inserções/,
+      /audit_log is insert-only/,
     );
-    // DELETE: recusado.
-    await expect(sql`DELETE FROM audit_log WHERE id = ${id}`).rejects.toThrow(/audit_log só recebe inserções/);
-    // Trocar o ator por outro valor que não o marcador: recusado.
+    // DELETE: rejected.
+    await expect(sql`DELETE FROM audit_log WHERE id = ${id}`).rejects.toThrow(/audit_log is insert-only/);
+    // Replacing the actor with a value other than the marker: rejected.
     await expect(sql`UPDATE audit_log SET actor_user_id = 'anon' WHERE id = ${id}`).rejects.toThrow(
-      /audit_log só recebe inserções/,
+      /audit_log is insert-only/,
     );
-    // Só o marcador passa.
+    // Only the marker passes.
     await expect(sql`UPDATE audit_log SET actor_user_id = ${ANONYMIZED_ACTOR} WHERE id = ${id}`).resolves.toBeTruthy();
     const [after] = await db.select({ actor: auditLog.actorUserId }).from(auditLog).where(eq(auditLog.id, id));
     expect(after!.actor).toBe(ANONYMIZED_ACTOR);

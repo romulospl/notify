@@ -1,14 +1,14 @@
--- Escrita à mão (drizzle-kit generate --custom). Spec do E5, seção 5 (#34).
+-- Written by hand (drizzle-kit generate --custom). E5 spec, section 5 (#34).
 --
--- Consolidação de api_metric_1m em api_metric_1h e api_metric_1d e retenção
--- por partição. Quem chama é o serviço services/rollup, como stellytics (dono das
--- tabelas), pela função api_metric_maintain().
+-- Rollup of api_metric_1m into api_metric_1h and api_metric_1d and retention
+-- by partition. The caller is the services/rollup service, as stellytics (owner
+-- of the tables), through the api_metric_maintain() function.
 
--- Consolida as horas fechadas a partir de `since`: as que terminaram há pelo
--- menos 5 minutos antes de `until` (lotes atrasados do coletor). Depois refaz
--- os dias dessas horas a partir de api_metric_1h. O ON CONFLICT substitui os
--- valores pela soma recalculada, então rodar de novo sobre o mesmo período dá
--- o mesmo resultado. Tudo em UTC.
+-- Rolls up the closed hours starting at `since`: those that ended at least
+-- 5 minutes before `until` (late batches from the collector). Then it rebuilds
+-- the days of those hours from api_metric_1h. The ON CONFLICT replaces the
+-- values with the recomputed sum, so running again over the same period gives
+-- the same result. All in UTC.
 CREATE FUNCTION api_metric_rollup(since timestamptz, until timestamptz DEFAULT now()) RETURNS void
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -33,7 +33,7 @@ BEGIN
     duration_sum = EXCLUDED.duration_sum,
     duration_buckets = EXCLUDED.duration_buckets;
 
-  -- O dia corrente fica parcial até a última hora fechada e é refeito a cada execução.
+  -- The current day stays partial up to the last closed hour and is rebuilt on every run.
   lo_day := date_trunc('day', lo_hour, 'UTC');
   hi_day := date_trunc('day', hi_hour - interval '1 hour', 'UTC') + interval '1 day';
 
@@ -52,10 +52,10 @@ END
 $$;
 --> statement-breakpoint
 
--- Retenção (D3): apaga as partições mensais inteiras cujo fim ficou mais
--- antigo que 35 dias (api_metric_1m) ou 25 meses (api_metric_1h e
--- api_metric_1d). Nunca apaga linha a linha nem a partição default. Devolve
--- os nomes das partições apagadas.
+-- Retention (D3): drops the whole monthly partitions whose end is older
+-- than 35 days (api_metric_1m) or 25 months (api_metric_1h and
+-- api_metric_1d). It never deletes row by row nor the default partition.
+-- Returns the names of the dropped partitions.
 CREATE FUNCTION api_metric_drop_partitions(at timestamptz DEFAULT now()) RETURNS SETOF text
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -83,8 +83,8 @@ END
 $$;
 --> statement-breakpoint
 
--- O que o serviço de consolidação roda a cada execução: partições futuras,
--- consolidação das horas fechadas em `lookback` e retenção.
+-- What the rollup service runs on every execution: future partitions,
+-- rollup of the closed hours in `lookback` and retention.
 CREATE FUNCTION api_metric_maintain(lookback interval DEFAULT interval '2 days') RETURNS void
 LANGUAGE plpgsql AS $$
 BEGIN

@@ -1,18 +1,18 @@
 # rollup
 
-Job de consolidação e retenção das métricas de API (#34, spec do E5, seção 5). Toda a lógica fica em funções SQL da migração `apps/portal/drizzle/0005_api_metric_rollup.sql`; este processo só agenda a chamada.
+Rollup and retention job for the API metrics (#34, E5 spec, section 5). All the logic lives in SQL functions of the migration `apps/portal/drizzle/0005_api_metric_rollup.sql`; this process only schedules the call.
 
-A cada `ROLLUP_INTERVAL` ele roda, como `stellytics` (dono das tabelas), `api_metric_maintain(ROLLUP_LOOKBACK)`, que:
+Every `ROLLUP_INTERVAL` it runs, as `stellytics` (owner of the tables), `api_metric_maintain(ROLLUP_LOOKBACK)`, which:
 
-1. cria as partições mensais do mês corrente e dos dois seguintes (`api_metric_ensure_partitions(2)`);
-2. consolida as horas fechadas (terminadas há pelo menos 5 minutos) de `api_metric_1m` em `api_metric_1h`, e os dias dessas horas em `api_metric_1d` (`api_metric_rollup`), substituindo os valores pela soma recalculada (idempotente);
-3. apaga as partições vencidas (`api_metric_drop_partitions`): `api_metric_1m` 35 dias depois do fim do mês, `api_metric_1h` e `api_metric_1d` 25 meses depois.
+1. creates the monthly partitions for the current month and the next two (`api_metric_ensure_partitions(2)`);
+2. rolls up the closed hours (ended at least 5 minutes ago) of `api_metric_1m` into `api_metric_1h`, and the days of those hours into `api_metric_1d` (`api_metric_rollup`), replacing the values with the recomputed sum (idempotent);
+3. drops the expired partitions (`api_metric_drop_partitions`): `api_metric_1m` 35 days after the end of the month, `api_metric_1h` and `api_metric_1d` 25 months after.
 
-| Variável | Padrão | Uso |
+| Variable | Default | Use |
 |---|---|---|
-| `DATABASE_URL` | (obrigatória) | Banco `stellytics`, como o usuário `stellytics` |
-| `ROLLUP_INTERVAL` | `15m` | Intervalo entre execuções (a primeira roda ao subir) |
-| `ROLLUP_LOOKBACK` | `48h` | Quanto para trás reconsolidar a cada execução (mínimo `2h`); cobre lotes atrasados e o job parado por até esse tempo |
-| `LISTEN_ADDR` | `:8080` | `GET /healthz`: 200 se a última execução bem-sucedida tiver no máximo dois intervalos |
+| `DATABASE_URL` | (required) | `stellytics` database, as the `stellytics` user |
+| `ROLLUP_INTERVAL` | `15m` | Interval between runs (the first one runs at startup) |
+| `ROLLUP_LOOKBACK` | `48h` | How far back to roll up again on each run (minimum `2h`); covers late batches and the job being stopped for up to that long |
+| `LISTEN_ADDR` | `:8080` | `GET /healthz`: 200 if the last successful run is at most two intervals old |
 
-Imagem `scratch`; o healthcheck é `rollup -healthcheck`. Ficando parado mais que `ROLLUP_LOOKBACK`, reconsolide à mão: `SELECT api_metric_rollup(now() - interval '7 days');`.
+`scratch` image; the healthcheck is `rollup -healthcheck`. If it stays stopped longer than `ROLLUP_LOOKBACK`, roll up again by hand: `SELECT api_metric_rollup(now() - interval '7 days');`.

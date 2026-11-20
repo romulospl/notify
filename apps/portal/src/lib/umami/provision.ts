@@ -1,12 +1,12 @@
 import "server-only";
 import { umamiRequest } from "./http";
 
-// Cria o site no Umami e depois grava o vínculo no `stellytics` (spec do E2,
-// seção 7). Se a gravação falhar, apaga o site recém-criado no Umami. O
-// portal cria só sites, nunca usuários nem equipes (ADR 0003).
+// Creates the site in Umami and then writes the link in `stellytics` (E2 spec,
+// section 7). If the write fails, it deletes the newly created site in Umami.
+// The portal creates only sites, never users or teams (ADR 0003).
 //
-// Recebe a gravação como função para que o ID do Umami nunca saia daqui sem
-// estar ligado a um site do tenant. Chamado só por src/lib/data/sites.ts.
+// It takes the write as a function so that the Umami ID never leaves here
+// without being tied to a site of the tenant. Called only by src/lib/data/sites.ts.
 export async function provisionUmamiWebsite<T>(
   input: { name: string; domain: string },
   persist: (umamiWebsiteId: string) => Promise<T>,
@@ -19,8 +19,8 @@ export async function provisionUmamiWebsite<T>(
     return await persist(website.id);
   } catch (error) {
     await umamiRequest(`/api/websites/${website.id}`, { method: "DELETE" }).catch((cleanup) => {
-      // Sobra um site órfão no Umami; o teste de consistência o encontra.
-      console.error("Falha ao desfazer o site no Umami", website.id, cleanup);
+      // An orphan site is left in Umami; the consistency test finds it.
+      console.error("Failed to undo the site in Umami", website.id, cleanup);
     });
     throw error;
   }

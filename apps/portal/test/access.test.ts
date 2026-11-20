@@ -1,5 +1,5 @@
-// Contextos de acesso (#18): o tenant vem da sessão e quem não tem acesso
-// recebe 404. A sessão é simulada; o resto roda contra o Postgres de DATABASE_URL.
+// Access contexts (#18): the tenant comes from the session and whoever has no access
+// gets 404. The session is mocked; the rest runs against the DATABASE_URL Postgres.
 import { randomUUID } from "node:crypto";
 import { inArray, like } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,7 +15,7 @@ import { tenant, tenantMember, user } from "@/lib/db/schema";
 const DOMAIN = "@access-test.stellytics.invalid";
 const SLUG = "access-test-";
 
-// Usuário da sessão simulada; null simula quem não entrou.
+// User of the mocked session; null simulates someone not signed in.
 let sessionUser: { id: string; role: "tenant" | "operator" } | null = null;
 
 vi.mock("@/lib/session", () => ({
@@ -68,8 +68,8 @@ afterAll(async () => {
   await sql.end();
 });
 
-describe("contexto do tenant", () => {
-  it("vem da sessão: o tenant do membro logado", async () => {
+describe("tenant context", () => {
+  it("comes from the session: the tenant of the signed-in member", async () => {
     const { userId, tenantId } = await createMember();
     sessionUser = { id: userId, role: "tenant" };
 
@@ -77,17 +77,17 @@ describe("contexto do tenant", () => {
     expect(ctx).toMatchObject({ userId, tenantId, memberRole: "owner", tenantStatus: "active" });
   });
 
-  it("sem sessão vai para o login", async () => {
+  it("without a session goes to sign-in", async () => {
     await expect(requireTenantContext()).rejects.toMatchObject({ digest: "NEXT_REDIRECT;/sign-in" });
   });
 
-  it("operador recebe 404 (D2)", async () => {
+  it("operator gets 404 (D2)", async () => {
     sessionUser = { id: await createUser("operator"), role: "operator" };
     await expect(getTenantContext()).rejects.toMatchObject(NOT_FOUND);
     await expect(requireTenantContext()).rejects.toMatchObject(NOT_FOUND);
   });
 
-  it("usuário sem projeto: nulo em getTenantContext e vai criar o projeto em requireTenantContext", async () => {
+  it("user without a project: null in getTenantContext and goes to create the project in requireTenantContext", async () => {
     sessionUser = { id: await createUser(), role: "tenant" };
     expect(await getTenantContext()).toBeNull();
     await expect(requireTenantContext()).rejects.toMatchObject({
@@ -96,14 +96,14 @@ describe("contexto do tenant", () => {
   });
 });
 
-describe("contexto do operador", () => {
-  it("só para o papel operator", async () => {
+describe("operator context", () => {
+  it("only for the operator role", async () => {
     const operatorId = await createUser("operator");
     sessionUser = { id: operatorId, role: "operator" };
     expect(await requireOperatorContext()).toEqual({ userId: operatorId });
   });
 
-  it("membro de tenant recebe 404", async () => {
+  it("tenant member gets 404", async () => {
     const { userId } = await createMember();
     sessionUser = { id: userId, role: "tenant" };
     await expect(requireOperatorContext()).rejects.toMatchObject(NOT_FOUND);

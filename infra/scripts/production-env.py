@@ -43,13 +43,13 @@ def initialize(template, path):
         except FileExistsError:
             path.chmod(0o600)
             return
-    print("Criei .env.production com segredos aleatórios e permissão 0600.")
+    print("Created .env.production with random secrets and permission 0600.")
 
 
 def validate(path):
     mode = stat.S_IMODE(path.stat().st_mode)
     if mode & 0o077:
-        raise SystemExit(f"deploy: {path} permite leitura por grupo/outros (modo {mode:04o}); rode sudo chmod 600 {path}")
+        raise SystemExit(f"deploy: {path} is readable by group/others (mode {mode:04o}); run sudo chmod 600 {path}")
 
     values = {}
     with path.open(encoding="utf-8") as stream:
@@ -74,10 +74,10 @@ def validate(path):
     )
     missing = [key for key in required if not values.get(key)]
     if missing:
-        raise SystemExit("deploy: preencha estes campos em .env.production: " + ", ".join(missing))
+        raise SystemExit("deploy: fill in these fields in .env.production: " + ", ".join(missing))
 
     if values["POSTGRES_PASSWORD"] in {"postgres", "password", "CHANGE_ME"}:
-        raise SystemExit("deploy: POSTGRES_PASSWORD ainda usa um valor inseguro")
+        raise SystemExit("deploy: POSTGRES_PASSWORD still uses an insecure value")
 
     # Release images: all four or none. deploy.sh builds from the checkout when
     # none is set and pulls them, without building, when all four are.

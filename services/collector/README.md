@@ -1,59 +1,59 @@
 # services/collector
 
-Distribuição própria do OpenTelemetry Collector, montada com o OCB (OpenTelemetry Collector Builder). Contrato em [`docs/specs/e5-pipeline-de-api.md`](../../docs/specs/e5-pipeline-de-api.md).
+Own distribution of the OpenTelemetry Collector, built with the OCB (OpenTelemetry Collector Builder). Contract in [`docs/specs/e5-api-pipeline.md`](../../docs/specs/e5-api-pipeline.md).
 
-- **Pipeline:** receiver OTLP (gRPC na 4317, HTTP na 4318) → `memory_limiter` → `tenantattr` → `batch` → `stellyticspg` (traces e métricas) ou `nop` (logs).
-- **Guarda só contadores e histogramas** em `api_metric_1m`. Traces, spans e logs nunca são gravados (#31).
+- **Pipeline:** OTLP receiver (gRPC on 4317, HTTP on 4318) → `memory_limiter` → `tenantattr` → `batch` → `stellyticspg` (traces and metrics) or `nop` (logs).
+- **Stores only counters and histograms** in `api_metric_1m`. Traces, spans and logs are never written (#31).
 
-## Métricas (#31)
+## Metrics (#31)
 
-O exporter `stellyticspg` (`components/pgexporter`) usa o pacote `components/httpmetrics` para transformar cada lote em pontos de 1 minuto. Depois grava os pontos em `api_metric_1m` com `INSERT ... ON CONFLICT` somando, numa transação e em ordem fixa de chave.
+The `stellyticspg` exporter (`components/pgexporter`) uses the `components/httpmetrics` package to turn each batch into 1-minute points. It then writes the points to `api_metric_1m` with a summing `INSERT ... ON CONFLICT`, in one transaction and in a fixed key order.
 
-- **Entradas:** spans de servidor HTTP (`span.kind = SERVER` com método) e o histograma `http.server.request.duration` (ou o antigo `http.server.duration`, em ms). Todo o resto é descartado.
-- **Atributos:** de cada requisição ficam só rota normalizada (`routenorm`), método, status e duração. Os buckets de origem são levados para os 15 do banco.
-- **D9:** se o serviço mandou a métrica nos últimos 15 minutos, os spans dele são ignorados. Métricas e traces passam por batches separados, então na primeira troca pode haver dupla contagem por um lote.
-- **Cumulativo:** pontos `cumulative` viram delta com o último valor de cada série, em memória. A primeira observação só conta se o processo começou há até 5 minutos.
-- **Teto de rotas (D4):** 500 rotas por serviço e dia; o excesso vira `{other}`. É contado por instância do coletor.
-- **Falha no banco:** o lote é calculado uma vez e regravado até 4 vezes. Depois disso é descartado com erro permanente, porque recalcular a partir do OTLP daria delta zero nas séries cumulativas.
-- **Componentes próprios** em [`components/`](components/).
+- **Inputs:** HTTP server spans (`span.kind = SERVER` with a method) and the `http.server.request.duration` histogram (or the old `http.server.duration`, in ms). Everything else is dropped.
+- **Attributes:** from each request only the normalized route (`routenorm`), method, status and duration are kept. The source buckets are mapped to the 15 in the database.
+- **D9:** if the service sent the metric in the last 15 minutes, its spans are ignored. Metrics and traces go through separate batches, so on the first switch there may be double counting for one batch.
+- **Cumulative:** `cumulative` points become deltas against the last value of each series, in memory. The first observation only counts if the process started at most 5 minutes ago.
+- **Route cap (D4):** 500 routes per service and day; the excess becomes `{other}`. It is counted per collector instance.
+- **Database failure:** the batch is computed once and rewritten up to 4 times. After that it is dropped with a permanent error, because recomputing from the OTLP would give a zero delta on the cumulative series.
+- **Own components** in [`components/`](components/).
 
-## Autenticação (#30)
+## Authentication (#30)
 
-Toda requisição OTLP precisa de `Authorization: Bearer ntf_<prefixo>_<segredo>` (spec do E2, seção 5), em HTTP e em gRPC.
+Every OTLP request needs `Authorization: Bearer ntf_<prefix>_<secret>` (E2 spec, section 5), over HTTP and over gRPC.
 
-1. A extensão `ingestkeyauth` busca a chave pelo prefixo na visão `ingest_key_active`, com o usuário `stellytics_collector`, e compara o SHA-256 em tempo constante.
-2. Chave ausente, mal formada, errada, revogada, de serviço arquivado ou de tenant que não está ativo recebe `401` (HTTP) ou `Unauthenticated` (gRPC). A resposta é a mesma em todos os casos.
-3. As respostas, positivas e negativas, ficam em cache por `INGEST_KEY_CACHE_TTL` (no máximo 60 s, 5 s no Compose). Uma revogação vale em até esse tempo. Erro do banco não fica em cache.
-4. O processor `tenantattr` apaga do recurso o que o cliente mandou como tenant e grava `stellytics.tenant.id` e `stellytics.api_service.id` com os valores da chave. Ele vem antes do `batch`, que perde o contexto do pedido. Dado que chegue sem autenticação é recusado ali.
-5. A chave completa nunca vai para log; só o prefixo.
+1. The `ingestkeyauth` extension looks the key up by prefix in the `ingest_key_active` view, as the `stellytics_collector` user, and compares the SHA-256 in constant time.
+2. A key that is missing, malformed, wrong, revoked, of an archived service or of a tenant that is not active gets `401` (HTTP) or `Unauthenticated` (gRPC). The response is the same in all cases.
+3. The answers, positive and negative, are cached for `INGEST_KEY_CACHE_TTL` (at most 60 s, 5 s in Compose). A revocation takes effect within that time. A database error is not cached.
+4. The `tenantattr` processor erases from the resource what the client sent as tenant and writes `stellytics.tenant.id` and `stellytics.api_service.id` with the key's values. It comes before `batch`, which loses the request context. Data that arrives without authentication is refused there.
+5. The full key never goes to a log; only the prefix.
 
-## Código gerado
+## Generated code
 
-O manifesto é [`builder-config.yaml`](builder-config.yaml), com os componentes do core do Collector v0.164.0 (core v1.70.0) e os nossos. O OCB sempre cria um `go.mod` próprio. Como o ADR 0002 pede um módulo Go só em `services/`, o [`generate.sh`](generate.sh) gera numa pasta temporária e copia só os `.go` para `cmd/stellytics-collector`. Depois de mudar o manifesto ou a versão do OCB:
+The manifest is [`builder-config.yaml`](builder-config.yaml), with the core components of Collector v0.164.0 (core v1.70.0) and ours. The OCB always creates its own `go.mod`. Since ADR 0002 asks for a single Go module in `services/`, [`generate.sh`](generate.sh) generates into a temporary folder and copies only the `.go` files to `cmd/stellytics-collector`. After changing the manifest or the OCB version:
 
 ```bash
 cd services && collector/generate.sh && go mod tidy
 ```
 
-O job `go` do CI confere que o código gerado está commitado. Ao subir a versão do Collector, todos os módulos `go.opentelemetry.io/collector/...` precisam ir juntos, na mesma release e com pelo menos 14 dias.
+The `go` CI job checks that the generated code is committed. When bumping the Collector version, all `go.opentelemetry.io/collector/...` modules must move together, in the same release and at least 14 days old.
 
-## Rodar
+## Running
 
 ```bash
 cd services && go build -o /tmp/stellytics-collector ./collector/cmd/stellytics-collector
 DATABASE_URL=postgresql://stellytics_collector:stellytics_collector@127.0.0.1:5432/stellytics /tmp/stellytics-collector --config collector/config.yaml
 ```
 
-No Compose, o serviço `collector` publica 4317 e 4318 em `127.0.0.1`. A imagem é `scratch`; o healthcheck do contêiner é o binário `/healthcheck`, que faz um GET no receiver HTTP.
+In Compose, the `collector` service publishes 4317 and 4318 on `127.0.0.1`. The image is `scratch`; the container healthcheck is the `/healthcheck` binary, which sends a GET to the HTTP receiver.
 
-## Testes
+## Tests
 
-- `components/ingestkeyauth`: unidade (formato, cache, erro do banco) e integração com a visão real como `stellytics_collector` (precisa de `DATABASE_URL`; veja `internal/pgtest`).
-- `components/tenantattr`: inclui `pipeline_test.go`, que sobe o receiver OTLP de verdade em processo e confere HTTP e gRPC: recusa sem chave e tenant e serviço vindos da chave, por cima do que o cliente mandou.
-- `components/httpmetrics`: spans e histogramas para pontos, remapeamento de buckets e ms, cumulativo para delta, D9, teto de rotas.
-- `components/pgexporter`: retentativa sobre o mesmo lote e upsert real em `api_metric_1m` como `stellytics_collector`.
-- `e2e/` (tag `e2e`, job `compose` do CI): contra o contêiner, com chaves criadas no banco.
-  - Passam a chave válida; são recusadas a errada, a ausente e a de tenant removido.
-  - A métrica de um serviço é gravada, e os spans dele são ignorados (D9).
-  - Os spans de outro serviço viram rota normalizada.
-  - Logs e spans de cliente não deixam nada.
+- `components/ingestkeyauth`: unit (format, cache, database error) and integration with the real view as `stellytics_collector` (needs `DATABASE_URL`; see `internal/pgtest`).
+- `components/tenantattr`: includes `pipeline_test.go`, which starts the real OTLP receiver in process and checks HTTP and gRPC: refusal without a key, and tenant and service taken from the key, over what the client sent.
+- `components/httpmetrics`: spans and histograms to points, bucket and ms remapping, cumulative to delta, D9, route cap.
+- `components/pgexporter`: retry over the same batch and a real upsert into `api_metric_1m` as `stellytics_collector`.
+- `e2e/` (tag `e2e`, CI job `compose`): against the container, with keys created in the database.
+  - The valid key passes; the wrong one, the missing one and the one of a removed tenant are refused.
+  - The metric of one service is written, and its spans are ignored (D9).
+  - The spans of another service become a normalized route.
+  - Logs and client spans leave nothing behind.

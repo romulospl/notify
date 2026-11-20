@@ -1,22 +1,22 @@
-# NNNN. Título da decisão
+# NNNN. Decision title
 
-- **Status:** Proposto
-- **Data:** DD/MM/AAAA
+- **Status:** Proposed
+- **Date:** DD/MM/YYYY
 - **Issue:** #
 
-## Contexto
+## Context
 
-Qual problema ou força motivou a decisão.
+Which problem or force motivated the decision.
 
-## Decisão
+## Decision
 
-O que foi decidido, de forma direta.
+What was decided, stated directly.
 
-## Alternativas consideradas
+## Alternatives considered
 
-| Alternativa | Prós | Contras |
+| Alternative | Pros | Cons |
 |---|---|---|
 
-## Consequências
+## Consequences
 
-O que fica mais fácil, o que fica mais difícil e o que precisa ser feito por causa da decisão.
+What becomes easier, what becomes harder and what needs to be done because of the decision.

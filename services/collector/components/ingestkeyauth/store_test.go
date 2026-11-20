@@ -17,13 +17,13 @@ import (
 	"github.com/romulospl/stellytics/services/internal/pgtest"
 )
 
-// Teste de integração do Store com a visão real ingest_key_active, como o
-// usuário stellytics_collector. Precisa de DATABASE_URL (veja internal/pgtest).
-// COLLECTOR_DATABASE_URL troca a conexão usada como stellytics_collector.
+// Integration test of the Store with the real ingest_key_active view, as the
+// stellytics_collector user. Needs DATABASE_URL (see internal/pgtest).
+// COLLECTOR_DATABASE_URL replaces the connection used as stellytics_collector.
 func TestPGStoreIntegration(t *testing.T) {
 	adminURL := os.Getenv("DATABASE_URL")
 	if adminURL == "" {
-		t.Skip("DATABASE_URL não definida")
+		t.Skip("DATABASE_URL not set")
 	}
 	ctx := context.Background()
 	adminURL = pgtest.Database(t, adminURL)
@@ -31,7 +31,7 @@ func TestPGStoreIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Fecha a conexão só depois das limpezas (t.Cleanup roda depois dos defer).
+	// Close the connection only after the cleanups (t.Cleanup runs after the defers).
 	t.Cleanup(func() { admin.Close(context.Background()) })
 
 	userID := createUser(t, admin)
@@ -55,31 +55,31 @@ func TestPGStoreIntegration(t *testing.T) {
 
 	ctx2, err := a.Authenticate(ctx, header("Authorization", "Bearer "+good))
 	if err != nil {
-		t.Fatalf("chave ativa recusada: %v", err)
+		t.Fatalf("active key refused: %v", err)
 	}
 	if got := attr(ctx2, AttrTenantID); got != active {
-		t.Errorf("tenant = %q, quero %q", got, active)
+		t.Errorf("tenant = %q, want %q", got, active)
 	}
 	if got := attr(ctx2, AttrServiceID); got != svc {
-		t.Errorf("serviço = %q, quero %q", got, svc)
+		t.Errorf("service = %q, want %q", got, svc)
 	}
-	for name, key := range map[string]string{"revogada": revoked, "de serviço arquivado": ofArchived, "de tenant removido": ofRemoved} {
+	for name, key := range map[string]string{"revoked": revoked, "of an archived service": ofArchived, "of a removed tenant": ofRemoved} {
 		if _, err := a.Authenticate(ctx, header("Authorization", "Bearer "+key)); err == nil {
-			t.Errorf("chave %s aceita", name)
+			t.Errorf("%s key accepted", name)
 		}
 	}
 
-	// stellytics_collector só lê a visão.
+	// stellytics_collector only reads the view.
 	_, err = pool.Exec(ctx, `SELECT 1 FROM ingest_key LIMIT 1`)
-	pgtest.AssertDenied(t, "SELECT na ingest_key", err)
+	pgtest.AssertDenied(t, "SELECT on ingest_key", err)
 }
 
-// Último uso (migração 0008): a função grava o dia, uma vez por dia, só para
-// chave ativa, e o stellytics_collector não ganha mais nada na tabela.
+// Last use (migration 0008): the function stores the day, once per day, only
+// for an active key, and stellytics_collector gains nothing else on the table.
 func TestPGStoreTouch(t *testing.T) {
 	adminURL := os.Getenv("DATABASE_URL")
 	if adminURL == "" {
-		t.Skip("DATABASE_URL não definida")
+		t.Skip("DATABASE_URL not set")
 	}
 	ctx := context.Background()
 	adminURL = pgtest.Database(t, adminURL)
@@ -121,46 +121,46 @@ func TestPGStoreTouch(t *testing.T) {
 	}
 
 	if d, _ := lastUsed(good); d != nil {
-		t.Fatalf("last_used_on já preenchida: %s", *d)
+		t.Fatalf("last_used_on already set: %s", *d)
 	}
 	if err := store.Touch(ctx, prefix(good)); err != nil {
 		t.Fatal(err)
 	}
 	d, xmin := lastUsed(good)
 	if d == nil || *d != today {
-		t.Fatalf("last_used_on = %v, quero %s", d, today)
+		t.Fatalf("last_used_on = %v, want %s", d, today)
 	}
-	// Segunda chamada no mesmo dia: a linha não é reescrita.
+	// Second call on the same day: the row is not rewritten.
 	if err := store.Touch(ctx, prefix(good)); err != nil {
 		t.Fatal(err)
 	}
 	if _, xmin2 := lastUsed(good); xmin2 != xmin {
-		t.Errorf("a linha foi reescrita no mesmo dia (xmin %s -> %s)", xmin, xmin2)
+		t.Errorf("the row was rewritten on the same day (xmin %s -> %s)", xmin, xmin2)
 	}
 
-	// Revogada, de tenant removido e prefixo desconhecido: nada é gravado.
-	for name, key := range map[string]string{"revogada": revoked, "de tenant removido": ofRemoved} {
+	// Revoked, of a removed tenant and unknown prefix: nothing is written.
+	for name, key := range map[string]string{"revoked": revoked, "of a removed tenant": ofRemoved} {
 		if err := store.Touch(ctx, prefix(key)); err != nil {
 			t.Fatal(err)
 		}
 		if d, _ := lastUsed(key); d != nil {
-			t.Errorf("chave %s foi atualizada: %s", name, *d)
+			t.Errorf("%s key was updated: %s", name, *d)
 		}
 	}
 	if err := store.Touch(ctx, "zzzzzzzz"); err != nil {
 		t.Fatal(err)
 	}
 
-	// Menor privilégio: nenhuma outra escrita ou leitura na tabela ou fora dela.
+	// Least privilege: no other write or read on the table or outside it.
 	for what, q := range map[string]string{
-		"UPDATE de last_used_on":     `UPDATE ingest_key SET last_used_on = NULL`,
-		"UPDATE de revoked_at":       `UPDATE ingest_key SET revoked_at = NULL`,
-		"UPDATE de key_hash":         `UPDATE ingest_key SET key_hash = key_hash`,
+		"UPDATE of last_used_on":     `UPDATE ingest_key SET last_used_on = NULL`,
+		"UPDATE of revoked_at":       `UPDATE ingest_key SET revoked_at = NULL`,
+		"UPDATE of key_hash":         `UPDATE ingest_key SET key_hash = key_hash`,
 		"DELETE":                     `DELETE FROM ingest_key`,
-		"SELECT de key_hash":         `SELECT key_hash FROM ingest_key`,
-		"UPDATE em tenant":           `UPDATE tenant SET status = 'active'`,
-		"SELECT em operator_api_key": `SELECT 1 FROM operator_api_key`,
-		"UPDATE em api_service":      `UPDATE api_service SET name = name`,
+		"SELECT of key_hash":         `SELECT key_hash FROM ingest_key`,
+		"UPDATE on tenant":           `UPDATE tenant SET status = 'active'`,
+		"SELECT on operator_api_key": `SELECT 1 FROM operator_api_key`,
+		"UPDATE on api_service":      `UPDATE api_service SET name = name`,
 	} {
 		_, err := pool.Exec(ctx, q)
 		pgtest.AssertDenied(t, what, err)
@@ -172,13 +172,13 @@ func attr(ctx context.Context, name string) string {
 	return v
 }
 
-// createUser cria o autor das chaves. Chamada antes dos tenants, a limpeza
-// dele roda por último, depois que as chaves que o citam já saíram.
+// createUser creates the author of the keys. Called before the tenants, its
+// cleanup runs last, after the keys that reference it are already gone.
 func createUser(t *testing.T, db *pgx.Conn) string {
 	t.Helper()
 	id := pgtest.NewUUID(t)
 	if _, err := db.Exec(context.Background(),
-		`INSERT INTO "user" (id, name, email, email_verified) VALUES ($1, 'Teste', $1 || '@collector.invalid', true)`, id,
+		`INSERT INTO "user" (id, name, email, email_verified) VALUES ($1, 'Test', $1 || '@collector.invalid', true)`, id,
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func createService(t *testing.T, db *pgx.Conn, tenantID string, archived bool) s
 	return id
 }
 
-// createKey grava uma chave no formato do portal (#59) e devolve a chave completa.
+// createKey writes a key in the portal's format (#59) and returns the full key.
 func createKey(t *testing.T, db *pgx.Conn, userID, tenantID, serviceID string, revoked bool) string {
 	t.Helper()
 	const alphabet = "abcdefghijklmnopqrstuvwxyz234567"

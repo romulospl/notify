@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { PERIODS, type PeriodKey } from "@/lib/period";
 
-// Seletor de período dos painéis web (#28, #29): uma linha acima de tudo o que
-// ele filtra. São links (GET), então funciona sem JavaScript.
+// Period picker of the web dashboards (#28, #29): one row above everything it
+// filters. They are links (GET), so it works without JavaScript.
 export function PeriodPicker({ current, href }: { current: PeriodKey; href: (key: PeriodKey) => string }) {
   return (
     <nav aria-label="Period" className="mt-6 inline-flex flex-wrap gap-0.5 rounded-control border border-border bg-surface p-0.5 text-sm">

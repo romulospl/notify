@@ -1,6 +1,6 @@
-// Roda uma consulta como outro papel do banco (stellytics_ingest ou
-// stellytics_collector, spec do E2, D4), dentro de uma transação desfeita no fim.
-// Exige os papéis de infra/compose/postgres/init/02-ingest-roles.sh.
+// Runs a query as another database role (stellytics_ingest or
+// stellytics_collector, E2 spec, D4), inside a transaction rolled back at the end.
+// Requires the roles from infra/compose/postgres/init/02-ingest-roles.sh.
 import { sql } from "@/lib/db";
 
 class Rollback extends Error {}

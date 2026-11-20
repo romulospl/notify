@@ -11,21 +11,23 @@ import (
 	"github.com/romulospl/stellytics/services/internal/pgtest"
 )
 
-// Teste de integração: precisa de DATABASE_URL (o banco stellytics, com o dono das
-// tabelas) e dos usuários de 02-ingest-roles.sh, que o CI e o Compose criam.
-// INGEST_DATABASE_URL troca a conexão usada como stellytics_ingest.
+// Integration test: it needs DATABASE_URL (the stellytics database, with the
+// owner of the tables) and the users from 02-ingest-roles.sh, which CI and
+// Compose create. INGEST_DATABASE_URL overrides the connection used as
+// stellytics_ingest.
 //
-// O teste nunca aplica migrações no banco de DATABASE_URL: elas são do portal,
-// que as registra no Drizzle, e aplicá-las por fora faria o portal falhar ao
-// migrar depois. Com permissão de criar banco (o CI), ele cria um banco
-// temporário, aplica as migrações lá e o apaga no fim. Sem essa permissão (o
-// usuário stellytics do Compose), usa o banco de DATABASE_URL se o portal já o
-// migrou, e pula o teste se não.
+// The test never applies migrations to the DATABASE_URL database: they belong
+// to the portal, which records them in Drizzle, and applying them from outside
+// would make the portal fail when migrating later. With permission to create a
+// database (CI), it creates a temporary database, applies the migrations there
+// and drops it at the end. Without that permission (the Compose stellytics
+// user), it uses the DATABASE_URL database if the portal has already migrated
+// it, and skips the test if not.
 
 func TestPGIntegration(t *testing.T) {
 	adminURL := os.Getenv("DATABASE_URL")
 	if adminURL == "" {
-		t.Skip("DATABASE_URL não definida")
+		t.Skip("DATABASE_URL not set")
 	}
 	ctx := context.Background()
 	adminURL = pgtest.Database(t, adminURL)
@@ -34,7 +36,8 @@ func TestPGIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Fecha a conexão só depois das limpezas (t.Cleanup roda depois dos defer).
+	// Closes the connection only after the cleanups (t.Cleanup runs after the
+	// defers).
 	t.Cleanup(func() { admin.Close(context.Background()) })
 
 	active := createTenant(t, admin, "active")
@@ -81,19 +84,19 @@ func TestPGIntegration(t *testing.T) {
 			t.Fatalf("Active(%s): %v", id, err)
 		}
 		if got != w {
-			t.Errorf("Active(%s) = %v, quero %v", id, got, w)
+			t.Errorf("Active(%s) = %v, want %v", id, got, w)
 		}
 	}
 
-	// stellytics_ingest só lê a ingest_site.
+	// stellytics_ingest only reads ingest_site.
 	var n int
 	if err := pool.QueryRow(ctx, `SELECT count(*)::int FROM ingest_site`).Scan(&n); err != nil {
-		t.Fatalf("SELECT na ingest_site: %v", err)
+		t.Fatalf("SELECT on ingest_site: %v", err)
 	}
 	_, err = pool.Exec(ctx, `SELECT 1 FROM site`)
-	pgtest.AssertDenied(t, "SELECT na site", err)
+	pgtest.AssertDenied(t, "SELECT on site", err)
 	_, err = pool.Exec(ctx, `SELECT 1 FROM "user"`)
-	pgtest.AssertDenied(t, "SELECT na user", err)
+	pgtest.AssertDenied(t, "SELECT on user", err)
 	_, err = pool.Exec(ctx, `CREATE TABLE ingest_probe (x int)`)
 	pgtest.AssertDenied(t, "CREATE TABLE", err)
 }

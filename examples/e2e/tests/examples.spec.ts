@@ -1,5 +1,5 @@
-// Os três exemplos registram page views no Umami, passando pelo gateway com a
-// prova de execução de JS (#27). A conferência é feita no banco do Umami.
+// The three examples record page views in Umami, going through the gateway with
+// the JS execution proof (#27). The check is done in the Umami database.
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
 
@@ -8,11 +8,11 @@ test.afterAll(() => umami.end());
 
 function site(name: "SITE_STATIC" | "SITE_SPA" | "SITE_NEXT" | "SITE_WALLET"): string {
   const id = process.env[name];
-  if (!id) throw new Error(`${name} não definido: rode pelo run.mjs`);
+  if (!id) throw new Error(`${name} not set: run through run.mjs`);
   return id;
 }
 
-// Caminhos dos page views do site, em ordem alfabética.
+// Paths of the site's page views, in alphabetical order.
 async function pageviews(website: string): Promise<string[]> {
   const rows = await umami<{ url_path: string }[]>`
     SELECT url_path FROM website_event WHERE website_id = ${website} AND event_type = 1`;
@@ -23,7 +23,7 @@ async function expectPageviews(website: string, want: string[]) {
   await expect.poll(() => pageviews(website), { timeout: 30_000 }).toEqual([...want].sort());
 }
 
-// Marca a janela; se a página recarregar, a marca some.
+// Marks the window; if the page reloads, the mark is gone.
 async function mark(page: Page) {
   await page.evaluate(() => Object.assign(window, { __noReload: true }));
 }
@@ -31,37 +31,38 @@ async function expectNoReload(page: Page) {
   expect(await page.evaluate(() => (window as { __noReload?: boolean }).__noReload)).toBe(true);
 }
 
-test("HTML estático: um page view por página carregada", async ({ page }) => {
+test("Static HTML: one page view per loaded page", async ({ page }) => {
   const website = site("SITE_STATIC");
   await page.goto("http://127.0.0.1:4001/");
   await expectPageviews(website, ["/"]);
-  await page.getByRole("link", { name: "Documentação" }).click();
+  await page.getByRole("link", { name: "Documentation" }).click();
   await expect(page).toHaveURL(/\/docs\.html$/);
   await expectPageviews(website, ["/", "/docs.html"]);
 });
 
-test("SPA: conta cada mudança de rota sem recarregar", async ({ page }) => {
+test("SPA: counts each route change without reloading", async ({ page }) => {
   const website = site("SITE_SPA");
   await page.goto("http://127.0.0.1:4002/");
   await expectPageviews(website, ["/"]);
   await mark(page);
 
-  // O script junta navegações a menos de 300 ms uma da outra num page view só,
-  // o da rota final. Como uma pessoa, o teste espera cada rota ser contada.
-  await page.getByRole("link", { name: "Preços" }).click();
-  await expect(page).toHaveTitle("SPA: preços");
-  await expectPageviews(website, ["/", "/precos"]);
-  await page.getByRole("link", { name: "Contato" }).click();
-  await expect(page).toHaveTitle("SPA: contato");
-  await expectPageviews(website, ["/", "/precos", "/contato"]);
+  // The script merges navigations less than 300 ms apart into a single page
+  // view, the one for the final route. Like a person, the test waits for each
+  // route to be counted.
+  await page.getByRole("link", { name: "Pricing" }).click();
+  await expect(page).toHaveTitle("SPA: pricing");
+  await expectPageviews(website, ["/", "/pricing"]);
+  await page.getByRole("link", { name: "Contact" }).click();
+  await expect(page).toHaveTitle("SPA: contact");
+  await expectPageviews(website, ["/", "/pricing", "/contact"]);
   await page.goBack();
-  await expect(page).toHaveURL(/\/precos$/);
+  await expect(page).toHaveURL(/\/pricing$/);
 
   await expectNoReload(page);
-  await expectPageviews(website, ["/", "/precos", "/contato", "/precos"]);
+  await expectPageviews(website, ["/", "/pricing", "/contact", "/pricing"]);
 });
 
-test("Next.js com SSR: a tag vem no HTML do servidor e a navegação do roteador conta", async ({ page, request }) => {
+test("Next.js with SSR: the tag ships in the server HTML and router navigation counts", async ({ page, request }) => {
   const website = site("SITE_NEXT");
   const html = await (await request.get("http://127.0.0.1:4003/")).text();
   expect(html).toMatch(/<script[^>]+src="[^"]+\/s\/v\d+\.\d+\.\d+\/n\.js"/);
@@ -71,7 +72,7 @@ test("Next.js com SSR: a tag vem no HTML do servidor e a navegação do roteador
   await page.goto("http://127.0.0.1:4003/");
   await expectPageviews(website, ["/"]);
   await mark(page);
-  await page.getByRole("link", { name: "Documentação" }).click();
+  await page.getByRole("link", { name: "Documentation" }).click();
   await expect(page).toHaveURL(/\/docs$/);
   await expectNoReload(page);
   await expectPageviews(website, ["/", "/docs"]);

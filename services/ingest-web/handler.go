@@ -21,16 +21,16 @@ import (
 	"github.com/romulospl/stellytics/services/ingest-web/internal/site"
 )
 
-// maxBody é o tamanho máximo do corpo de um evento.
+// maxBody is the maximum size of an event body.
 const maxBody = 16 << 10
 
-// fingerprints é a parte do fingerprint.Counter que o handler usa.
+// fingerprints is the part of fingerprint.Counter that the handler uses.
 type fingerprints interface {
 	Admit(ip netip.Addr, site string, fp uint64) (ok, fresh bool)
 	Forget(ip netip.Addr, site string, fp uint64)
 }
 
-// limiter é a parte do limit.Limiter que o handler usa.
+// limiter is the part of limit.Limiter that the handler uses.
 type limiter interface {
 	Allow(key netip.Addr) bool
 }
@@ -42,8 +42,8 @@ type gateway struct {
 	ips     clientip.Resolver
 	proofs  *proof.Issuer
 	fps     fingerprints
-	scripts *os.Root // nil desliga /s/
-	// health confere as dependências no /healthz; nil responde sempre 200.
+	scripts *os.Root // nil turns /s/ off
+	// health checks the dependencies on /healthz; nil always answers 200.
 	health func(context.Context) error
 	log    *slog.Logger
 }
@@ -60,8 +60,8 @@ func (g *gateway) routes() http.Handler {
 	return g.recoverPanic(mux)
 }
 
-// recoverPanic responde 500 a um panic e registra só o erro. Sem ele, o
-// net/http registraria o panic junto com o endereço completo do cliente.
+// recoverPanic answers 500 to a panic and logs only the error. Without it,
+// net/http would log the panic together with the client's full address.
 func (g *gateway) recoverPanic(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -69,7 +69,7 @@ func (g *gateway) recoverPanic(next http.Handler) http.Handler {
 				if v == http.ErrAbortHandler {
 					panic(v)
 				}
-				g.log.Error("panic no handler", "path", r.URL.Path, "panic", fmt.Sprint(v))
+				g.log.Error("panic in handler", "path", r.URL.Path, "panic", fmt.Sprint(v))
 				http.Error(w, "internal error", http.StatusInternalServerError)
 			}
 		}()
@@ -77,8 +77,8 @@ func (g *gateway) recoverPanic(next http.Handler) http.Handler {
 	})
 }
 
-// cors libera a chamada de qualquer origem. Nenhuma resposta usa cookie, então
-// não há Allow-Credentials.
+// cors allows the call from any origin. No response uses a cookie, so there is
+// no Allow-Credentials.
 func cors(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 }
@@ -92,8 +92,9 @@ func (g *gateway) preflight(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// event recebe o page view do script. O script manda o JSON como text/plain
-// para não disparar preflight de CORS; application/json também é aceito.
+// event receives the page view from the script. The script sends the JSON as
+// text/plain so as not to trigger a CORS preflight; application/json is also
+// accepted.
 func (g *gateway) event(w http.ResponseWriter, r *http.Request) {
 	cors(w)
 
@@ -124,46 +125,48 @@ func (g *gateway) event(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sem prova de execução de JS válida (#25), o evento é descartado com a
-	// mesma resposta do sucesso.
+	// Without a valid JS execution proof (#25), the event is dropped with the
+	// same response as success.
 	if err := g.proofs.Verify(ev.Payload.Website, ev.Proof.Token, ev.Proof.Nonce); err != nil {
-		g.log.Debug("evento descartado", "reason", err.Error())
+		g.log.Debug("event dropped", "reason", err.Error())
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
 	active, err := g.sites.Active(r.Context(), ev.Payload.Website)
 	if err != nil {
-		g.log.Error("consulta à ingest_site falhou", "err", err)
+		g.log.Error("ingest_site query failed", "err", err)
 		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	// Spec do E2, seção 6: site desconhecido ou que não aceita ingestão recebe a
-	// mesma resposta do sucesso, para não dar pista a quem testa IDs, e o evento
-	// é descartado.
+	// E2 spec, section 6: a site that is unknown or does not accept ingestion
+	// gets the same response as success, to give no hint to whoever probes IDs,
+	// and the event is dropped.
 	if !active {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	// Muitos navegadores diferentes no mesmo IP truncado e site (#26): as
-	// fingerprints além do limite são descartadas, com a mesma resposta do sucesso.
+	// Many different browsers on the same truncated IP and site (#26): the
+	// fingerprints beyond the limit are dropped, with the same response as
+	// success.
 	fp := fingerprint.Of(r.UserAgent(), r.Header.Get("Accept-Language"), ev.Payload.Language, ev.Payload.Screen)
 	admitted, fresh := g.fps.Admit(truncated, ev.Payload.Website, fp)
 	if !admitted {
-		g.log.Debug("evento descartado", "reason", "fingerprints demais no IP")
+		g.log.Debug("event dropped", "reason", "too many fingerprints on the IP")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	// O evento só conta para a cota de fingerprints se for repassado. Saturação,
-	// cancelamento do cliente, falha do Umami e panic (defer) devolvem a vaga de
-	// fingerprint que este evento acabou de ocupar.
+	// The event only counts towards the fingerprint quota if it is relayed.
+	// Saturation, client cancellation, an Umami failure and a panic (defer)
+	// return the fingerprint slot this event has just taken.
 	//
-	// Limite conhecido: se outro evento do mesmo IP e da mesma fingerprint passou
-	// entre o Admit e o Forget (viu a fingerprint como "não nova" e foi gravado),
-	// o Forget também tira a fingerprint dele da conta. A cota fica subcontada
-	// por uma fingerprint, e só sob concorrência; o efeito é frouxo, não rígido.
+	// Known limitation: if another event from the same IP and the same
+	// fingerprint went through between Admit and Forget (it saw the fingerprint
+	// as "not new" and was written), Forget also removes its fingerprint from
+	// the count. The quota is undercounted by one fingerprint, and only under
+	// concurrency; the effect is loose, not strict.
 	relayed := false
 	if fresh {
 		defer func() {
@@ -175,19 +178,20 @@ func (g *gateway) event(w http.ResponseWriter, r *http.Request) {
 
 	if err := g.relay.Send(r.Context(), ev, r.UserAgent(), truncated); err != nil {
 		if errors.Is(err, relay.ErrSaturated) {
-			// Repasses ao Umami no limite: o evento é perdido (o script não tenta
-			// de novo) e o contador agregado registra. Sem log por evento.
+			// Relays to Umami at the limit: the event is lost (the script does
+			// not retry) and the aggregated counter records it. No per-event
+			// log.
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		if r.Context().Err() != nil {
-			// O cliente desistiu (ou estourou o prazo dele) durante a espera ou o
-			// repasse: não é falha do Umami nem do gateway, não há quem leia a
-			// resposta. Sem Error e sem 502.
-			g.log.Debug("evento descartado", "reason", "cliente cancelou")
+			// The client gave up (or its deadline ran out) during the wait or
+			// the relay: it is neither an Umami nor a gateway failure, and
+			// there is nobody to read the response. No Error and no 502.
+			g.log.Debug("event dropped", "reason", "client cancelled")
 			return
 		}
-		g.log.Error("repasse ao umami falhou", "err", err)
+		g.log.Error("relay to umami failed", "err", err)
 		http.Error(w, "bad gateway", http.StatusBadGateway)
 		return
 	}
@@ -195,8 +199,9 @@ func (g *gateway) event(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// challenge entrega o desafio da prova de execução de JS (#25) para o site
-// em ?s=. Não consulta a ingest_site: o desafio não diz se o site existe.
+// challenge hands out the challenge of the JS execution proof (#25) for the
+// site in ?s=. It does not query ingest_site: the challenge does not say
+// whether the site exists.
 func (g *gateway) challenge(w http.ResponseWriter, r *http.Request) {
 	cors(w)
 	ip, err := g.ips.FromRequest(r)
@@ -218,9 +223,9 @@ func (g *gateway) challenge(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(g.proofs.Challenge(strings.ToLower(website)))
 }
 
-// script serve os arquivos de SCRIPT_DIR. Cada versão fica em /s/vX.Y.Z/ e
-// nunca muda, por isso o cache é de um ano e imutável. os.Root impede que um
-// caminho saia da pasta.
+// script serves the files in SCRIPT_DIR. Each version lives in /s/vX.Y.Z/ and
+// never changes, which is why the cache is one year and immutable. os.Root
+// prevents a path from leaving the directory.
 func (g *gateway) script(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(path.Clean("/"+strings.TrimPrefix(r.URL.Path, "/s/")), "/")
 	if name == "" {
@@ -230,7 +235,7 @@ func (g *gateway) script(w http.ResponseWriter, r *http.Request) {
 	f, err := g.scripts.Open(name)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
-			g.log.Warn("erro ao abrir script", "err", err)
+			g.log.Warn("error opening script", "err", err)
 		}
 		http.NotFound(w, r)
 		return

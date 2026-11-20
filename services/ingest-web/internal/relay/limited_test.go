@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// gate é um Sender que segura cada chamada até receber um sinal.
+// gate is a Sender that holds each call until it receives a signal.
 type gate struct {
 	started chan struct{}
 	release chan struct{}
@@ -48,7 +48,7 @@ func waitStarted(t *testing.T, g *gate, n int) {
 		select {
 		case <-g.started:
 		case <-time.After(2 * time.Second):
-			t.Fatal("repasse não começou")
+			t.Fatal("relay did not start")
 		}
 	}
 }
@@ -63,23 +63,23 @@ func TestLimitedCapsInflightAndRefusesAfterWait(t *testing.T) {
 	}
 	waitStarted(t, g, 2)
 	if l.InFlight() != 2 {
-		t.Fatalf("em voo = %d", l.InFlight())
+		t.Fatalf("in flight = %d", l.InFlight())
 	}
 	start := time.Now()
 	err := send(l, context.Background())
 	if !errors.Is(err, ErrSaturated) {
-		t.Fatalf("err = %v, quero ErrSaturated", err)
+		t.Fatalf("err = %v, want ErrSaturated", err)
 	}
 	if d := time.Since(start); d < 25*time.Millisecond || d > time.Second {
-		t.Errorf("esperou %v, quero cerca de 30ms", d)
+		t.Errorf("waited %v, want about 30ms", d)
 	}
 	if g.calls.Load() != 2 || l.Dropped() != 1 {
-		t.Errorf("chamadas = %d, descartados = %d", g.calls.Load(), l.Dropped())
+		t.Errorf("calls = %d, dropped = %d", g.calls.Load(), l.Dropped())
 	}
 	close(g.release)
 	wg.Wait()
 	if l.InFlight() != 0 {
-		t.Errorf("vagas não devolvidas: %d", l.InFlight())
+		t.Errorf("slots not returned: %d", l.InFlight())
 	}
 }
 
@@ -91,18 +91,18 @@ func TestLimitedWaiterGetsFreedSlot(t *testing.T) {
 	waitStarted(t, g, 1)
 	second := make(chan error, 1)
 	go func() { second <- send(l, context.Background()) }()
-	time.Sleep(20 * time.Millisecond) // o segundo está esperando a vaga
-	g.release <- struct{}{}           // libera o primeiro
+	time.Sleep(20 * time.Millisecond) // the second one is waiting for the slot
+	g.release <- struct{}{}           // releases the first one
 	if err := <-first; err != nil {
 		t.Fatal(err)
 	}
-	waitStarted(t, g, 1) // o segundo pegou a vaga
+	waitStarted(t, g, 1) // the second one took the slot
 	g.release <- struct{}{}
 	if err := <-second; err != nil {
-		t.Fatalf("o que esperou deveria passar: %v", err)
+		t.Fatalf("the one that waited should go through: %v", err)
 	}
 	if l.Dropped() != 0 {
-		t.Errorf("descartados = %d", l.Dropped())
+		t.Errorf("dropped = %d", l.Dropped())
 	}
 }
 
@@ -124,18 +124,18 @@ func TestLimitedReleasesOnPanic(t *testing.T) {
 	func() {
 		defer func() {
 			if recover() == nil {
-				t.Error("o panic deveria passar")
+				t.Error("the panic should go through")
 			}
 		}()
 		_ = send(l, context.Background())
 	}()
 	if l.InFlight() != 0 {
-		t.Fatalf("vaga presa depois do panic: %d", l.InFlight())
+		t.Fatalf("slot stuck after the panic: %d", l.InFlight())
 	}
 	g.fn = nil
 	close(g.release)
 	if err := send(l, context.Background()); err != nil {
-		t.Fatalf("depois do panic: %v", err)
+		t.Fatalf("after the panic: %v", err)
 	}
 }
 
@@ -146,12 +146,12 @@ func TestLimitedReleasesOnErrorAndCancel(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- send(l, ctx) }()
 	waitStarted(t, g, 1)
-	cancel() // o cliente desistiu no meio do repasse
+	cancel() // the client gave up in the middle of the relay
 	if err := <-done; !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v", err)
 	}
 	if l.InFlight() != 0 {
-		t.Fatalf("vaga presa depois do cancelamento: %d", l.InFlight())
+		t.Fatalf("slot stuck after the cancellation: %d", l.InFlight())
 	}
 }
 
@@ -169,13 +169,13 @@ func TestLimitedCancelWhileWaitingIsNotCountedAsDrop(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	if l.Dropped() != 0 || g.calls.Load() != 1 {
-		t.Errorf("descartados = %d, chamadas = %d", l.Dropped(), g.calls.Load())
+		t.Errorf("dropped = %d, calls = %d", l.Dropped(), g.calls.Load())
 	}
 	close(g.release)
 }
 
-// Muitas chegadas ao mesmo tempo: nunca passa de max em voo, tudo é aceito ou
-// recusado, nada fica pendurado e nenhuma goroutine vaza.
+// Many arrivals at the same time: it never goes past max in flight, everything
+// is accepted or refused, nothing is left hanging and no goroutine leaks.
 func TestLimitedConcurrentNoLeak(t *testing.T) {
 	before := runtime.NumGoroutine()
 	var cur, peak, ok, refused atomic.Int64
@@ -209,20 +209,20 @@ func TestLimitedConcurrentNoLeak(t *testing.T) {
 	}
 	wg.Wait()
 	if peak.Load() > 4 {
-		t.Errorf("pico em voo = %d, limite 4", peak.Load())
+		t.Errorf("peak in flight = %d, limit 4", peak.Load())
 	}
 	if ok.Load()+refused.Load() != 200 || refused.Load() != int64(l.Dropped()) || refused.Load() == 0 || ok.Load() == 0 {
-		t.Errorf("aceitos %d, recusados %d, contador %d", ok.Load(), refused.Load(), l.Dropped())
+		t.Errorf("accepted %d, refused %d, counter %d", ok.Load(), refused.Load(), l.Dropped())
 	}
 	if l.InFlight() != 0 {
-		t.Errorf("em voo no fim = %d", l.InFlight())
+		t.Errorf("in flight at the end = %d", l.InFlight())
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for runtime.NumGoroutine() > before && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	if n := runtime.NumGoroutine(); n > before {
-		t.Errorf("goroutines: %d antes, %d depois", before, n)
+		t.Errorf("goroutines: %d before, %d after", before, n)
 	}
 }
 
@@ -239,13 +239,13 @@ func TestLimitedReservesSlotForAnotherSite(t *testing.T) {
 	}
 	waitStarted(t, g, 2)
 	if err := l.Send(context.Background(), event("a"), "", netip.Addr{}); !errors.Is(err, ErrSaturated) {
-		t.Fatalf("site em pico: %v", err)
+		t.Fatalf("site at peak: %v", err)
 	}
 	done := make(chan error, 1)
 	go func() { done <- l.Send(context.Background(), event("b"), "", netip.Addr{}) }()
 	waitStarted(t, g, 1)
 	if l.InFlight() != 3 {
-		t.Fatalf("em voo: %d", l.InFlight())
+		t.Fatalf("in flight: %d", l.InFlight())
 	}
 	close(g.release)
 	if err := <-done; err != nil {
@@ -270,7 +270,7 @@ func TestLimitedDoesNotRetainRejectedSites(t *testing.T) {
 	n := len(l.bySite)
 	l.mu.Unlock()
 	if n != 2 {
-		t.Fatalf("sites em memória = %d", n)
+		t.Fatalf("sites in memory = %d", n)
 	}
 	close(g.release)
 }

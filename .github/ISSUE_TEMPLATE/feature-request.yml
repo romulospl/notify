@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest a new metric, dashboard or integration.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What need the feature solves and for whom (tenant, SCF operator, contributor).
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How you imagine the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: The feature requires no cookies, browser storage or storing personal data (such as the full IP).

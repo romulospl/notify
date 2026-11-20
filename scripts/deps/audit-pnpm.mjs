@@ -1,84 +1,84 @@
-// Roda "pnpm audit --prod --json" e falha em vulnerabilidade high ou critical.
-// Uma segunda passada sem --prod so lista as de devDependencies.
+// Runs "pnpm audit --prod --json" and fails on a high or critical vulnerability.
+// A second pass without --prod only lists the devDependencies ones.
 //
-// Distingue tres resultados, porque o pnpm sai com 1 tanto para "achei
-// vulnerabilidade" quanto para "nao consegui consultar" (rede, registry fora,
-// endpoint fora do ar), e este ultimo nao pode virar verde:
-//   0  consulta feita, nada high/critical (moderate e low so sao listadas)
-//   1  consulta feita, ha vulnerabilidade high ou critical
-//   2  nao consegui consultar ou a resposta nao e um relatorio de audit
+// Tells three results apart, because pnpm exits with 1 both for "found a
+// vulnerability" and for "could not query" (network, registry down, endpoint
+// unavailable), and the latter must not turn green:
+//   0  query done, nothing high/critical (moderate and low are only listed)
+//   1  query done, there is a high or critical vulnerability
+//   2  could not query or the response is not an audit report
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 const SEVERITIES = ["info", "low", "moderate", "high", "critical"];
 const FAIL_FROM = "high";
 
-// Aceita o texto de "pnpm audit --json" (ou use --file <arquivo> para teste).
+// Takes the text of "pnpm audit --json" (or use --file <file> for testing).
 export function interpret(stdout) {
   let report;
   try {
     report = JSON.parse(stdout);
   } catch {
-    return { code: 2, message: "A saida do pnpm audit nao e JSON." };
+    return { code: 2, message: "The pnpm audit output is not JSON." };
   }
   if (typeof report !== "object" || report === null || Array.isArray(report)) {
-    return { code: 2, message: "A saida do pnpm audit nao e um objeto JSON." };
+    return { code: 2, message: "The pnpm audit output is not a JSON object." };
   }
   if (report.error) {
-    return { code: 2, message: `Nao consegui consultar o audit: ${report.error.code ?? ""} ${report.error.message ?? ""}`.trim() };
+    return { code: 2, message: `Could not query the audit: ${report.error.code ?? ""} ${report.error.message ?? ""}`.trim() };
   }
   if (typeof report.advisories !== "object" || report.advisories === null || !report.metadata?.vulnerabilities) {
-    return { code: 2, message: "A resposta nao tem advisories nem metadata: nao e um relatorio de audit." };
+    return { code: 2, message: "The response has no advisories or metadata: it is not an audit report." };
   }
   const list = Object.values(report.advisories);
-  // Severidade desconhecida ou ausente ("unknown", "High") nao pode virar verde.
+  // An unknown or missing severity ("unknown", "High") must not turn green.
   const bad = list.filter((a) => !SEVERITIES.includes(a?.severity));
   if (bad.length > 0) {
-    return { code: 2, message: `Severidade desconhecida no relatorio do audit: ${bad.map((a) => JSON.stringify(a?.severity)).join(", ")}. Esperado: ${SEVERITIES.join(", ")}.` };
+    return { code: 2, message: `Unknown severity in the audit report: ${bad.map((a) => JSON.stringify(a?.severity)).join(", ")}. Expected: ${SEVERITIES.join(", ")}.` };
   }
-  // Os totais do metadata precisam bater com a lista; senao a resposta esta incompleta.
+  // The metadata totals must match the list; otherwise the response is incomplete.
   for (const level of ["high", "critical"]) {
     const total = Number(report.metadata.vulnerabilities[level] ?? 0);
     const listed = list.filter((a) => a.severity === level).length;
     if (!Number.isFinite(total) || (total > 0 && listed === 0)) {
-      return { code: 2, message: `O metadata diz ${total} ${level} mas a lista de advisories tem ${listed}: resposta incompleta ou inconsistente.` };
+      return { code: 2, message: `The metadata says ${total} ${level} but the advisories list has ${listed}: incomplete or inconsistent response.` };
     }
   }
   const lines = list.map(
     (a) =>
-      `  ${a.severity.padEnd(8)} ${a.module_name}  vulneravel: ${a.vulnerable_versions}  corrigido em: ${a.patched_versions}  ${a.github_advisory_id ?? ""}  ${a.title}\n` +
+      `  ${a.severity.padEnd(8)} ${a.module_name}  vulnerable: ${a.vulnerable_versions}  fixed in: ${a.patched_versions}  ${a.github_advisory_id ?? ""}  ${a.title}\n` +
       a.findings.flatMap((f) => f.paths.map((p) => `             ${f.version} via ${p}`)).join("\n"),
   );
   const blocking = list.filter((a) => SEVERITIES.indexOf(a.severity) >= SEVERITIES.indexOf(FAIL_FROM));
-  const summary = `Consulta feita: ${list.length} advisory(ies); ${blocking.length} high/critical. Pacotes: ${report.metadata.totalDependencies}.`;
+  const summary = `Query done: ${list.length} advisory(ies); ${blocking.length} high/critical. Packages: ${report.metadata.totalDependencies}.`;
   const body = lines.length ? `\n${lines.join("\n")}\n` : "";
   return { code: blocking.length > 0 ? 1 : 0, message: summary + body };
 }
 
 function run(args) {
   const r = spawnSync("pnpm", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  if (r.error) return { error: `Nao consegui rodar o pnpm: ${r.error.message}` };
+  if (r.error) return { error: `Could not run pnpm: ${r.error.message}` };
   return { stdout: r.stdout };
 }
 
-// Segunda passada, sem --prod, so para LISTAR o que ha nas devDependencies
-// (ex.: o esbuild que gera o n.js servido a todos os tenants). Nunca altera o
-// resultado: o veredito vem so da passada de producao.
+// Second pass, without --prod, only to LIST what is in the devDependencies
+// (e.g. the esbuild that generates the n.js served to every tenant). It never
+// changes the result: the verdict comes only from the production pass.
 function devOnlyNote(prodStdout) {
   const all = run(["audit", "--json"]);
-  if (all.error) return `aviso: passada completa nao rodou (${all.error})`;
+  if (all.error) return `warning: the full pass did not run (${all.error})`;
   let a, p;
   try {
     a = JSON.parse(all.stdout);
     p = JSON.parse(prodStdout);
   } catch {
-    return "aviso: passada completa (sem --prod) ilegivel; so a de producao vale";
+    return "warning: full pass (without --prod) unreadable; only the production one counts";
   }
-  if (!a?.advisories || !p?.advisories) return "aviso: passada completa (sem --prod) sem relatorio; so a de producao vale";
+  if (!a?.advisories || !p?.advisories) return "warning: full pass (without --prod) has no report; only the production one counts";
   const extra = Object.entries(a.advisories).filter(([id]) => !(id in p.advisories));
-  if (extra.length === 0) return "Passada completa (sem --prod): nenhum advisory a mais, so de desenvolvimento.";
+  if (extra.length === 0) return "Full pass (without --prod): no additional, development-only advisory.";
   return (
-    "Somente em devDependencies (informativo, nao falha o job):\n" +
+    "Only in devDependencies (informational, does not fail the job):\n" +
     extra.map(([, v]) => `  ${v.severity} ${v.module_name} ${v.github_advisory_id ?? ""} ${v.title}\n` + v.findings.flatMap((f) => f.paths.map((x) => `             ${f.version} via ${x}`)).join("\n")).join("\n")
   );
 }

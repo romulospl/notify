@@ -18,54 +18,54 @@ func TestLoadConfig(t *testing.T) {
 	get := func(k string) string { return env[k] }
 	c, err := loadConfig(get)
 	if err != nil || c.Interval != 15*time.Minute || c.Lookback != 48*time.Hour || c.ListenAddr != ":8080" {
-		t.Fatalf("padrões: %+v, %v", c, err)
+		t.Fatalf("defaults: %+v, %v", c, err)
 	}
-	// Retenção do Umami: sem UMAMI_DATABASE_URL fica desligada, com o padrão
-	// de dias intacto (docs/umami.md).
+	// Umami retention: without UMAMI_DATABASE_URL it is off, with the default
+	// number of days untouched (docs/umami.md).
 	if c.UmamiDatabaseURL != "" || c.UmamiRetentionDays != defaultUmamiRetentionDays {
-		t.Errorf("retenção do Umami por padrão: %+v", c)
+		t.Errorf("Umami retention by default: %+v", c)
 	}
 	for k, v := range map[string]string{"ROLLUP_INTERVAL": "abc", "ROLLUP_LOOKBACK": "1h"} {
 		env[k] = v
 		if _, err := loadConfig(get); err == nil {
-			t.Errorf("%s=%s deveria falhar", k, v)
+			t.Errorf("%s=%s should fail", k, v)
 		}
 		delete(env, k)
 	}
 	delete(env, "DATABASE_URL")
 	if _, err := loadConfig(get); err == nil {
-		t.Error("sem DATABASE_URL deveria falhar")
+		t.Error("without DATABASE_URL it should fail")
 	}
 }
 
-// A retenção do Umami (#154): liga com UMAMI_DATABASE_URL, desliga com 0 e
-// recusa dias inválidos ou dias sem banco.
+// The Umami retention (#154): on with UMAMI_DATABASE_URL, off with 0, and it
+// refuses invalid days or days without a database.
 func TestLoadConfigUmami(t *testing.T) {
 	env := map[string]string{"DATABASE_URL": "postgres://x", "UMAMI_DATABASE_URL": "postgres://umami"}
 	get := func(k string) string { return env[k] }
 	c, err := loadConfig(get)
 	if err != nil || c.UmamiDatabaseURL != "postgres://umami" || c.UmamiRetentionDays != defaultUmamiRetentionDays {
-		t.Fatalf("padrão da retenção: %+v, %v", c, err)
+		t.Fatalf("retention default: %+v, %v", c, err)
 	}
 	env["UMAMI_RETENTION_DAYS"] = "0"
 	if c, err = loadConfig(get); err != nil || c.UmamiRetentionDays != 0 {
-		t.Fatalf("0 desliga a poda: %+v, %v", c, err)
+		t.Fatalf("0 turns the pruning off: %+v, %v", c, err)
 	}
 	for _, v := range []string{"-1", "abc"} {
 		env["UMAMI_RETENTION_DAYS"] = v
 		if _, err := loadConfig(get); err == nil {
-			t.Errorf("UMAMI_RETENTION_DAYS=%s deveria falhar", v)
+			t.Errorf("UMAMI_RETENTION_DAYS=%s should fail", v)
 		}
 	}
 	delete(env, "UMAMI_DATABASE_URL")
 	delete(env, "UMAMI_RETENTION_DAYS")
 	env["UMAMI_RETENTION_DAYS"] = "30"
 	if _, err := loadConfig(get); err == nil {
-		t.Error("dias sem UMAMI_DATABASE_URL deveria falhar")
+		t.Error("days without UMAMI_DATABASE_URL should fail")
 	}
 }
 
-// Consolida um ponto de 1 minuto de duas horas atrás pela mesma chamada do serviço, duas vezes.
+// Rolls up a 1-minute point from two hours ago through the same call as the service, twice.
 func TestNextRun(t *testing.T) {
 	for _, c := range []struct {
 		interval time.Duration
@@ -77,7 +77,7 @@ func TestNextRun(t *testing.T) {
 		{10 * time.Second, true, 10 * time.Second},
 	} {
 		if got := nextRun(c.interval, c.failed); got != c.want {
-			t.Errorf("nextRun(%s, %v) = %s, quero %s", c.interval, c.failed, got, c.want)
+			t.Errorf("nextRun(%s, %v) = %s, want %s", c.interval, c.failed, got, c.want)
 		}
 	}
 }
@@ -85,7 +85,7 @@ func TestNextRun(t *testing.T) {
 func TestMaintain(t *testing.T) {
 	adminURL := os.Getenv("DATABASE_URL")
 	if adminURL == "" {
-		t.Skip("DATABASE_URL não definida")
+		t.Skip("DATABASE_URL not set")
 	}
 	ctx := context.Background()
 	adminURL = pgtest.Database(t, adminURL)
@@ -119,21 +119,21 @@ func TestMaintain(t *testing.T) {
 			t.Fatal(err)
 		}
 		if n != 3 {
-			t.Errorf("%s: %d requisições, esperava 3", tbl, n)
+			t.Errorf("%s: %d requests, expected 3", tbl, n)
 		}
 	}
 }
 
-// A poda do Umami (#154): apaga o evento e a sessão antigos, e preserva a
-// sessão antiga que ainda sustenta um evento recente.
+// The Umami pruning (#154): it deletes the old event and session, and keeps
+// the old session that still backs a recent event.
 func TestPruneUmami(t *testing.T) {
 	adminURL := os.Getenv("DATABASE_URL")
 	if adminURL == "" {
-		t.Skip("DATABASE_URL não definida")
+		t.Skip("DATABASE_URL not set")
 	}
 	ctx := context.Background()
-	// Banco próprio, sem as migrações do portal: o schema do Umami tem
-	// tabelas homônimas (session, website_event) que as migrações criam.
+	// Its own database, without the portal's migrations: the Umami schema has
+	// tables with the same names (session, website_event) that the migrations create.
 	admin, err := pgx.Connect(ctx, adminURL)
 	if err != nil {
 		t.Fatal(err)
@@ -143,7 +143,7 @@ func TestPruneUmami(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !canCreate {
-		t.Skip("o usuário de DATABASE_URL não pode criar um banco para o schema do Umami")
+		t.Skip("the DATABASE_URL user cannot create a database for the Umami schema")
 	}
 	name := "rollup_prune_test_" + pgtest.NewUUID(t)
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{name}.Sanitize()); err != nil {
@@ -153,12 +153,12 @@ func TestPruneUmami(t *testing.T) {
 		ctx := context.Background()
 		c, err := pgx.Connect(ctx, adminURL)
 		if err != nil {
-			t.Errorf("apagando %s: %v", name, err)
+			t.Errorf("dropping %s: %v", name, err)
 			return
 		}
 		defer c.Close(ctx)
 		if _, err := c.Exec(ctx, "DROP DATABASE "+pgx.Identifier{name}.Sanitize()+" WITH (FORCE)"); err != nil {
-			t.Errorf("apagando %s: %v", name, err)
+			t.Errorf("dropping %s: %v", name, err)
 		}
 	})
 	admin.Close(ctx)
@@ -173,8 +173,8 @@ func TestPruneUmami(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	// Só o que a poda toca no schema do Umami 3.4.1 (chaves em website_id/
-	// event_id omitidas; o schema real não tem chaves estrangeiras).
+	// Only what the pruning touches in the Umami 3.4.1 schema (keys on
+	// website_id/event_id omitted; the real schema has no foreign keys).
 	_, err = pool.Exec(ctx, `CREATE TABLE session (session_id uuid primary key, created_at timestamptz not null);
 		CREATE TABLE website_event (event_id uuid primary key, session_id uuid not null,
 			created_at timestamptz not null default CURRENT_TIMESTAMP)`)
@@ -200,30 +200,30 @@ func TestPruneUmami(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Esperado: o evento antigo e a sessão antiga sem eventos saem; a sessão
-	// antiga que sustenta um evento recente e a sessão recente ficam.
+	// Expected: the old event and the old session without events go; the old
+	// session that backs a recent event and the recent session stay.
 	events, sessions, err := pruneUmami(ctx, pool, defaultUmamiRetentionDays)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if events != 1 || sessions != 1 {
-		t.Fatalf("apagados: %d eventos, %d sessões; esperava 1 e 1", events, sessions)
+		t.Fatalf("deleted: %d events, %d sessions; expected 1 and 1", events, sessions)
 	}
 	var n int
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM website_event WHERE session_id = $1", oldWithRecent).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	if n != 1 {
-		t.Errorf("evento recente da sessão antiga sobreviveu? count=%d", n)
+		t.Errorf("did the recent event of the old session survive? count=%d", n)
 	}
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM session WHERE session_id = $1", oldWithRecent).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	if n != 1 {
-		t.Error("sessão antiga com evento recente deveria ficar")
+		t.Error("old session with a recent event should stay")
 	}
-	// Idempotente: segunda execução não apaga nada.
+	// Idempotent: a second run deletes nothing.
 	if events, sessions, err = pruneUmami(ctx, pool, defaultUmamiRetentionDays); err != nil || events != 0 || sessions != 0 {
-		t.Fatalf("segunda execução: %d eventos, %d sessões, %v; esperava nada", events, sessions, err)
+		t.Fatalf("second run: %d events, %d sessions, %v; expected nothing", events, sessions, err)
 	}
 }

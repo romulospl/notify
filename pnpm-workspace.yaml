@@ -3,5 +3,5 @@ packages:
   - packages/*
   - examples/*
 
-# Só instala versões publicadas há pelo menos 14 dias (em minutos), conforme o ADR 0002.
+# Only installs versions published at least 14 days ago (in minutes), as per ADR 0002.
 minimumReleaseAge: 20160

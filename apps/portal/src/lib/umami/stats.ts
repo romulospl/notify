@@ -1,5 +1,5 @@
 import "server-only";
-import type { TenantContext } from "../access";
+import type { TenantContext, TenantReadContext } from "../access";
 import type { Period } from "../period";
 import { getSite } from "../data/sites";
 import {
@@ -15,13 +15,13 @@ import {
   type Totals,
 } from "./read";
 
-// As páginas tratam a falha do Umami sem importar o cliente HTTP (regra de lint).
+// The pages handle the Umami failure without importing the HTTP client (lint rule).
 export { UmamiError } from "./http";
 export type { Breakdown, SiteStats, Totals };
 
-// Leitura de estatísticas web. Recebe o ID do site do portal, nunca o do
-// Umami: o ID do Umami só é obtido depois de conferir que o site é do tenant
-// do contexto (ADR 0003). Site de outro tenant devolve nulo sem chamar o Umami.
+// Web statistics read. Takes the portal's site ID, never Umami's: the Umami
+// ID is only obtained after checking that the site belongs to the context's
+// tenant (ADR 0003). Another tenant's site returns null without calling Umami.
 
 export async function getSiteStats(
   ctx: TenantContext,
@@ -33,13 +33,13 @@ export async function getSiteStats(
   return readStats(found.umamiWebsiteId, range);
 }
 
-// Painel web do tenant (#28): as 7 métricas mínimas de um site num período.
-// Conferido no Umami 3.4.1 (pendência do ADR 0001):
-// - /stats: visualizações, visitantes, visitas, rejeições e tempo total, com o
-//   período anterior de mesmo tamanho em `comparison`;
-// - /metrics?type=referrer|country|device|browser: listas ordenadas em que `y`
-//   conta visitantes (sessões únicas), não visualizações;
-// - /pageviews: série por hora, dia ou mês, só com os baldes que têm dados.
+// Tenant web dashboard (#28): the 7 minimum metrics of a site in a period.
+// Checked on Umami 3.4.1 (open item of ADR 0001):
+// - /stats: pageviews, visitors, visits, bounces and total time, with the
+//   previous period of the same size in `comparison`;
+// - /metrics?type=referrer|country|device|browser: sorted lists in which `y`
+//   counts visitors (unique sessions), not pageviews;
+// - /pageviews: series per hour, day or month, only with the buckets that have data.
 
 export const TOP_LIMIT = 10;
 
@@ -56,7 +56,7 @@ export type CountedItem = { name: string; count: number };
 export type SiteDashboard = {
   totals: Totals;
   previous: Totals;
-  // Um ponto por balde do período, inclusive os vazios.
+  // One point per bucket of the period, including the empty ones.
   series: { at: Date; pageviews: number; visitors: number }[];
   breakdowns: Record<Breakdown, RankedItem[]>;
   // Custom events by name, counted in events.
@@ -66,10 +66,10 @@ export type SiteDashboard = {
   wallets: { selections: CountedItem[]; disconnects: number };
 };
 
-// Nulo quando o site não é do tenant do contexto (ou está arquivado): nesse
-// caso nenhuma chamada chega ao Umami.
+// Null when the site does not belong to the context's tenant (or is archived):
+// in that case no call reaches Umami.
 export async function getSiteDashboard(
-  ctx: TenantContext,
+  ctx: TenantReadContext,
   siteId: string,
   period: Period,
 ): Promise<SiteDashboard | null> {

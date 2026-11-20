@@ -1,8 +1,8 @@
-// Esquema do banco `stellytics`: tabelas do Better Auth (usuários, sessões, contas e
-// verificações) e o modelo de tenants do spec do E2, seção 3
-// (docs/specs/e2-tenants-e-controle-de-acesso.md).
-// As visões lidas pelo gateway e pelo coletor e as permissões dos usuários
-// stellytics_ingest e stellytics_collector estão em SQL escrito à mão, em
+// Schema of the `stellytics` database: Better Auth tables (users, sessions, accounts
+// and verifications) and the tenant model from the E2 spec, section 3
+// (docs/specs/e2-tenants-and-access-control.md).
+// The views read by the gateway and the collector and the privileges of the
+// stellytics_ingest and stellytics_collector users are in hand-written SQL, in
 // drizzle/0002_ingest_views.sql.
 import { sql } from "drizzle-orm";
 import {
@@ -39,7 +39,7 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
-  // Operador SCF tem visão global. Só é atribuído por comando de administração (#19).
+  // The SCF operator has a global view. Only assigned by the administration command (#19).
   role: userRole("role").notNull().default("tenant"),
   ...timestamps,
 });
@@ -50,7 +50,7 @@ export const session = pgTable(
     id: text("id").primaryKey(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     token: text("token").notNull().unique(),
-    // Sempre nulo: o portal não guarda IP (ver databaseHooks em lib/auth.ts).
+    // Always null: the portal does not store the IP (see databaseHooks in lib/auth.ts).
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
     userId: text("user_id")
@@ -98,24 +98,24 @@ export const verification = pgTable(
 // Tenants (#16)
 // ---------------------------------------------------------------------------
 
-// `pending` fica reservado para o cadastro com aprovação (#49); o MVP usa só
-// `active` e `removed`.
+// `pending` is reserved for sign-up with approval (#49); the MVP uses only
+// `active` and `removed`.
 export const tenantStatus = pgEnum("tenant_status", ["active", "removed", "pending"]);
 export const memberRole = pgEnum("member_role", ["owner", "member"]);
 
-// O Drizzle 0.45 não tem coluna `bytea` pronta.
+// Drizzle 0.45 has no ready-made `bytea` column.
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType: () => "bytea",
 });
 
 export const tenant = pgTable("tenant", {
-  // É o `tenant.id` gravado nas métricas de API.
+  // It is the `tenant.id` written in the API metrics.
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   status: tenantStatus("status").notNull().default("active"),
   statusChangedAt: timestamp("status_changed_at", { withTimezone: true }).notNull().defaultNow(),
-  // Operador que mudou o status; nulo na criação.
+  // Operator who changed the status; null on creation.
   statusChangedBy: text("status_changed_by").references(() => user.id, { onDelete: "set null" }),
   statusReason: text("status_reason"),
   ...timestamps,
@@ -135,8 +135,8 @@ export const tenantMember = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.tenantId, t.userId] }),
-    // D1: cada usuário pertence a um único tenant. Retirar este índice libera
-    // vários tenants por usuário sem mudar o resto do modelo.
+    // D1: each user belongs to a single tenant. Dropping this index allows
+    // several tenants per user without changing the rest of the model.
     uniqueIndex("tenant_member_user_id_key").on(t.userId),
   ],
 );
@@ -150,10 +150,10 @@ export const site = pgTable(
       .references(() => tenant.id),
     name: text("name").notNull(),
     domain: text("domain").notNull(),
-    // ID do site no Umami; é o que o script de rastreamento envia.
+    // The site's ID in Umami; it is what the tracking script sends.
     umamiWebsiteId: uuid("umami_website_id").notNull().unique(),
     createdAt: timestamps.createdAt,
-    // Site arquivado para de receber eventos e some dos painéis.
+    // An archived site stops receiving events and disappears from the dashboards.
     archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
   (t) => [unique("site_tenant_id_domain_key").on(t.tenantId, t.domain)],
@@ -166,14 +166,14 @@ export const apiService = pgTable(
     tenantId: uuid("tenant_id")
       .notNull()
       .references(() => tenant.id),
-    // Nome mostrado nos painéis. D5: o `service.name` enviado pelo cliente é ignorado.
+    // Name shown on the dashboards. D5: the `service.name` sent by the client is ignored.
     name: text("name").notNull(),
     createdAt: timestamps.createdAt,
     archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
   (t) => [
     unique("api_service_tenant_id_name_key").on(t.tenantId, t.name),
-    // Alvo da chave estrangeira composta de `ingest_key`.
+    // Target of the composite foreign key of `ingest_key`.
     unique("api_service_id_tenant_id_key").on(t.id, t.tenantId),
   ],
 );
@@ -183,19 +183,19 @@ export const ingestKey = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     apiServiceId: uuid("api_service_id").notNull(),
-    // Repetido para o coletor resolver o tenant sem junção. A chave estrangeira
-    // composta garante que é o mesmo tenant do serviço.
+    // Repeated so the collector resolves the tenant without a join. The composite
+    // foreign key guarantees it is the same tenant as the service's.
     tenantId: uuid("tenant_id").notNull(),
-    // Parte pública da chave `ntf_<prefixo>_<segredo>` (spec, seção 5).
+    // Public part of the `ntf_<prefix>_<secret>` key (spec, section 5).
     prefix: text("prefix").notNull().unique(),
-    // SHA-256 da chave completa. A chave em si nunca é gravada.
+    // SHA-256 of the full key. The key itself is never stored.
     keyHash: bytea("key_hash").notNull(),
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id),
     createdAt: timestamps.createdAt,
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
-    // Atualizado no máximo uma vez por dia.
+    // Updated at most once a day.
     lastUsedOn: date("last_used_on"),
   },
   (t) => [
@@ -210,26 +210,27 @@ export const ingestKey = pgTable(
   ],
 );
 
-// Chave de leitura do SCF (#48, ADR 0006): dá acesso de leitura às métricas
-// globais pela API `/api/v1`. Só operador cria. Fica fora das visões de
-// stellytics_ingest e stellytics_collector, que não têm permissão nesta tabela.
+// SCF read key (#48, ADR 0006): gives read access to the global metrics
+// through the `/api/v1` API. Only an operator creates one. It stays out of the
+// views of stellytics_ingest and stellytics_collector, which have no privilege
+// on this table.
 export const operatorApiKey = pgTable(
   "operator_api_key",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    // Rótulo dado por quem criou, para saber de quem é cada chave.
+    // Label given by whoever created it, to know whose key each one is.
     name: text("name").notNull(),
-    // Parte pública da chave `nrk_<prefixo>_<segredo>`.
+    // Public part of the `nrk_<prefix>_<secret>` key.
     prefix: text("prefix").notNull().unique(),
-    // SHA-256 da chave completa. A chave em si nunca é gravada.
+    // SHA-256 of the full key. The key itself is never stored.
     keyHash: bytea("key_hash").notNull(),
-    // A chave só vale enquanto quem a criou for operador.
+    // The key is only valid while whoever created it is an operator.
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id),
     createdAt: timestamps.createdAt,
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
-    // Atualizado no máximo uma vez por dia.
+    // Updated at most once a day.
     lastUsedOn: date("last_used_on"),
   },
   (t) => [
@@ -263,22 +264,22 @@ export const operatorInvite = pgTable(
   ],
 );
 
-// Só recebe inserções: um gatilho recusa UPDATE e DELETE (0002_ingest_views.sql
-// e 0009_erasure.sql). A única mudança aceita troca actor_user_id pelo marcador
-// '[apagado]' na exclusão de conta (#154). Sem chave estrangeira, para o
-// registro sobreviver à exclusão do usuário ou do tenant.
+// Insert-only: a trigger rejects UPDATE and DELETE (0002_ingest_views.sql and
+// 0009_erasure.sql). The only accepted change replaces actor_user_id with the
+// '[erased]' marker on account erasure (#154). No foreign key, so the record
+// survives the erasure of the user or the tenant.
 export const auditLog = pgTable(
   "audit_log",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
-    // Nulo quando a ação vem do script de administração.
+    // Null when the action comes from the administration script.
     actorUserId: text("actor_user_id"),
-    // Ex.: tenant.removed, tenant.reactivated, operator.created, ingest_key.revoked.
+    // E.g. tenant.removed, tenant.reactivated, operator.created, ingest_key.revoked.
     action: text("action").notNull(),
-    // Nulo em ações globais.
+    // Null for global actions.
     tenantId: uuid("tenant_id"),
-    // Nunca contém chave, senha nem IP.
+    // Never contains a key, a password or an IP.
     details: jsonb("details").notNull().default({}),
   },
   (t) => [index("audit_log_tenant_id_at_idx").on(t.tenantId, t.at)],

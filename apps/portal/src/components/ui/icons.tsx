@@ -18,6 +18,10 @@ const PATHS = {
   minus: "M5 12h14",
   info: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01",
   alert: "M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
+  play: "M7 4.5l12 7.5-12 7.5z",
+  code: "M16 18l6-6-6-6M8 6l-6 6 6 6",
+  doc: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M9 13h6M9 17h4",
+  sparkle: "M12 4l1.8 6.2L20 12l-6.2 1.8L12 20l-1.8-6.2L4 12l6.2-1.8z",
 } as const;
 
 export type IconName = keyof typeof PATHS;

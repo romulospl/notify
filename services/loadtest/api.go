@@ -23,7 +23,7 @@ import (
 	"github.com/romulospl/stellytics/services/collector/components/httpmetrics"
 )
 
-// route é uma rota simulada: o template (http.route) e como montar o caminho real.
+// route is a simulated route: the template (http.route) and how to build the real path.
 type route struct {
 	method   string
 	template string
@@ -80,7 +80,7 @@ func pickStatus() int {
 	}
 }
 
-// pickLatency: lognormal com mediana de 40 ms, entre 1 ms e 30 s.
+// pickLatency: lognormal with a 40 ms median, between 1 ms and 30 s.
 func pickLatency() float64 {
 	return min(max(0.040*math.Exp(rand.NormFloat64()*1.0), 0.001), 30)
 }
@@ -103,13 +103,13 @@ type spanRec struct {
 	useRoute            bool
 }
 
-// svc é um serviço simulado com o buffer do que ainda não foi exportado.
+// svc is a simulated service with the buffer of what has not been exported yet.
 type svc struct {
 	ServiceKey
 	baseRows  int64
-	baseline  int64        // request_count que o serviço já tinha em api_metric_1m antes do teste
-	simulated atomic.Int64 // requisições simuladas
-	sentOK    atomic.Int64 // requisições dentro de exportações que receberam 2xx
+	baseline  int64        // request_count the service already had in api_metric_1m before the test
+	simulated atomic.Int64 // simulated requests
+	sentOK    atomic.Int64 // requests inside exports that got 2xx
 	mu        sync.Mutex
 	hists     map[histKey]*hist
 	spans     []spanRec
@@ -117,18 +117,18 @@ type svc struct {
 
 func runAPI(args []string) error {
 	fs := flag.NewFlagSet("api", flag.ExitOnError)
-	stateFile := fs.String("state", "state.json", "arquivo de estado do setup")
-	collector := fs.String("collector", envOr("COLLECTOR_URL", "http://127.0.0.1:4318"), "OTLP/HTTP do coletor")
-	stellyticsDB := fs.String("stellytics-db", envOr("STELLYTICS_DATABASE_URL", "postgresql://stellytics:stellytics@127.0.0.1:5432/stellytics"), "banco stellytics, para conferir api_metric_1m")
-	profile := fs.String("profile", "11.6x2m", "degraus taxaxduração de requisições da API por segundo")
-	modes := fs.String("modes", "metrics,spans", "modos de exportação a usar (metrics, spans)")
-	exportEvery := fs.Duration("export-interval", 10*time.Second, "intervalo de exportação das métricas (o padrão do SDK do OTel é 60 s)")
-	spanBatch := fs.Int("span-batch", 512, "spans por lote (padrão do BatchSpanProcessor)")
-	spanFlush := fs.Duration("span-flush", time.Second, "intervalo máximo entre lotes de spans (o padrão do SDK é 5 s)")
-	settle := fs.Duration("settle", 15*time.Second, "espera antes de contar em api_metric_1m")
-	allowRemote := fs.Bool("allow-remote", false, "permite alvos que não sejam loopback")
-	watchSpec := fs.String("watch", "", "processos locais nome=pid,...")
-	dockerSpec := fs.String("docker", "", "contêineres para o docker stats, separados por vírgula")
+	stateFile := fs.String("state", "state.json", "state file from setup")
+	collector := fs.String("collector", envOr("COLLECTOR_URL", "http://127.0.0.1:4318"), "the collector's OTLP/HTTP")
+	stellyticsDB := fs.String("stellytics-db", envOr("STELLYTICS_DATABASE_URL", "postgresql://stellytics:stellytics@127.0.0.1:5432/stellytics"), "stellytics database, to check api_metric_1m")
+	profile := fs.String("profile", "11.6x2m", "ratexduration steps of API requests per second")
+	modes := fs.String("modes", "metrics,spans", "export modes to use (metrics, spans)")
+	exportEvery := fs.Duration("export-interval", 10*time.Second, "metrics export interval (the OTel SDK default is 60 s)")
+	spanBatch := fs.Int("span-batch", 512, "spans per batch (BatchSpanProcessor default)")
+	spanFlush := fs.Duration("span-flush", time.Second, "maximum interval between span batches (the SDK default is 5 s)")
+	settle := fs.Duration("settle", 15*time.Second, "wait before counting in api_metric_1m")
+	allowRemote := fs.Bool("allow-remote", false, "allows targets that are not loopback")
+	watchSpec := fs.String("watch", "", "local processes name=pid,...")
+	dockerSpec := fs.String("docker", "", "containers for docker stats, comma-separated")
 	_ = fs.Parse(args)
 
 	steps, err := parseProfile(*profile)
@@ -149,7 +149,7 @@ func runAPI(args []string) error {
 		}
 	}
 	if len(svcs) == 0 {
-		return fmt.Errorf("nenhum serviço dos modos %q no estado", *modes)
+		return fmt.Errorf("no service of modes %q in the state", *modes)
 	}
 	w, err := newWatcher(*watchSpec, *dockerSpec)
 	if err != nil {
@@ -159,7 +159,7 @@ func runAPI(args []string) error {
 	defer cancel()
 	go w.run(ctx, 2*time.Second)
 
-	// Linha de base: execuções anteriores com o mesmo setup já gravaram linhas.
+	// Baseline: earlier runs with the same setup have already written rows.
 	pre, err := pgx.Connect(ctx, *stellyticsDB)
 	if err != nil {
 		return err
@@ -223,7 +223,7 @@ func runAPI(args []string) error {
 		}
 	}
 
-	// Exportadores periódicos, um por serviço, como o SDK faria.
+	// Periodic exporters, one per service, as the SDK would do.
 	var exporters sync.WaitGroup
 	stop := make(chan struct{})
 	for _, s := range svcs {
@@ -234,7 +234,7 @@ func runAPI(args []string) error {
 		exporters.Add(1)
 		go func() {
 			defer exporters.Done()
-			// Desloca o início para os serviços não exportarem todos juntos.
+			// Offset the start so that the services do not all export together.
 			time.Sleep(time.Duration(rand.Int64N(int64(every))))
 			t := time.NewTicker(every)
 			defer t.Stop()
@@ -269,22 +269,22 @@ func runAPI(args []string) error {
 		s.spans = append(s.spans, spanRec{r.template, r.path(), r.method, status, lat, time.Now(), rand.IntN(2) == 0})
 	}
 
-	fmt.Printf("perfil %s, %d serviços (%s), coletor %s, exportação de métricas a cada %s\n", *profile, len(svcs), *modes, *collector, *exportEvery)
+	fmt.Printf("profile %s, %d services (%s), collector %s, metrics export every %s\n", *profile, len(svcs), *modes, *collector, *exportEvery)
 	began := time.Now()
 	fired, saturated, starts := drive(ctx, steps, 1000, func(i int, s step) {
 		curStep.Store(int64(i))
-		fmt.Printf("[%s] degrau %d: %s\n", time.Now().Format("15:04:05"), i, s)
+		fmt.Printf("[%s] step %d: %s\n", time.Now().Format("15:04:05"), i, s)
 	}, fire)
 	elapsed := time.Since(began)
 	close(stop)
 	exporters.Wait()
 	for _, s := range svcs {
-		flush(s) // o que sobrou no buffer
+		flush(s) // what was left in the buffer
 	}
 	rec.report(steps)
 	w.report(steps, starts, time.Now())
 
-	fmt.Printf("\nrequisições simuladas: %d em %s (%.2f/s); saturação do gerador: %d; exportações com falha: %d\n",
+	fmt.Printf("\nsimulated requests: %d in %s (%.2f/s); generator saturation: %d; failed exports: %d\n",
 		fired, elapsed.Round(time.Second), float64(fired)/elapsed.Seconds(), saturated, exportFailures.Load())
 	time.Sleep(*settle)
 	return verifyAPI(ctx, *stellyticsDB, st, svcs)
@@ -343,14 +343,14 @@ func marshalSpans(spans []spanRec) []byte {
 	return b
 }
 
-// verifyAPI confere em api_metric_1m o que foi enviado com sucesso.
+// verifyAPI checks in api_metric_1m what was sent successfully.
 func verifyAPI(ctx context.Context, dsn string, st State, svcs []*svc) error {
 	db, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		return err
 	}
 	defer db.Close(ctx)
-	fmt.Printf("\n%-14s %-8s %10s %10s %10s %8s %7s\n", "serviço", "modo", "simuladas", "enviadas*", "gravadas", "linhas", "rotas")
+	fmt.Printf("\n%-14s %-8s %10s %10s %10s %8s %7s\n", "service", "mode", "simulated", "sent*", "written", "rows", "routes")
 	var sim, sent, got int64
 	for _, s := range svcs {
 		var n, rows, routes int64
@@ -366,18 +366,18 @@ func verifyAPI(ctx context.Context, dsn string, st State, svcs []*svc) error {
 		got += n
 	}
 	fmt.Printf("%-14s %-8s %10d %10d %10d\n", "total", "", sim, sent, got)
-	fmt.Println("* enviadas = requisições dentro de exportações OTLP que receberam 2xx")
+	fmt.Println("* sent = requests inside OTLP exports that got 2xx")
 	var bad, total int64
 	if err := db.QueryRow(ctx, `SELECT count(*) FILTER (WHERE (SELECT sum(b) FROM unnest(duration_buckets) b) <> request_count OR duration_sum <= 0), count(*)
 		FROM api_metric_1m WHERE tenant_id = $1`, st.APITenantID).Scan(&bad, &total); err != nil {
 		return err
 	}
-	fmt.Printf("linhas com buckets que não somam a contagem ou soma de duração <= 0: %d de %d\n", bad, total)
+	fmt.Printf("rows with buckets that do not add up to the count or duration sum <= 0: %d of %d\n", bad, total)
 	var other int64
 	_ = db.QueryRow(ctx, `SELECT coalesce(sum(request_count), 0) FROM api_metric_1m WHERE tenant_id = $1 AND route = '{other}'`, st.APITenantID).Scan(&other)
-	fmt.Printf("requisições na rota {other} (teto de rotas): %d\n", other)
+	fmt.Printf("requests on the {other} route (route cap): %d\n", other)
 	if got != sent {
-		fmt.Printf("DIFERENÇA: gravadas %d, enviadas %d (%+d)\n", got, sent, got-sent)
+		fmt.Printf("DIFFERENCE: written %d, sent %d (%+d)\n", got, sent, got-sent)
 	}
 	return nil
 }

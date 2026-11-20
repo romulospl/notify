@@ -1,40 +1,40 @@
 #!/usr/bin/env bash
-# Exporta os bancos stellytics e umami para uma pasta (#54, docs/transferencia.md).
+# Exports the stellytics and umami databases to a folder (#54, docs/handover.md).
 #
-# Gera stellytics.dump e umami.dump (formato custom do pg_dump, compactado), a
-# impressão digital da origem (fingerprint.txt) e sha256sums. Rode na VM de
-# origem como root, na raiz do clone, na janela de manutenção e
-# com o portal, o gateway e o Umami parados (senão os dois bancos podem ficar
-# em instantes diferentes):
+# Generates stellytics.dump and umami.dump (pg_dump custom format, compressed), the
+# origin's fingerprint (fingerprint.txt) and sha256sums. Run on the origin
+# VM as root, at the root of the clone, in the maintenance window and
+# with the portal, the gateway and Umami stopped (otherwise the two databases may end up
+# at different points in time):
 #
 #   docker compose --env-file .env.production -f infra/compose/prod.yaml stop caddy portal ingest-web collector rollup umami
-#   infra/scripts/db-export.sh /root/migracao
+#   infra/scripts/db-export.sh /root/migration
 #
-# Os dumps têm hashes de senha e sessões do portal: ficam com permissão 600 e
-# precisam ser apagados depois (e nunca ir para o repositório).
+# The dumps contain password hashes and portal sessions: they get permission 600 and
+# must be deleted afterwards (and never go to the repository).
 set -euo pipefail
 
-dir="${1:?uso: db-export.sh <pasta-de-saída>}"
+dir="${1:?usage: db-export.sh <output-folder>}"
 COMPOSE="${COMPOSE:-docker compose --env-file .env.production -f infra/compose/prod.yaml}"
 here="$(cd "$(dirname "$0")" && pwd)"
 
 umask 077
 mkdir -p "$dir"
-if [ -n "$(ls -A "$dir")" ]; then echo "db-export: $dir não está vazia." >&2; exit 1; fi
+if [ -n "$(ls -A "$dir")" ]; then echo "db-export: $dir is not empty." >&2; exit 1; fi
 
 running=$($COMPOSE ps --status running --services | grep -v -E '^(postgres|s3)$' || true)
 if [ -n "$running" ]; then
-  echo "db-export: pare antes: $(echo "$running" | tr '\n' ' ')" >&2
+  echo "db-export: stop first: $(echo "$running" | tr '\n' ' ')" >&2
   exit 1
 fi
 
 for db in stellytics umami; do
-  echo "exportando $db..."
-  # --no-password: o socket local do contêiner é confiável para o postgres.
+  echo "exporting $db..."
+  # --no-password: the container's local socket is trusted for postgres.
   $COMPOSE exec -T -u postgres postgres pg_dump --no-password -Fc -d "$db" > "$dir/$db.dump"
-  # Confere que o arquivo é legível antes de confiar nele.
+  # Checks that the file is readable before trusting it.
   $COMPOSE exec -T -u postgres postgres pg_restore -l < "$dir/$db.dump" > /dev/null
 done
 "$here/db-fingerprint.sh" > "$dir/fingerprint.txt"
 (cd "$dir" && sha256sum stellytics.dump umami.dump fingerprint.txt > sha256sums)
-echo "pronto em $dir:"; ls -l "$dir"
+echo "ready in $dir:"; ls -l "$dir"

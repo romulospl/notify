@@ -1,12 +1,12 @@
 import "server-only";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import type { TenantContext } from "../access";
+import type { TenantContext, TenantReadContext } from "../access";
 import { db } from "../db";
 import { site } from "../db/schema";
 import { provisionUmamiWebsite } from "../umami/provision";
 
-// Sites do tenant. Toda função recebe o contexto e filtra por ctx.tenantId
-// (spec do E2, seção 4).
+// The tenant's sites. Every function takes the context and filters by
+// ctx.tenantId (E2 spec, section 4).
 
 export type Site = typeof site.$inferSelect;
 
@@ -20,14 +20,14 @@ export class SiteInputError extends Error {
   }
 }
 
-// Mesma regra do Umami 3.4.1 (DOMAIN_REGEX em src/lib/constants.ts), para
-// recusar aqui o que o Umami recusaria.
+// Same rule as Umami 3.4.1 (DOMAIN_REGEX in src/lib/constants.ts), to
+// reject here what Umami would reject.
 const DOMAIN_REGEX =
   /^(localhost(:[1-9]\d{0,4})?|((?=[a-z0-9-_]{1,63}\.)(xn--)?[a-z0-9-_]+(-[a-z0-9-_]+)*\.)+(xn--)?[a-z0-9-_]{2,63})$/;
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Aceita "https://Example.org/path" e grava "example.org".
+// Accepts "https://Example.org/path" and stores "example.org".
 export function normalizeDomain(raw: string): string {
   return raw
     .trim()
@@ -41,11 +41,11 @@ export async function createSite(
   ctx: TenantContext,
   input: { name: string; domain: string },
 ): Promise<Site> {
-  // Spec do E2, seção 6: tenant removido não cadastra site.
+  // E2 spec, section 6: a removed tenant registers no site.
   if (ctx.tenantStatus === "removed") {
     throw new SiteInputError("tenant", "This project was removed.");
   }
-  // Cadastro com aprovação (#49): projeto pendente não cadastra site.
+  // Sign-up with approval (#49): a pending project registers no site.
   if (ctx.tenantStatus === "pending") {
     throw new SiteInputError("tenant", "This project is awaiting approval.");
   }
@@ -58,8 +58,8 @@ export async function createSite(
     throw new SiteInputError("domain", "Enter a valid domain, like example.org.");
   }
 
-  // Confere antes para não criar um site no Umami à toa. O índice único
-  // (tenant_id, domain) continua valendo numa corrida.
+  // Checks first so as not to create a site in Umami for nothing. The unique
+  // index (tenant_id, domain) still holds in a race.
   const [duplicate] = await db
     .select({ id: site.id })
     .from(site)
@@ -78,9 +78,9 @@ export async function createSite(
   });
 }
 
-// Nulo quando o site não existe, está arquivado ou é de outro tenant: quem
-// chama responde 404 nos três casos.
-export async function getSite(ctx: TenantContext, siteId: string): Promise<Site | null> {
+// Null when the site does not exist, is archived or belongs to another tenant:
+// the caller answers 404 in all three cases.
+export async function getSite(ctx: TenantReadContext, siteId: string): Promise<Site | null> {
   if (!UUID_REGEX.test(siteId)) return null;
   const [found] = await db
     .select()
@@ -90,7 +90,7 @@ export async function getSite(ctx: TenantContext, siteId: string): Promise<Site 
   return found ?? null;
 }
 
-export async function listSites(ctx: TenantContext): Promise<Site[]> {
+export async function listSites(ctx: TenantReadContext): Promise<Site[]> {
   return db
     .select()
     .from(site)

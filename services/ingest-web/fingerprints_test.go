@@ -1,6 +1,7 @@
 package main
 
-// Teste da #26: muitas fingerprints no mesmo IP truncado não inflam as métricas.
+// Test for #26: many fingerprints on the same truncated IP do not inflate the
+// metrics.
 
 import (
 	"net/http"
@@ -12,7 +13,7 @@ import (
 	"github.com/romulospl/stellytics/services/ingest-web/internal/fingerprint"
 )
 
-// otherActiveSite é o site de outro tenant, também ativo.
+// otherActiveSite is another tenant's site, also active.
 const otherActiveSite = "11111111-2222-4333-8444-555555555555"
 
 func TestFingerprintLimitPerIP(t *testing.T) {
@@ -25,20 +26,21 @@ func TestFingerprintLimitPerIP(t *testing.T) {
 		t.Helper()
 		resp := post(t, s, "text/plain", eventBody(activeSite), "X-Forwarded-For", ip, "User-Agent", ua)
 		if resp.StatusCode != http.StatusNoContent {
-			t.Fatalf("status = %d, quero 204 mesmo quando descarta", resp.StatusCode)
+			t.Fatalf("status = %d, want 204 even when it drops", resp.StatusCode)
 		}
 	}
 
-	// Um robô troca de User-Agent a cada request no mesmo /24.
+	// A bot changes User-Agent on every request in the same /24.
 	send("203.0.113.10", "bot/1")
 	send("203.0.113.11", "bot/2")
 	send("203.0.113.12", "bot/3")
 	send("203.0.113.13", "bot/4")
-	// As duas primeiras fingerprints continuam valendo; outro IP tem a própria conta.
+	// The first two fingerprints still count; another IP has its own count.
 	send("203.0.113.14", "bot/1")
 	send("198.51.100.7", "bot/3")
-	// Outro site no mesmo /24 também: o robô não lota a cota dos outros tenants.
-	resp := post(t, s, "text/plain", eventBody(otherActiveSite), "X-Forwarded-For", "203.0.113.15", "User-Agent", "humano")
+	// Another site in the same /24 too: the bot does not fill the quota of
+	// other tenants.
+	resp := post(t, s, "text/plain", eventBody(otherActiveSite), "X-Forwarded-For", "203.0.113.15", "User-Agent", "human")
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("status = %d", resp.StatusCode)
 	}
@@ -52,14 +54,14 @@ func TestFingerprintLimitPerIP(t *testing.T) {
 		"bot/2 @ 203.0.113.0",
 		"bot/1 @ 203.0.113.0",
 		"bot/3 @ 198.51.100.0",
-		"humano @ 203.0.113.0",
+		"human @ 203.0.113.0",
 	}
 	if len(uas) != len(want) {
-		t.Fatalf("umami recebeu %v, quero %v", uas, want)
+		t.Fatalf("umami received %v, want %v", uas, want)
 	}
 	for i := range want {
 		if uas[i] != want[i] {
-			t.Errorf("evento %d = %q, quero %q", i, uas[i], want[i])
+			t.Errorf("event %d = %q, want %q", i, uas[i], want[i])
 		}
 	}
 }

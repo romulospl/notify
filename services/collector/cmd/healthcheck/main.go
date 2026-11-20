@@ -1,7 +1,7 @@
-// Command healthcheck é o healthcheck do contêiner do coletor, que não tem
-// shell nem curl (imagem scratch). Faz um GET no receiver OTLP HTTP: qualquer
-// resposta HTTP (o receiver responde 401 sem chave ou 405 a um GET) quer dizer
-// que o coletor está de pé. Sai com 0 se respondeu e 1 se não.
+// Command healthcheck is the healthcheck of the collector container, which has
+// no shell and no curl (scratch image). It sends a GET to the OTLP HTTP
+// receiver: any HTTP response (the receiver answers 401 without a key or 405 to
+// a GET) means the collector is up. It exits with 0 if it answered and 1 if not.
 package main
 
 import (

@@ -1,9 +1,9 @@
-# Varredura de dependências: vulnerabilidades (Go e pnpm) e licenças.
-# Fica fora do workflow ci pelo mesmo motivo do adblock: o resultado muda sem
-# mudança no código (um advisory novo deixa vermelho um PR que não mexe em
-# nada). Roda nos PRs que mexem em manifestos, lockfiles ou na versão do Go das
-# imagens, na main e uma vez por dia, para pegar advisory publicado depois.
-# Como tratar um alerta: CONTRIBUTING.md, seção Dependências.
+# Dependency scan: vulnerabilities (Go and pnpm) and licenses.
+# Stays out of the ci workflow for the same reason as adblock: the result
+# changes without a code change (a new advisory turns red a PR that touches
+# nothing). Runs on PRs that touch manifests, lockfiles or the Go version of the
+# images, on main and once a day, to catch an advisory published later.
+# How to handle an alert: CONTRIBUTING.md, Dependencies section.
 name: dependencies
 
 on:
@@ -38,25 +38,26 @@ permissions:
   contents: read
 
 jobs:
-  # Vulnerabilidades alcançáveis (govulncheck só falha quando o código chama o
-  # símbolo vulnerável). Roda com o Go das imagens (FROM golang:X.Y.Z nos
-  # Dockerfiles), porque é a biblioteca padrão dele que vai para produção. Fica
-  # vermelho quando a imagem usa um Go com vulnerabilidade já corrigida, até os
-  # Dockerfiles subirem; é esperado e curto. (O job licenses usa go-version-file:
-  # a licença não depende da versão do Go, só das dependências do go.mod.)
+  # Reachable vulnerabilities (govulncheck only fails when the code calls the
+  # vulnerable symbol). Runs with the Go of the images (FROM golang:X.Y.Z in the
+  # Dockerfiles), because its standard library is what goes to production. Turns
+  # red when the image uses a Go with an already fixed vulnerability, until the
+  # Dockerfiles are bumped; that is expected and short. (The licenses job uses
+  # go-version-file: the license does not depend on the Go version, only on the
+  # go.mod dependencies.)
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Versão do Go das imagens
+      - name: Go version of the images
         id: gover
         run: |
           versions=$(sed -nE 's/^FROM golang:([0-9]+\.[0-9]+\.[0-9]+)-.*/\1/p' services/*/Dockerfile | sort -u)
-          echo "Versões nos Dockerfiles: $versions"
+          echo "Versions in the Dockerfiles: $versions"
           if [ "$(echo "$versions" | wc -l)" -ne 1 ] || [ -z "$versions" ]; then
-            echo "::error::Os Dockerfiles de services/ precisam usar a mesma versão do Go (e ter uma)."
+            echo "::error::The Dockerfiles in services/ must use the same Go version (and have one)."
             exit 1
           fi
           echo "version=$versions" >> "$GITHUB_OUTPUT"
@@ -64,20 +65,20 @@ jobs:
         with:
           go-version: ${{ steps.gover.outputs.version }}
           cache: false
-      # golang.org/x/vuln, licença BSD-3-Clause. Versão exata, com mais de 14 dias.
+      # golang.org/x/vuln, BSD-3-Clause license. Exact version, more than 14 days old.
       - run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
       - name: govulncheck
         working-directory: services
         run: |
           go version
-          # Sai com 3 se o código chama uma vulnerabilidade; erro de rede ao
-          # buscar o banco de vulnerabilidades sai com outro código e também
-          # deixa o job vermelho.
+          # Exits with 3 if the code calls a vulnerability; a network error while
+          # fetching the vulnerability database exits with another code and
+          # also turns the job red.
           govulncheck ./...
 
-  # pnpm audit consulta o endpoint de advisories do registry. O script separa
-  # "vulnerabilidade high/critical" (1) de "não consegui consultar" (2); os
-  # dois deixam o job vermelho, mas a mensagem diz qual foi.
+  # pnpm audit queries the registry's advisories endpoint. The script separates
+  # "high/critical vulnerability" (1) from "could not query" (2); both turn
+  # the job red, but the message says which one it was.
   pnpm-audit:
     name: pnpm audit
     runs-on: ubuntu-24.04
@@ -91,8 +92,8 @@ jobs:
       - run: node --test scripts/deps/*.test.mjs
       - run: node scripts/deps/audit-pnpm.mjs
 
-  # Allowlist de licenças OSI em scripts/licenses/allowed.json, conferida contra
-  # as dependências de produção do pnpm e do Go.
+  # Allowlist of OSI licenses in scripts/licenses/allowed.json, checked against
+  # the pnpm and Go production dependencies.
   licenses:
     name: licenses
     runs-on: ubuntu-24.04
@@ -109,20 +110,20 @@ jobs:
           go-version-file: services/go.mod
           cache-dependency-path: services/go.*
       - run: node --test scripts/deps/*.test.mjs
-      # "pnpm licenses" lê o que está instalado em node_modules.
+      # "pnpm licenses" reads what is installed in node_modules.
       - run: pnpm install --frozen-lockfile
-      - name: Licenças do pnpm (produção)
+      - name: pnpm licenses (production)
         run: pnpm licenses list --json --prod > "$RUNNER_TEMP/npm-licenses.json"
-      # google/go-licenses, Apache-2.0. Versão exata, com mais de 14 dias.
+      # google/go-licenses, Apache-2.0. Exact version, more than 14 days old.
       - run: go install github.com/google/go-licenses/v2@v2.0.1
-      - name: Licenças do Go (pacotes que entram nos binários)
+      - name: Go licenses (packages that go into the binaries)
         working-directory: services
         run: |
           go-licenses report ./... \
             --template "$GITHUB_WORKSPACE/scripts/licenses/go-licenses.tpl" \
             --ignore github.com/romulospl/stellytics/services \
             > "$RUNNER_TEMP/go-licenses.tsv"
-      - name: Confere contra a allowlist
+      - name: Check against the allowlist
         run: |
           node scripts/deps/check-licenses.mjs \
             --npm "$RUNNER_TEMP/npm-licenses.json" \

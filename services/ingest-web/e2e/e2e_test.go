@@ -1,16 +1,17 @@
 //go:build e2e
 
-// Teste ponta a ponta contra o ambiente do Docker Compose:
+// End-to-end test against the Docker Compose environment:
 //
 //	docker compose -f compose.yaml -f infra/compose/umami-port.yaml up -d --build --wait
 //	cd services && go test -tags e2e ./ingest-web/e2e/...
 //
-// Cria um website no Umami pela API e um tenant ativo com esse site no banco
-// stellytics (o que aparece na ingest_site), envia um page view ao gateway e
-// confere que ele aparece no Umami, e que o evento enviado antes do cadastro não.
-// As URLs podem ser trocadas por GATEWAY_URL, UMAMI_URL, STELLYTICS_DATABASE_URL e
-// UMAMI_DATABASE_URL. O teste de privacidade (privacy_test.go) exige que o
-// gateway confie no X-Forwarded-For da conexão do teste (INGEST_TRUSTED_PROXIES).
+// It creates a website in Umami through the API and an active tenant with that
+// site in the stellytics database (what shows up in ingest_site), sends a page
+// view to the gateway and checks that it shows up in Umami, and that the event
+// sent before the registration does not. The URLs can be overridden with
+// GATEWAY_URL, UMAMI_URL, STELLYTICS_DATABASE_URL and UMAMI_DATABASE_URL. The
+// privacy test (privacy_test.go) requires the gateway to trust the
+// X-Forwarded-For of the test's connection (INGEST_TRUSTED_PROXIES).
 package e2e
 
 import (
@@ -46,7 +47,7 @@ var (
 	umamiDB      = env("UMAMI_DATABASE_URL", "postgresql://umami:umami@127.0.0.1:5432/umami")
 )
 
-// siteCacheTTL é o SITE_CACHE_TTL do gateway no Compose.
+// siteCacheTTL is the gateway's SITE_CACHE_TTL in Compose.
 const siteCacheTTL = 5 * time.Second
 
 func TestEventReachesUmami(t *testing.T) {
@@ -54,7 +55,7 @@ func TestEventReachesUmami(t *testing.T) {
 
 	resp, err := http.Get(gatewayURL + "/healthz")
 	if err != nil {
-		t.Fatalf("gateway fora do ar: %v", err)
+		t.Fatalf("gateway down: %v", err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -71,21 +72,21 @@ func TestEventReachesUmami(t *testing.T) {
 	}
 	defer db.Close(ctx)
 
-	// Antes do cadastro, o gateway responde como se aceitasse (spec do E2,
-	// seção 6), mas descarta: o pageview não pode chegar ao Umami.
-	if code := sendEvent(t, websiteID, "/antes"); code != http.StatusNoContent {
-		t.Fatalf("site fora da ingest_site: status = %d, quero 204", code)
+	// Before the registration, the gateway answers as if it accepted (E2 spec,
+	// section 6), but drops: the pageview must not reach Umami.
+	if code := sendEvent(t, websiteID, "/before"); code != http.StatusNoContent {
+		t.Fatalf("site not in ingest_site: status = %d, want 204", code)
 	}
 
 	registerSite(t, db, websiteID)
 
-	// A resposta negativa fica no cache do gateway por SITE_CACHE_TTL (5 s no
-	// Compose).
+	// The negative answer stays in the gateway's cache for SITE_CACHE_TTL (5 s
+	// in Compose).
 	time.Sleep(siteCacheTTL + time.Second)
 	start := time.Now().Add(-time.Minute)
 	deadline := time.Now().Add(90 * time.Second)
 	if code := sendEvent(t, websiteID, "/docs/e2e"); code != http.StatusNoContent {
-		t.Fatalf("evento válido: status = %d, quero 204", code)
+		t.Fatalf("valid event: status = %d, want 204", code)
 	}
 
 	for {
@@ -94,17 +95,17 @@ func TestEventReachesUmami(t *testing.T) {
 			return
 		}
 		if views > 1 {
-			t.Fatalf("pageviews = %d, quero 1 (o evento recusado chegou ao Umami?)", views)
+			t.Fatalf("pageviews = %d, want 1 (did the refused event reach Umami?)", views)
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("o page view não apareceu no Umami")
+			t.Fatal("the page view did not show up in Umami")
 		}
 		time.Sleep(time.Second)
 	}
 }
 
-// registerSite cria um tenant ativo com o site no banco stellytics, o que o põe na
-// ingest_site com accepts_ingest verdadeiro.
+// registerSite creates an active tenant with the site in the stellytics
+// database, which puts it in ingest_site with accepts_ingest true.
 func registerSite(t *testing.T, db *pgx.Conn, websiteID string) {
 	t.Helper()
 	ctx := context.Background()
@@ -125,12 +126,12 @@ func registerSite(t *testing.T, db *pgx.Conn, websiteID string) {
 	})
 }
 
-// sendEvent manda um page view ao gateway; hdr são pares de cabeçalho extras.
+// sendEvent sends a page view to the gateway; hdr are extra header pairs.
 func sendEvent(t *testing.T, websiteID, path string, hdr ...string) int {
 	t.Helper()
 	token, nonce := solveChallenge(t, websiteID)
 	body := fmt.Sprintf(`{"type":"event","p":{"t":%q,"n":%q},"payload":{"website":%q,"hostname":"e2e.example","url":%q,`+
-		`"title":"e2e","language":"pt-BR","screen":"1920x1080"}}`, token, nonce, websiteID, path)
+		`"title":"e2e","language":"de-DE","screen":"1920x1080"}}`, token, nonce, websiteID, path)
 	req, _ := http.NewRequest(http.MethodPost, gatewayURL+"/e", strings.NewReader(body))
 	req.Header.Set("Content-Type", "text/plain;charset=UTF-8")
 	req.Header.Set("User-Agent", browserUA)
@@ -145,7 +146,8 @@ func sendEvent(t *testing.T, websiteID, path string, hdr ...string) int {
 	return resp.StatusCode
 }
 
-// solveChallenge pede o desafio em GET /c e o resolve, como o script faz (#25).
+// solveChallenge requests the challenge on GET /c and solves it, as the script
+// does (#25).
 func solveChallenge(t *testing.T, websiteID string) (token, nonce string) {
 	t.Helper()
 	resp, err := http.Get(gatewayURL + "/c?s=" + websiteID)
@@ -168,7 +170,7 @@ func umamiLogin(t *testing.T) string {
 	umamiDo(t, "", http.MethodPost, "/api/auth/login",
 		map[string]string{"username": env("UMAMI_USER", "admin"), "password": env("UMAMI_PASSWORD", "umami")}, &out)
 	if out.Token == "" {
-		t.Fatal("login no Umami sem token")
+		t.Fatal("Umami login without a token")
 	}
 	return out.Token
 }
@@ -181,7 +183,7 @@ func umamiCreateWebsite(t *testing.T, token string) string {
 	name := "e2e-" + strconv.FormatInt(time.Now().UnixNano(), 36)
 	umamiDo(t, token, http.MethodPost, "/api/websites", map[string]string{"name": name, "domain": "e2e.example"}, &out)
 	if out.ID == "" {
-		t.Fatal("Umami não devolveu o id do website")
+		t.Fatal("Umami did not return the website id")
 	}
 	return out.ID
 }
@@ -194,16 +196,16 @@ func umamiPageviews(t *testing.T, token, websiteID string, since time.Time) int 
 	umamiDo(t, token, http.MethodGet, path, nil, &out)
 	raw, ok := out["pageviews"]
 	if !ok {
-		t.Fatalf("stats sem pageviews: %v", out)
+		t.Fatalf("stats without pageviews: %v", out)
 	}
-	// v3 devolve um número; versões antigas, {"value": n}.
+	// v3 returns a number; older versions, {"value": n}.
 	var n int
 	if err := json.Unmarshal(raw, &n); err == nil {
 		return n
 	}
 	var v struct{ Value int }
 	if err := json.Unmarshal(raw, &v); err != nil {
-		t.Fatalf("pageviews inesperado: %s", raw)
+		t.Fatalf("unexpected pageviews: %s", raw)
 	}
 	return v.Value
 }
@@ -234,8 +236,8 @@ func umamiDo(t *testing.T, token, method, path string, in, out any) {
 	}
 }
 
-// TestCustomEventReachesUmami envia um evento customizado (#50) e confere no
-// banco do Umami o nome e as propriedades, e que o IP completo não foi gravado.
+// TestCustomEventReachesUmami sends a custom event (#50) and checks in Umami's
+// database the name and the properties, and that the full IP was not written.
 func TestCustomEventReachesUmami(t *testing.T) {
 	ctx := context.Background()
 	token := umamiLogin(t)
@@ -253,7 +255,7 @@ func TestCustomEventReachesUmami(t *testing.T) {
 	body := func(extra string) string {
 		tok, nonce := solveChallenge(t, websiteID)
 		return fmt.Sprintf(`{"type":"event","p":{"t":%q,"n":%q},"payload":{"website":%q,"hostname":"e2e.example","url":"/pricing",`+
-			`"title":"e2e","language":"pt-BR","screen":"1920x1080",%s}}`, tok, nonce, websiteID, extra)
+			`"title":"e2e","language":"de-DE","screen":"1920x1080",%s}}`, tok, nonce, websiteID, extra)
 	}
 	post := func(b string) int {
 		req, _ := http.NewRequest(http.MethodPost, gatewayURL+"/e", strings.NewReader(b))
@@ -267,10 +269,10 @@ func TestCustomEventReachesUmami(t *testing.T) {
 		return resp.StatusCode
 	}
 	if code := post(body(`"name":"signup_clicked","data":{"plan":"pro","seats":3,"trial":true}`)); code != http.StatusNoContent {
-		t.Fatalf("evento customizado: status = %d, quero 204", code)
+		t.Fatalf("custom event: status = %d, want 204", code)
 	}
 	if code := post(body(`"name":"bad name"`)); code != http.StatusBadRequest {
-		t.Fatalf("nome inválido: status = %d, quero 400", code)
+		t.Fatalf("invalid name: status = %d, want 400", code)
 	}
 
 	udb, err := pgx.Connect(ctx, umamiDB)
@@ -306,26 +308,27 @@ func TestCustomEventReachesUmami(t *testing.T) {
 		}
 		rows.Close()
 		if got["plan"] == "pro" && got["seats"] != "" {
-			t.Logf("propriedades no Umami: %v", got)
+			t.Logf("properties in Umami: %v", got)
 			if got["plan"] != "pro" || !strings.HasPrefix(got["seats"], "3") {
-				t.Fatalf("propriedades = %v", got)
+				t.Fatalf("properties = %v", got)
 			}
 			var n int
 			if err := udb.QueryRow(ctx, `SELECT count(*) FROM website_event WHERE website_id = $1 AND event_name IS NOT NULL`, websiteID).Scan(&n); err != nil || n != 1 {
-				t.Fatalf("eventos customizados = %d (err %v), quero 1", n, err)
+				t.Fatalf("custom events = %d (err %v), want 1", n, err)
 			}
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("o evento customizado não apareceu no Umami (visto: %v)", got)
+			t.Fatalf("the custom event did not show up in Umami (seen: %v)", got)
 		}
 		time.Sleep(time.Second)
 	}
 }
 
-// TestWalletEventsReachUmami envia os dois eventos que window.stellytics.wallets
-// (script v1.3.0, #50) produz e confere no banco do Umami que wallet_selected
-// leva só wallet=freighter e que wallet_disconnected não leva propriedade.
+// TestWalletEventsReachUmami sends the two events that
+// window.stellytics.wallets (script v1.3.0, #50) produces and checks in Umami's
+// database that wallet_selected carries only wallet=freighter and that
+// wallet_disconnected carries no property.
 func TestWalletEventsReachUmami(t *testing.T) {
 	ctx := context.Background()
 	token := umamiLogin(t)
@@ -346,7 +349,7 @@ func TestWalletEventsReachUmami(t *testing.T) {
 	} {
 		tok, nonce := solveChallenge(t, websiteID)
 		b := fmt.Sprintf(`{"type":"event","p":{"t":%q,"n":%q},"payload":{"website":%q,"hostname":"e2e.example","url":"/connect",`+
-			`"title":"e2e","language":"pt-BR","screen":"1920x1080",%s}}`, tok, nonce, websiteID, extra)
+			`"title":"e2e","language":"de-DE","screen":"1920x1080",%s}}`, tok, nonce, websiteID, extra)
 		req, _ := http.NewRequest(http.MethodPost, gatewayURL+"/e", strings.NewReader(b))
 		req.Header.Set("Content-Type", "text/plain")
 		req.Header.Set("User-Agent", browserUA)
@@ -356,7 +359,7 @@ func TestWalletEventsReachUmami(t *testing.T) {
 		}
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusNoContent {
-			t.Fatalf("%s: status = %d, quero 204", extra, resp.StatusCode)
+			t.Fatalf("%s: status = %d, want 204", extra, resp.StatusCode)
 		}
 	}
 
@@ -384,14 +387,14 @@ func TestWalletEventsReachUmami(t *testing.T) {
 		}
 		rows.Close()
 		if len(got) == 2 {
-			t.Logf("eventos no Umami: %v", got)
+			t.Logf("events in Umami: %v", got)
 			if got[0] != "wallet_disconnected|=" || got[1] != "wallet_selected|wallet=freighter" {
-				t.Fatalf("eventos = %v", got)
+				t.Fatalf("events = %v", got)
 			}
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("os eventos de carteira não apareceram no Umami (visto: %v)", got)
+			t.Fatalf("the wallet events did not show up in Umami (seen: %v)", got)
 		}
 		time.Sleep(time.Second)
 	}

@@ -28,14 +28,15 @@ var userAgents = []string{
 }
 
 var (
-	languages = []string{"en-US", "pt-BR", "es-ES", "de-DE", "fr-FR", "ja-JP"}
+	languages = []string{"en-US", "it-IT", "es-ES", "de-DE", "fr-FR", "ja-JP"}
 	screens   = []string{"1920x1080", "1366x768", "390x844", "1440x900", "412x915", "2560x1440"}
 	pages     = []string{"/", "/docs", "/docs/getting-started", "/pricing", "/blog", "/blog/stellar-soroban", "/about", "/app/swap", "/app/pools", "/app/portfolio"}
 )
 
-// visitor é um navegador simulado: IP, UA, idioma e tela fixos. Cada visitante
-// tem o próprio /24 (o gateway trunca o IPv4 nesse bloco), para o limite por IP
-// truncado e o de fingerprints se comportarem como com visitantes reais.
+// visitor is a simulated browser: fixed IP, UA, language and screen. Each
+// visitor has its own /24 (the gateway truncates the IPv4 to that block), so
+// that the per-truncated-IP limit and the fingerprint limit behave as with
+// real visitors.
 type visitor struct {
 	ip, ua, lang, screen string
 }
@@ -49,10 +50,11 @@ func newVisitor(i int) visitor {
 	}
 }
 
-// solve acha o nonce da prova de JS (mesmo algoritmo de internal/proof, que o
-// Go não deixa importar de fora de services/ingest-web: SHA-256(token+":"+nonce)
-// com n bits zero no começo). Se divergir do gateway, o teste inteiro vira
-// 204 descartado e a conferência no Umami mostra zero eventos.
+// solve finds the nonce of the JS proof (same algorithm as internal/proof,
+// which Go does not allow importing from outside services/ingest-web:
+// SHA-256(token+":"+nonce) with n leading zero bits). If it diverges from the
+// gateway, the whole test becomes dropped 204s and the check in Umami shows
+// zero events.
 func solve(token string, n int) string {
 	for i := uint64(0); ; i++ {
 		nonce := strconv.FormatUint(i, 10)
@@ -73,16 +75,16 @@ func solve(token string, n int) string {
 
 func runWeb(args []string) error {
 	fs := flag.NewFlagSet("web", flag.ExitOnError)
-	stateFile := fs.String("state", "state.json", "arquivo de estado do setup")
-	gateway := fs.String("gateway", envOr("GATEWAY_URL", "http://127.0.0.1:3002"), "URL do gateway")
-	umamiDB := fs.String("umami-db", envOr("UMAMI_DATABASE_URL", "postgresql://umami:umami@127.0.0.1:5432/umami"), "banco do Umami, para conferir o que chegou")
-	profile := fs.String("profile", "11.6x2m", "degraus taxaxduração de page views por segundo")
-	visitors := fs.Int("visitors", 20000, "visitantes distintos (IPs /24 e fingerprints)")
-	maxInflight := fs.Int("max-inflight", 2000, "máximo de page views em andamento")
-	settle := fs.Duration("settle", 10*time.Second, "espera antes de contar no Umami")
-	allowRemote := fs.Bool("allow-remote", false, "permite alvos que não sejam loopback")
-	watchSpec := fs.String("watch", "", "processos locais nome=pid,...")
-	dockerSpec := fs.String("docker", "", "contêineres para o docker stats, separados por vírgula")
+	stateFile := fs.String("state", "state.json", "state file from setup")
+	gateway := fs.String("gateway", envOr("GATEWAY_URL", "http://127.0.0.1:3002"), "gateway URL")
+	umamiDB := fs.String("umami-db", envOr("UMAMI_DATABASE_URL", "postgresql://umami:umami@127.0.0.1:5432/umami"), "Umami database, to check what arrived")
+	profile := fs.String("profile", "11.6x2m", "ratexduration steps of page views per second")
+	visitors := fs.Int("visitors", 20000, "distinct visitors (/24 IPs and fingerprints)")
+	maxInflight := fs.Int("max-inflight", 2000, "maximum page views in flight")
+	settle := fs.Duration("settle", 10*time.Second, "wait before counting in Umami")
+	allowRemote := fs.Bool("allow-remote", false, "allows targets that are not loopback")
+	watchSpec := fs.String("watch", "", "local processes name=pid,...")
+	dockerSpec := fs.String("docker", "", "containers for docker stats, comma-separated")
 	_ = fs.Parse(args)
 
 	steps, err := parseProfile(*profile)
@@ -135,8 +137,8 @@ func runWeb(args []string) error {
 			resp.Body.Close()
 			d := time.Since(t0)
 			rec.add(stepIdx, op, d, strconv.Itoa(resp.StatusCode))
-			// Linha à parte por status: com o limite de repasses ligado, as
-			// respostas de cada status são medidas separadamente; 204 inclui descartes.
+			// Separate row per status: with the relay limit on, the responses of
+			// each status are measured separately; 204 includes drops.
 			rec.add(stepIdx, op+" "+strconv.Itoa(resp.StatusCode), d, strconv.Itoa(resp.StatusCode))
 			return resp, nil
 		}
@@ -180,32 +182,32 @@ func runWeb(args []string) error {
 		case err != nil:
 			failed.Add(1)
 		case r2.StatusCode == http.StatusNoContent:
-			accepted.Add(1) // 204: aceito ou descartado; o Umami diz qual
+			accepted.Add(1) // 204: accepted or dropped; Umami tells which
 		default:
 			notAccepted.Add(1)
 		}
 	}
 
-	fmt.Printf("perfil %s, %d visitantes, gateway %s\n", *profile, *visitors, *gateway)
+	fmt.Printf("profile %s, %d visitors, gateway %s\n", *profile, *visitors, *gateway)
 	var fired, saturated int64
 	var starts []time.Time
 	began := time.Now()
 	fired, saturated, starts = drive(ctx, steps, *maxInflight, func(i int, s step) {
-		fmt.Printf("[%s] degrau %d: %s\n", time.Now().Format("15:04:05"), i, s)
+		fmt.Printf("[%s] step %d: %s\n", time.Now().Format("15:04:05"), i, s)
 	}, fire)
 	elapsed := time.Since(began)
 	rec.report(steps)
 	w.report(steps, starts, time.Now())
 
-	fmt.Printf("\npage views iniciados: %d em %s (%.2f/s); saturação do gerador: %d\n", fired, elapsed.Round(time.Second), float64(fired)/elapsed.Seconds(), saturated)
-	fmt.Printf("POST /e com 204: %d; outro status (429 etc.): %d; falha de rede ou desafio: %d\n", accepted.Load(), notAccepted.Load(), failed.Load())
+	fmt.Printf("\npage views started: %d in %s (%.2f/s); generator saturation: %d\n", fired, elapsed.Round(time.Second), float64(fired)/elapsed.Seconds(), saturated)
+	fmt.Printf("POST /e with 204: %d; other status (429 etc.): %d; network or challenge failure: %d\n", accepted.Load(), notAccepted.Load(), failed.Load())
 	time.Sleep(*settle)
 	after, err := countUmami(ctx, *umamiDB, st.UmamiWebsiteID)
 	if err != nil {
 		return err
 	}
 	got := after - umamiBefore
-	fmt.Printf("page views gravados no Umami: %d de %d com 204 (%.3f%%); descartados ou perdidos: %d\n",
+	fmt.Printf("page views written to Umami: %d of %d with 204 (%.3f%%); dropped or lost: %d\n",
 		got, accepted.Load(), 100*float64(got)/float64(max(accepted.Load(), 1)), accepted.Load()-got)
 	return nil
 }

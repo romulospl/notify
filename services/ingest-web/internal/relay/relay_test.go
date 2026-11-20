@@ -47,9 +47,10 @@ func TestSendWithoutUserAgent(t *testing.T) {
 	if err := c.Send(context.Background(), ev, "", netip.MustParseAddr("203.0.113.0")); err != nil {
 		t.Fatal(err)
 	}
-	// Sem User-Agent do cliente, nada é inventado (nem o "Go-http-client").
+	// Without a client User-Agent, nothing is made up (not even
+	// "Go-http-client").
 	if len(gotUA) != 0 {
-		t.Errorf("User-Agent enviado = %q", gotUA)
+		t.Errorf("User-Agent sent = %q", gotUA)
 	}
 }
 
@@ -81,6 +82,6 @@ func TestHeartbeat(t *testing.T) {
 	}
 	status = http.StatusServiceUnavailable
 	if ue, ok := errors.AsType[*UpstreamError](c.Heartbeat(context.Background())); !ok || ue.Status != 503 {
-		t.Errorf("Heartbeat com 503 não devolveu UpstreamError")
+		t.Errorf("Heartbeat with 503 did not return UpstreamError")
 	}
 }

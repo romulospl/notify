@@ -1,17 +1,18 @@
 import "server-only";
-import type { OperatorContext } from "../../access";
+import type { DemoContext, OperatorContext } from "../../access";
 import { sql } from "../../db";
 import type { Period } from "../../period";
 import { type ApiCounts, metricSources } from "../api-metrics";
 
-// Painel de API global do SCF (#38): volume, erros e latência de cada projeto
-// ativo no período, somando os serviços não arquivados dele. Projeto removido
-// ou pendente não entra (spec do E2, seção 6); projeto ativo sem serviço ou
-// sem requisição entra com zeros, para o SCF achar quem não usa.
+// Global SCF API dashboard (#38): volume, errors and latency of each active
+// project in the period, summing its non-archived services. A removed or
+// pending project is left out (E2 spec, section 6); an active project with no
+// service or no requests is included with zeros, so the SCF finds who is not
+// using it.
 //
-// Cada projeto lê as tabelas pela mesma regra do painel do tenant
-// (metricSources, #37), com a última hora consolidada dele: os dois painéis
-// mostram os mesmos números para o mesmo período.
+// Each project reads the tables by the same rule as the tenant dashboard
+// (metricSources, #37), with its own last rolled-up hour: both dashboards
+// show the same numbers for the same period.
 
 export type ProjectApiStats = {
   tenantId: string;
@@ -31,10 +32,20 @@ type Row = {
 };
 
 export async function getApiOverview(ctx: OperatorContext, period: Period): Promise<ProjectApiStats[]> {
-  // O contexto não filtra nada aqui: exigi-lo prova que quem chama é operador.
+  // The context filters nothing here: requiring it proves that the caller is an operator.
   void ctx;
-  // Projetos ativos, serviços não arquivados e o fim da última hora
-  // consolidada de cada um (o índice (tenant_id, bucket_start) atende).
+  return apiOverview(period);
+}
+
+// Same numbers for the public demo's operator view, restricted to the demo
+// tenant: no other project is read.
+export async function getDemoApiOverview(ctx: DemoContext, period: Period): Promise<ProjectApiStats[]> {
+  return apiOverview(period, ctx.tenantId);
+}
+
+async function apiOverview(period: Period, onlyTenantId?: string): Promise<ProjectApiStats[]> {
+  // Active projects, non-archived services and the end of each one's last
+  // rolled-up hour (the (tenant_id, bucket_start) index serves it).
   const projects = await sql<
     { tenant_id: string; name: string; slug: string; services: string; until: Date | string | null }[]
   >`
@@ -42,13 +53,14 @@ export async function getApiOverview(ctx: OperatorContext, period: Period): Prom
       (SELECT count(*) FROM api_service s WHERE s.tenant_id = t.id AND s.archived_at IS NULL) AS services,
       (SELECT max(bucket_start) + interval '1 hour' FROM api_metric_1h m WHERE m.tenant_id = t.id) AS until
     FROM tenant t
-    WHERE t.status = 'active'
+    WHERE t.status = 'active' ${onlyTenantId ? sql`AND t.id = ${onlyTenantId}` : sql``}
     ORDER BY t.name`;
   if (projects.length === 0) return [];
 
-  // Os trechos de cada projeto vão num JSON só, que vira uma tabela com
-  // json_to_recordset (o driver não serializa arrays de texto aqui). Trecho
-  // vazio (from >= to) não devolve linha; o de dias some no período por hora.
+  // Each project's stretches go in a single JSON, which becomes a table with
+  // json_to_recordset (the driver does not serialize text arrays here). An
+  // empty stretch (from >= to) returns no row; the days one disappears in an
+  // hourly period.
   const ranges = projects.map((p) => {
     const src = metricSources(period, p.until ? new Date(p.until) : null);
     const day = src.day ?? { from: period.startAt, to: period.startAt };

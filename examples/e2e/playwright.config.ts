@@ -19,8 +19,8 @@ function server(name: string, port: number, command: string, cwd: string, site?:
 export default defineConfig({
   testDir: "tests",
   timeout: 60_000,
-  // Sem retry: cada site é criado uma vez por execução, e os page views de uma
-  // tentativa que falhou ficariam no banco e quebrariam a seguinte.
+  // No retry: each site is created once per run, and the page views of a
+  // failed attempt would stay in the database and break the next one.
   retries: 0,
   reporter: process.env.CI ? [["list"], ["github"]] : "list",
   use: { ...devices["Desktop Chrome"], trace: "retain-on-failure" },

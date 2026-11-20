@@ -5,7 +5,7 @@ import * as schema from "./schema";
 
 const globalForDb = globalThis as unknown as { stellyticsSql?: ReturnType<typeof postgres> };
 
-// Reaproveita a conexão entre recargas do `next dev`.
+// Reuses the connection across `next dev` reloads.
 const sql = globalForDb.stellyticsSql ?? postgres(env.databaseUrl, { max: 10, onnotice: () => {} });
 if (process.env.NODE_ENV !== "production") globalForDb.stellyticsSql = sql;
 

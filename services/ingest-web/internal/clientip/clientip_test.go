@@ -17,11 +17,11 @@ func TestTruncate(t *testing.T) {
 	}
 	for in, want := range cases {
 		if got := Truncate(netip.MustParseAddr(in)).String(); got != want {
-			t.Errorf("Truncate(%s) = %s, quero %s", in, got, want)
+			t.Errorf("Truncate(%s) = %s, want %s", in, got, want)
 		}
 	}
 	if got := Truncate(netip.Addr{}); got.IsValid() {
-		t.Errorf("Truncate(inválido) = %s, quero inválido", got)
+		t.Errorf("Truncate(invalid) = %s, want invalid", got)
 	}
 }
 
@@ -31,15 +31,15 @@ func TestFromRequest(t *testing.T) {
 		name, remote, xff, want string
 		trusted                 []netip.Prefix
 	}{
-		{"sem proxy", "198.51.100.7:5000", "", "198.51.100.7", nil},
-		{"XFF ignorado sem proxy confiável", "198.51.100.7:5000", "203.0.113.77", "198.51.100.7", nil},
-		{"XFF de proxy não listado", "198.51.100.7:5000", "203.0.113.77", "198.51.100.7", proxies},
-		{"proxy confiável", "10.0.0.2:5000", "203.0.113.77", "203.0.113.77", proxies},
-		{"cadeia com entrada forjada", "10.0.0.2:5000", "1.2.3.4, 203.0.113.77, 10.0.0.9", "203.0.113.77", proxies},
-		{"proxy sem XFF", "10.0.0.2:5000", "", "10.0.0.2", proxies},
-		{"XFF inválido", "10.0.0.2:5000", "lixo", "10.0.0.2", proxies},
+		{"no proxy", "198.51.100.7:5000", "", "198.51.100.7", nil},
+		{"XFF ignored without a trusted proxy", "198.51.100.7:5000", "203.0.113.77", "198.51.100.7", nil},
+		{"XFF from an unlisted proxy", "198.51.100.7:5000", "203.0.113.77", "198.51.100.7", proxies},
+		{"trusted proxy", "10.0.0.2:5000", "203.0.113.77", "203.0.113.77", proxies},
+		{"chain with a forged entry", "10.0.0.2:5000", "1.2.3.4, 203.0.113.77, 10.0.0.9", "203.0.113.77", proxies},
+		{"proxy without XFF", "10.0.0.2:5000", "", "10.0.0.2", proxies},
+		{"invalid XFF", "10.0.0.2:5000", "junk", "10.0.0.2", proxies},
 		{"IPv6", "[fd00::2]:5000", "2001:db8::1", "2001:db8::1", proxies},
-		{"IPv4 mapeado", "[::ffff:198.51.100.7]:5000", "", "198.51.100.7", nil},
+		{"mapped IPv4", "[::ffff:198.51.100.7]:5000", "", "198.51.100.7", nil},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -53,14 +53,14 @@ func TestFromRequest(t *testing.T) {
 				t.Fatal(err)
 			}
 			if got.String() != c.want {
-				t.Errorf("FromRequest = %s, quero %s", got, c.want)
+				t.Errorf("FromRequest = %s, want %s", got, c.want)
 			}
 		})
 	}
 
 	req := httptest.NewRequest("POST", "/e", nil)
-	req.RemoteAddr = "não-é-ip"
+	req.RemoteAddr = "not-an-ip"
 	if _, err := (Resolver{}).FromRequest(req); err == nil {
-		t.Error("RemoteAddr inválido não deu erro")
+		t.Error("invalid RemoteAddr gave no error")
 	}
 }

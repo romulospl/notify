@@ -2,8 +2,8 @@ import "server-only";
 import { sql } from "../../db";
 import type { OperatorContext } from "../../access";
 
-// Lista de projetos ativos para a API de leitura do SCF (#48). Mesmo critério
-// dos painéis globais: projeto removido ou pendente não aparece.
+// List of active projects for the SCF read API (#48). Same criterion as the
+// global dashboards: a removed or pending project does not appear.
 
 export type ActiveProject = {
   id: string;

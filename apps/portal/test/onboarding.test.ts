@@ -1,5 +1,5 @@
-// Cadastro self-service do projeto (#17) contra o Postgres de DATABASE_URL.
-// A sessão é simulada.
+// Self-service project sign-up (#17) against the DATABASE_URL Postgres.
+// The session is mocked.
 import { randomUUID } from "node:crypto";
 import { eq, inArray, like } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,7 +10,7 @@ import { runMigrations } from "@/lib/db/migrate";
 import { auditLog, tenant, tenantMember, user } from "@/lib/db/schema";
 
 const DOMAIN = "@onboarding-test.stellytics.invalid";
-// Todo projeto destes testes tem nome com este prefixo, para a limpeza.
+// Every project in these tests has a name with this prefix, for the cleanup.
 const NAME = "Onboarding Test";
 
 let sessionUser: { id: string; role: "tenant" | "operator"; emailVerified: boolean } | null = null;
@@ -61,32 +61,32 @@ afterAll(async () => {
   await sql.end();
 });
 
-describe("slug do projeto", () => {
-  it("vira ASCII minúsculo com hífens", () => {
+describe("project slug", () => {
+  it("becomes lowercase ASCII with hyphens", () => {
     expect(slugify("Soroban Explorer!")).toBe("soroban-explorer");
-    expect(slugify("  Ação Única  ")).toBe("acao-unica");
+    expect(slugify("  Élan Zürich  ")).toBe("elan-zurich");
     expect(slugify("🚀🚀")).toBe("project");
     expect(slugify("a".repeat(60))).toHaveLength(40);
   });
 });
 
-describe("quem pode criar projeto", () => {
-  it("membro com e-mail confirmado e sem projeto", async () => {
+describe("who can create a project", () => {
+  it("member with a confirmed e-mail and without a project", async () => {
     const id = await login();
     expect(await requireOnboardingContext()).toEqual({ userId: id });
   });
 
-  it("e-mail não confirmado recebe 404", async () => {
+  it("unconfirmed e-mail gets 404", async () => {
     await login("tenant", false);
     await expect(requireOnboardingContext()).rejects.toMatchObject(NOT_FOUND);
   });
 
-  it("operador recebe 404", async () => {
+  it("operator gets 404", async () => {
     await login("operator");
     await expect(requireOnboardingContext()).rejects.toMatchObject(NOT_FOUND);
   });
 
-  it("quem já tem projeto vai para o painel", async () => {
+  it("whoever already has a project goes to the dashboard", async () => {
     await login();
     await createProject(await requireOnboardingContext(), { name: `${NAME} existing` });
     await expect(requireOnboardingContext()).rejects.toMatchObject({
@@ -95,8 +95,8 @@ describe("quem pode criar projeto", () => {
   });
 });
 
-describe("criação do projeto", () => {
-  it("cria o tenant ativo com quem criou como owner e registra no audit_log", async () => {
+describe("project creation", () => {
+  it("creates the active tenant with its creator as owner and records it in the audit_log", async () => {
     const userId = await login();
     const created = await createProject(await requireOnboardingContext(), { name: `  ${NAME} Alpha  ` });
     expect(created).toMatchObject({ name: `${NAME} Alpha`, slug: "onboarding-test-alpha" });
@@ -109,7 +109,7 @@ describe("criação do projeto", () => {
     expect(audit).toMatchObject([{ action: "tenant.created", actorUserId: userId }]);
   });
 
-  it("com SIGNUP_APPROVAL desligado (padrão ou `false`) o tenant nasce active, como sempre", async () => {
+  it("with SIGNUP_APPROVAL off (default or `false`) the tenant starts active, as always", async () => {
     for (const value of [undefined, "", "false", "0", "no"]) {
       if (value === undefined) delete process.env.SIGNUP_APPROVAL;
       else process.env.SIGNUP_APPROVAL = value;
@@ -121,7 +121,7 @@ describe("criação do projeto", () => {
     }
   });
 
-  it("nome repetido em outro usuário ganha slug com sufixo", async () => {
+  it("a name repeated by another user gets a slug with a suffix", async () => {
     await login();
     const first = await createProject(await requireOnboardingContext(), { name: `${NAME} Same` });
     await login();
@@ -130,14 +130,14 @@ describe("criação do projeto", () => {
     expect(second.slug).toMatch(/^onboarding-test-same-[0-9a-f]{6}$/);
   });
 
-  it("recusa nome curto demais", async () => {
+  it("rejects a name that is too short", async () => {
     await login();
     await expect(createProject(await requireOnboardingContext(), { name: " x " })).rejects.toBeInstanceOf(
       ProjectError,
     );
   });
 
-  it("dois pedidos ao mesmo tempo criam um projeto só (D1)", async () => {
+  it("two requests at the same time create a single project (D1)", async () => {
     const userId = await login();
     const ctx = await requireOnboardingContext();
     const results = await Promise.allSettled([
@@ -151,12 +151,12 @@ describe("criação do projeto", () => {
   });
 });
 
-describe("cadastro com aprovação (#49)", () => {
+describe("sign-up with approval (#49)", () => {
   afterEach(() => {
     delete process.env.SIGNUP_APPROVAL;
   });
 
-  it("com SIGNUP_APPROVAL ligado o tenant nasce pending, com owner e audit_log", async () => {
+  it("with SIGNUP_APPROVAL on the tenant starts pending, with owner and audit_log", async () => {
     for (const value of ["true", "1", " TRUE "]) {
       process.env.SIGNUP_APPROVAL = value;
       const userId = await login();
@@ -173,7 +173,7 @@ describe("cadastro com aprovação (#49)", () => {
     }
   });
 
-  it("projeto pendente só passa por requireTenantContext com allowPending; o resto vai para /dashboard", async () => {
+  it("a pending project only passes requireTenantContext with allowPending; the rest goes to /dashboard", async () => {
     process.env.SIGNUP_APPROVAL = "true";
     await login();
     await createProject(await requireOnboardingContext(), { name: `${NAME} Waiting` });

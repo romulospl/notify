@@ -1,28 +1,28 @@
-// Seed de desenvolvimento (#19): 2 projetos de teste e 1 operador SCF.
-// Pode rodar mais de uma vez: o que já existe fica como está.
+// Development seed (#19): 2 test projects and 1 SCF operator.
+// It can run more than once: what already exists stays as it is.
 //
-// Uso:
+// Usage:
 //   read -rs SEED_PASSWORD && export SEED_PASSWORD
 //   pnpm db:seed
 //
-// Contas criadas (todas com a senha de SEED_PASSWORD e e-mail confirmado):
-//   owner-a@seed.stellytics.localhost  dono do "Seed Project A"
-//   owner-b@seed.stellytics.localhost  dono do "Seed Project B"
-//   operator@seed.stellytics.localhost operador SCF (não é membro de tenant, D2)
-// Cada projeto ganha um serviço de API com uma chave de ingestão (a chave não
-// é mostrada; crie outra pela tela se precisar dela) e, se UMAMI_API_KEY
-// estiver definida, um site no Umami.
+// Accounts created (all with the SEED_PASSWORD password and a confirmed e-mail):
+//   owner-a@seed.stellytics.localhost  owner of "Seed Project A"
+//   owner-b@seed.stellytics.localhost  owner of "Seed Project B"
+//   operator@seed.stellytics.localhost SCF operator (not a tenant member, D2)
+// Each project gets an API service with an ingest key (the key is not
+// shown; create another one in the UI if you need it) and, if UMAMI_API_KEY
+// is set, a site in Umami.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
 import postgres from "postgres";
 
 if (process.env.NODE_ENV === "production") {
-  console.error("O seed é só para desenvolvimento.");
+  console.error("The seed is for development only.");
   process.exit(1);
 }
 const password = process.env.SEED_PASSWORD;
 if (!password || password.length < 12) {
-  console.error("Informe uma senha de pelo menos 12 caracteres em SEED_PASSWORD.");
+  console.error("Provide a password of at least 12 characters in SEED_PASSWORD.");
   process.exit(1);
 }
 
@@ -33,7 +33,7 @@ const PROJECTS = [
 ];
 const OPERATOR = `operator@${DOMAIN}`;
 
-// 127.0.0.1:3001 só responde com o override de desenvolvimento do Umami (#62):
+// 127.0.0.1:3001 only answers with the Umami development override (#62):
 // docker compose -f compose.yaml -f infra/compose/umami-port.yaml up -d
 const umamiUrl = (process.env.UMAMI_URL ?? "http://127.0.0.1:3001").replace(/\/$/, "");
 const umamiKey = process.env.UMAMI_API_KEY;
@@ -44,7 +44,7 @@ const sql = postgres(process.env.DATABASE_URL ?? "postgresql://stellytics:stelly
 });
 const hash = await hashPassword(password);
 
-// Mesmo formato de src/lib/ingest-key.ts: ntf_<prefixo base32>_<segredo>.
+// Same format as src/lib/ingest-key.ts: ntf_<base32 prefix>_<secret>.
 function ingestKey() {
   const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
   let bits = 0n;
@@ -71,7 +71,7 @@ async function createUmamiSite(name, domain) {
     headers: { authorization: `Bearer ${umamiKey}`, "content-type": "application/json" },
     body: JSON.stringify({ name, domain }),
   });
-  if (!response.ok) throw new Error(`Umami respondeu ${response.status} ao criar o site ${domain}`);
+  if (!response.ok) throw new Error(`Umami answered ${response.status} when creating the site ${domain}`);
   return (await response.json()).id;
 }
 
@@ -81,7 +81,7 @@ try {
     await sql`insert into audit_log (actor_user_id, action, details)
               values (null, 'operator.created', ${sql.json({ userId: operator.id })})`;
   }
-  console.log(`${OPERATOR}: ${operator.created ? "criado" : "já existia"}`);
+  console.log(`${OPERATOR}: ${operator.created ? "created" : "already existed"}`);
 
   for (const project of PROJECTS) {
     const [existing] = await sql`select id from tenant where slug = ${project.slug}`;
@@ -99,25 +99,25 @@ try {
                  values (${service.id}, ${created.id}, ${prefix}, ${keyHash}, ${owner.id})`;
         return created.id;
       });
-      console.log(`${project.name}: criado, dono ${project.owner}`);
+      console.log(`${project.name}: created, owner ${project.owner}`);
     } else {
-      console.log(`${project.name}: já existia`);
+      console.log(`${project.name}: already existed`);
     }
 
     const [site] = await sql`select id from site where tenant_id = ${tenantId}`;
     if (site) continue;
     if (!umamiKey) {
-      console.log(`${project.name}: sem site (defina UMAMI_API_KEY para criar no Umami)`);
+      console.log(`${project.name}: no site (set UMAMI_API_KEY to create one in Umami)`);
       continue;
     }
     const umamiWebsiteId = await createUmamiSite(`${project.name} site`, project.site);
     await sql`insert into site (tenant_id, name, domain, umami_website_id)
               values (${tenantId}, ${`${project.name} site`}, ${project.site}, ${umamiWebsiteId})`;
-    console.log(`${project.name}: site ${project.site} criado no Umami`);
+    console.log(`${project.name}: site ${project.site} created in Umami`);
   }
 } catch (error) {
   process.exitCode = 1;
-  console.error(`Falha no seed: ${error.message}`);
+  console.error(`Seed failed: ${error.message}`);
 } finally {
   await sql.end();
 }

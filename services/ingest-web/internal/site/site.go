@@ -1,9 +1,10 @@
-// Package site diz se um websiteId pode receber eventos.
+// Package site says whether a websiteId may receive events.
 //
-// A fonte é a visão ingest_site(umami_website_id uuid, accepts_ingest boolean)
-// do banco stellytics, criada pelas migrações do portal e lida pelo usuário
-// stellytics_ingest, que só tem SELECT nela (spec do E2, seções 4 e 6). Site
-// arquivado ou de tenant que não está ativo vem com accepts_ingest falso.
+// The source is the view ingest_site(umami_website_id uuid, accepts_ingest
+// boolean) in the stellytics database, created by the portal migrations and
+// read by the stellytics_ingest user, which only has SELECT on it (E2 spec,
+// sections 4 and 6). A site that is archived or belongs to a tenant that is not
+// active comes with accepts_ingest false.
 package site
 
 import (
@@ -17,17 +18,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Store responde se o site existe e está ativo.
+// Store answers whether the site exists and is active.
 type Store interface {
 	Active(ctx context.Context, websiteID string) (bool, error)
 }
 
-// PG consulta a ingest_site no Postgres.
+// PG queries ingest_site in Postgres.
 type PG struct {
 	Pool *pgxpool.Pool
 }
 
-// Active implementa Store.
+// Active implements Store.
 func (s PG) Active(ctx context.Context, websiteID string) (bool, error) {
 	var accepts bool
 	err := s.Pool.QueryRow(ctx,
@@ -42,31 +43,32 @@ func (s PG) Active(ctx context.Context, websiteID string) (bool, error) {
 	return accepts, nil
 }
 
-// maxCached limita cada um dos dois mapas do cache.
+// maxCached caps each of the cache's two maps.
 const maxCached = 10_000
 
-// queryTimeout limita a consulta compartilhada entre as requisições que
-// esperam o mesmo site. Ela não herda o cancelamento de nenhuma requisição.
+// queryTimeout bounds the query shared among the requests waiting for the same
+// site. It does not inherit the cancellation of any request.
 const queryTimeout = 5 * time.Second
 
-// errBackoff é por quanto tempo, depois de uma falha, o stale-if-error não
-// consulta o banco de novo e responde na hora (circuit breaker simples).
+// errBackoff is how long, after a failure, stale-if-error does not query the
+// database again and answers immediately (simple circuit breaker).
 const errBackoff = 2 * time.Second
 
-// Cached guarda as respostas de outro Store por um TTL curto. Erros não ficam
-// em cache como resposta.
+// Cached keeps the answers of another Store for a short TTL. Errors are not
+// cached as an answer.
 //
-// Os sites aceitos ficam em `entries` e os recusados ou desconhecidos em
-// `neg`, cada um com seu teto. Assim, quem testa IDs inventados só enche o
-// mapa negativo e nunca expulsa um site aceito.
+// Accepted sites are kept in `entries` and refused or unknown ones in `neg`,
+// each with its own cap. This way, whoever probes made-up IDs only fills the
+// negative map and never evicts an accepted site.
 //
-// Com WithStale, quando a consulta falha, a última resposta ACEITA do mesmo
-// site ainda vale por até stale depois de vencer (stale-if-error). Site nunca
-// visto, desconhecido ou recusado não ganha stale: continua com erro. Passado
-// o stale, volta o erro. A revogação ocorrida durante a falha só vale quando o
-// banco volta. Há uma só consulta em voo por site. Depois de uma falha, um
-// circuit breaker evita novas consultas por errBackoff: a resposta vencida
-// sai na hora e uma sonda em segundo plano testa o banco.
+// With WithStale, when the query fails, the last ACCEPTED answer for the same
+// site is still valid for up to stale after it expires (stale-if-error). A site
+// never seen, unknown or refused gets no stale answer: it stays with the error.
+// Once stale has passed, the error returns. A revocation that happened during
+// the failure only takes effect when the database comes back. There is only one
+// query in flight per site. After a failure, a circuit breaker avoids new
+// queries for errBackoff: the stale answer goes out immediately and a
+// background probe tests the database.
 type Cached struct {
 	next    Store
 	ttl     time.Duration
@@ -78,11 +80,11 @@ type Cached struct {
 	staleServed atomic.Uint64
 
 	mu       sync.Mutex
-	entries  map[string]entry     // aceitos
-	neg      map[string]time.Time // recusados ou desconhecidos: validade
+	entries  map[string]entry     // accepted
+	neg      map[string]time.Time // refused or unknown: expiry
 	inflight map[string]*call
 
-	// circuit breaker (só com stale ligado)
+	// circuit breaker (only with stale on)
 	failed    bool
 	failUntil time.Time
 	lastErr   error
@@ -93,15 +95,15 @@ type entry struct {
 	expires time.Time
 }
 
-// call é a consulta em voo de um site; quem chega depois espera done.
+// call is the in-flight query for a site; whoever arrives later waits on done.
 type call struct {
 	done    chan struct{}
 	active  bool
 	err     error
-	waiters int // protegido por Cached.mu
+	waiters int // protected by Cached.mu
 }
 
-// NewCached embrulha next com um cache de ttl.
+// NewCached wraps next with a cache of ttl.
 func NewCached(next Store, ttl time.Duration) *Cached {
 	return &Cached{
 		next: next, ttl: ttl, now: time.Now,
@@ -111,17 +113,18 @@ func NewCached(next Store, ttl time.Duration) *Cached {
 	}
 }
 
-// WithStale liga o stale-if-error: respostas aceitas vencidas há menos de
-// stale podem ser servidas quando a consulta falha. Zero (o padrão) desliga.
+// WithStale turns stale-if-error on: accepted answers that expired less than
+// stale ago may be served when the query fails. Zero (the default) turns it
+// off.
 func (c *Cached) WithStale(stale time.Duration) *Cached {
 	c.stale = stale
 	return c
 }
 
-// StaleServed conta as respostas vencidas servidas por causa de erro do banco.
+// StaleServed counts the stale answers served because of a database error.
 func (c *Cached) StaleServed() uint64 { return c.staleServed.Load() }
 
-// Active implementa Store.
+// Active implements Store.
 func (c *Cached) Active(ctx context.Context, websiteID string) (bool, error) {
 	now := c.now()
 	c.mu.Lock()
@@ -135,9 +138,9 @@ func (c *Cached) Active(ctx context.Context, websiteID string) (bool, error) {
 		return false, nil
 	}
 
-	// Circuito aberto: não espera o banco. Serve a resposta aceita vencida, se
-	// couber no stale, ou o último erro; quando o backoff acaba, uma sonda em
-	// segundo plano testa o banco.
+	// Circuit open: do not wait for the database. Serve the stale accepted
+	// answer, if it fits within stale, or the last error; when the backoff
+	// ends, a background probe tests the database.
 	if c.stale > 0 && c.failed {
 		if !now.Before(c.failUntil) && !c.probing && c.inflight[websiteID] == nil {
 			c.probing = true
@@ -171,8 +174,9 @@ func (c *Cached) Active(ctx context.Context, websiteID string) (bool, error) {
 	if cl.err == nil {
 		return cl.active, nil
 	}
-	// Falha da consulta: só uma entrada aceita e vencida há menos de stale pode
-	// responder. A hora é lida de novo: a espera pode ter durado até o timeout.
+	// Query failure: only an accepted entry that expired less than stale ago
+	// can answer. The time is read again: the wait may have lasted until the
+	// timeout.
 	if c.stale > 0 && known && c.now().Before(e.expires.Add(c.stale)) {
 		c.staleServed.Add(1)
 		return true, nil
@@ -180,8 +184,9 @@ func (c *Cached) Active(ctx context.Context, websiteID string) (bool, error) {
 	return false, cl.err
 }
 
-// fetch faz a consulta de um site e acorda quem espera. Roda numa goroutine
-// própria para que o cancelamento de uma requisição não derrube as demais.
+// fetch runs the query for a site and wakes whoever is waiting. It runs in its
+// own goroutine so that the cancellation of one request does not take down the
+// others.
 func (c *Cached) fetch(websiteID string, cl *call, probe bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
@@ -207,9 +212,9 @@ func (c *Cached) fetch(websiteID string, cl *call, probe bool) {
 	close(cl.done)
 }
 
-// store grava a resposta no mapa certo, respeitando o teto de cada um. Uma
-// resposta nova de um lado apaga o registro do outro, para que um site que
-// passou a ser recusado não volte pelo stale. Quem chama segura mu.
+// store writes the answer to the right map, respecting each one's cap. A new
+// answer on one side erases the record on the other, so that a site that became
+// refused does not come back through stale. The caller holds mu.
 func (c *Cached) store(id string, active bool, now time.Time) {
 	exp := now.Add(c.ttl)
 	if active {
@@ -228,14 +233,14 @@ func (c *Cached) store(id string, active bool, now time.Time) {
 			}
 		}
 		if len(c.neg) >= maxCached {
-			clear(c.neg) // só o mapa negativo: os aceitos não são tocados
+			clear(c.neg) // only the negative map: accepted ones are not touched
 		}
 	}
 	c.neg[id] = exp
 }
 
-// evictAccepted abre uma vaga entre os aceitos: primeiro o que já passou da
-// janela útil (TTL mais stale); se nada passou, o mais antigo.
+// evictAccepted opens a slot among the accepted ones: first whichever is
+// already past the useful window (TTL plus stale); if none is, the oldest.
 func (c *Cached) evictAccepted(now time.Time) {
 	var oldest string
 	var oldestExp time.Time

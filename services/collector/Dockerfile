@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
-# Imagem do coletor de métricas de API (#30). O contexto do build é a raiz do
-# repositório:
+# Image of the API metrics collector (#30). The build context is the repository
+# root:
 #   docker build -f services/collector/Dockerfile .
 
 FROM golang:1.26.11-alpine@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab AS build
@@ -12,7 +12,7 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/stellytics-collector ./collector/cmd/stellytics-collector && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/healthcheck ./collector/cmd/healthcheck
 
-# Sem shell nem gerenciador de pacotes: os dois binários e a configuração.
+# No shell and no package manager: the two binaries and the configuration.
 FROM scratch
 COPY --from=build /out/stellytics-collector /stellytics-collector
 COPY --from=build /out/healthcheck /healthcheck

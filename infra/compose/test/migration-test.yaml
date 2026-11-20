@@ -1,8 +1,8 @@
-# Só para o teste da migração de dados (test/data-migration-test.sh, #54).
-# Vai por cima de prod.yaml e prod-test.yaml e deixa duas pilhas (origem e
-# destino) rodarem lado a lado na mesma máquina: tira os IPs fixos da rede
-# (o Caddy, que os usa, não sobe neste teste) e publica no loopback só o que o
-# teste alcança de fora. Nunca use em produção.
+# Only for the data migration test (test/data-migration-test.sh, #54).
+# Goes on top of prod.yaml and prod-test.yaml and lets two stacks (origin and
+# destination) run side by side on the same machine: removes the fixed network
+# IPs (Caddy, which uses them, does not start in this test) and publishes on
+# loopback only what the test reaches from outside. Never use in production.
 
 services:
   umami:

@@ -1,28 +1,28 @@
 #!/bin/sh
-# stellytics-restore (#14, ADR 0004): traz um backup do Object Storage para uma
-# pasta de dados VAZIA e prepara a recuperação. Na próxima subida, o Postgres
-# aplica o WAL arquivado e abre o banco.
+# stellytics-restore (#14, ADR 0004): fetches a backup from Object Storage into an
+# EMPTY data folder and prepares the recovery. On the next start, Postgres
+# applies the archived WAL and opens the database.
 #
-#   stellytics-restore [BACKUP] [ALVO]
-#   BACKUP: nome do backup base (padrão LATEST; `wal-g backup-list` mostra os nomes)
-#   ALVO:   horário até onde recuperar, como '2026-11-14 10:00:00+00'
-#           (padrão: até o último WAL arquivado)
+#   stellytics-restore [BACKUP] [TARGET]
+#   BACKUP: base backup name (default LATEST; `wal-g backup-list` shows the names)
+#   TARGET: time to recover up to, such as '2026-11-14 10:00:00+00'
+#           (default: up to the last archived WAL)
 #
-# Passo a passo na VM em docs/deploy.md ("Restaurar o banco").
+# Step by step on the VM in docs/deploy.md ("Restore the database").
 set -eu
 : "${PGDATA:?}"
 backup="${1:-LATEST}"
 target="${2:-}"
 
 if [ -n "$(ls -A "$PGDATA" 2>/dev/null)" ]; then
-  echo "stellytics-restore: $PGDATA não está vazia; mova os dados atuais antes." >&2
+  echo "stellytics-restore: $PGDATA is not empty; move the current data first." >&2
   exit 1
 fi
 
 wal-g backup-fetch "$PGDATA" "$backup"
-# O backup traz o postgresql.auto.conf da época: se ele veio de uma restauração
-# anterior, tem um restore_command e talvez um recovery_target_* antigo, que
-# faria esta restauração parar no horário errado. Tira tudo antes de escrever.
+# The backup brings the postgresql.auto.conf of its time: if it came from an earlier
+# restore, it has a restore_command and maybe an old recovery_target_*, which
+# would make this restore stop at the wrong time. Remove them all before writing.
 conf="$PGDATA/postgresql.auto.conf"
 if [ -f "$conf" ]; then
   sed -i -E '/^[[:space:]]*(restore_command|recovery_target[a-z_]*)[[:space:]]*=/d' "$conf"
@@ -35,4 +35,4 @@ fi
   fi
 } >> "$PGDATA/postgresql.auto.conf"
 touch "$PGDATA/recovery.signal"
-echo "stellytics-restore: backup $backup pronto em $PGDATA. Suba o Postgres para aplicar o WAL."
+echo "stellytics-restore: backup $backup ready in $PGDATA. Start Postgres to apply the WAL."

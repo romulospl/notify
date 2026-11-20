@@ -1,3 +1,3 @@
-// O pacote server-only lança erro fora do ambiente de React Server Components.
-// Nos testes, os módulos do servidor rodam direto no Node.
+// The server-only package throws outside the React Server Components environment.
+// In the tests, the server modules run directly in Node.
 export {};

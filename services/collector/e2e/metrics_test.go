@@ -2,7 +2,7 @@
 
 package e2e
 
-// #31 contra o contêiner: o que chega ao api_metric_1m.
+// #31 against the container: what reaches api_metric_1m.
 
 import (
 	"bytes"
@@ -42,33 +42,33 @@ func TestCollectorWritesMetrics(t *testing.T) {
 	exec(t, db, `INSERT INTO "user" (id, name, email, email_verified) VALUES ($1, 'e2e', $1 || '@collector.invalid', true)`, user)
 	t.Cleanup(func() { _, _ = db.Exec(context.Background(), `DELETE FROM "user" WHERE id = $1`, user) })
 
-	// Serviço A manda a métrica (delta) e também spans: só a métrica conta (D9).
+	// Service A sends the metric (delta) and also spans: only the metric counts (D9).
 	keyA, tenantA, serviceA := createKey(t, db, user, "active")
-	md := metrics() // 1 requisição em /ledgers/{id}, ver e2e_test.go
-	md.ResourceMetrics().At(0).Resource().Attributes().PutStr("stellytics.tenant.id", "forjado")
+	md := metrics() // 1 request on /ledgers/{id}, see e2e_test.go
+	md.ResourceMetrics().At(0).Resource().Attributes().PutStr("stellytics.tenant.id", "forged")
 	if code := postHTTPWith(t, "Bearer "+keyA, md); code != http.StatusOK {
-		t.Fatalf("métrica: status %d", code)
+		t.Fatalf("metric: status %d", code)
 	}
-	// Métricas e traces passam por batches separados; a regra vale depois que a
-	// métrica do serviço chegou ao exporter (spec, seção 2).
+	// Metrics and traces go through separate batches; the rule applies after the
+	// service's metric has reached the exporter (spec, section 2).
 	wantRows(t, db, tenantA, serviceA, []row{{"/ledgers/{id}", "GET", 200, 1}})
 	if err := exportSpansGRPC(t, "Bearer "+keyA, spans("/ledgers/9", 5)); err != nil {
-		t.Fatalf("spans do serviço A: %v", err)
+		t.Fatalf("service A's spans: %v", err)
 	}
 
-	// Serviço B só manda traces: os spans de servidor HTTP viram métrica, com
-	// a rota normalizada; spans de cliente e logs não deixam nada.
+	// Service B only sends traces: the HTTP server spans become a metric, with
+	// the normalized route; client spans and logs leave nothing behind.
 	keyB, tenantB, serviceB := createKey(t, db, user, "active")
 	if err := exportSpansGRPC(t, "Bearer "+keyB, spans("/accounts/"+account+"/payments/", 2)); err != nil {
-		t.Fatalf("spans do serviço B: %v", err)
+		t.Fatalf("service B's spans: %v", err)
 	}
 	if code := postLogs(t, "Bearer "+keyB); code != http.StatusOK {
 		t.Fatalf("logs: status %d", code)
 	}
 
 	wantRows(t, db, tenantB, serviceB, []row{{"/accounts/{address}/payments", "GET", 200, 2}})
-	// Os spans do serviço A já passaram pelo exporter junto com os do B (o batch
-	// grava em até 200 ms); continuam sem contar.
+	// Service A's spans have already gone through the exporter together with B's
+	// (the batch writes within 200 ms); they still do not count.
 	time.Sleep(time.Second)
 	wantRows(t, db, tenantA, serviceA, []row{{"/ledgers/{id}", "GET", 200, 1}})
 }
@@ -99,9 +99,9 @@ func wantRows(t *testing.T, db *pgx.Conn, tenantID, serviceID string, want []row
 		time.Sleep(300 * time.Millisecond)
 	}
 	if !equalRows(got, want) {
-		t.Errorf("linhas do serviço = %+v, quero %+v", got, want)
+		t.Errorf("service rows = %+v, want %+v", got, want)
 	}
-	// Nada de outro tenant nem dos consolidados (são do job da #34).
+	// Nothing from another tenant nor from the rollups (those belong to the job of #34).
 	var other int
 	if err := db.QueryRow(context.Background(),
 		`SELECT (SELECT count(*) FROM api_metric_1h WHERE tenant_id = $1) + (SELECT count(*) FROM api_metric_1d WHERE tenant_id = $1)`,
@@ -109,7 +109,7 @@ func wantRows(t *testing.T, db *pgx.Conn, tenantID, serviceID string, want []row
 		t.Fatal(err)
 	}
 	if other != 0 {
-		t.Errorf("o coletor gravou %d linhas nos consolidados", other)
+		t.Errorf("the collector wrote %d rows to the rollups", other)
 	}
 }
 
@@ -125,7 +125,7 @@ func equalRows(a, b []row) bool {
 	return true
 }
 
-// spans monta n spans de servidor HTTP no caminho dado, mais um de cliente.
+// spans builds n HTTP server spans on the given path, plus a client one.
 func spans(path string, n int) ptrace.Traces {
 	td := ptrace.NewTraces()
 	rs := td.ResourceSpans().AppendEmpty()
@@ -190,7 +190,7 @@ func post(t *testing.T, path, auth string, body func() ([]byte, error)) int {
 	req.Header.Set("Authorization", auth)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("coletor fora do ar: %v", err)
+		t.Fatalf("collector down: %v", err)
 	}
 	resp.Body.Close()
 	return resp.StatusCode

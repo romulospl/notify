@@ -16,7 +16,7 @@ import (
 	"github.com/romulospl/stellytics/services/internal/pgtest"
 )
 
-// flaky falha nas primeiras n gravações e guarda os lotes recebidos.
+// flaky fails on the first n writes and keeps the batches received.
 type flaky struct {
 	n       int
 	batches []httpmetrics.Batch
@@ -25,7 +25,7 @@ type flaky struct {
 func (f *flaky) write(_ context.Context, b httpmetrics.Batch) error {
 	f.batches = append(f.batches, b)
 	if len(f.batches) <= f.n {
-		return errors.New("banco fora do ar")
+		return errors.New("database down")
 	}
 	return nil
 }
@@ -43,11 +43,11 @@ func TestSaveRetriesTheSameBatch(t *testing.T) {
 		t.Fatalf("save = %v", err)
 	}
 	if len(w.batches) != 3 {
-		t.Fatalf("tentativas = %d, quero 3", len(w.batches))
+		t.Fatalf("attempts = %d, want 3", len(w.batches))
 	}
 	for _, got := range w.batches {
 		if len(got) != 1 || got[mapKey(b)] != b[mapKey(b)] {
-			t.Fatal("a nova tentativa não regravou o mesmo lote")
+			t.Fatal("the retry did not rewrite the same batch")
 		}
 	}
 }
@@ -57,10 +57,10 @@ func TestSaveGivesUpWithPermanentError(t *testing.T) {
 	e := &pgExporter{logger: zap.NewNop(), w: w}
 	err := e.save(context.Background(), batch())
 	if !consumererror.IsPermanent(err) {
-		t.Fatalf("err = %v, quero permanente (o lote não pode ser recalculado)", err)
+		t.Fatalf("err = %v, want permanent (the batch cannot be recomputed)", err)
 	}
 	if len(w.batches) != 4 {
-		t.Errorf("tentativas = %d, quero 4", len(w.batches))
+		t.Errorf("attempts = %d, want 4", len(w.batches))
 	}
 }
 
@@ -71,12 +71,12 @@ func mapKey(b httpmetrics.Batch) httpmetrics.Key {
 	return httpmetrics.Key{}
 }
 
-// Upsert real em api_metric_1m como stellytics_collector. Precisa de DATABASE_URL
-// (veja internal/pgtest); COLLECTOR_DATABASE_URL troca a conexão do coletor.
+// Real upsert into api_metric_1m as stellytics_collector. Needs DATABASE_URL
+// (see internal/pgtest); COLLECTOR_DATABASE_URL replaces the collector's connection.
 func TestPGWriterIntegration(t *testing.T) {
 	adminURL := os.Getenv("DATABASE_URL")
 	if adminURL == "" {
-		t.Skip("DATABASE_URL não definida")
+		t.Skip("DATABASE_URL not set")
 	}
 	ctx := context.Background()
 	adminURL = pgtest.Database(t, adminURL)
@@ -124,16 +124,16 @@ func TestPGWriterIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	if count != 5 || sum != 6.03 || buckets[2] != 2 || buckets[11] != 3 {
-		t.Errorf("linha somada = %d, %v, %v", count, sum, buckets)
+		t.Errorf("summed row = %d, %v, %v", count, sum, buckets)
 	}
 	if p95 <= 2.5 || p95 > 5 {
-		t.Errorf("p95 = %v, quero dentro de (2.5, 5]", p95)
+		t.Errorf("p95 = %v, want within (2.5, 5]", p95)
 	}
 	var rows int
 	if err := admin.QueryRow(ctx, `SELECT count(*) FROM api_metric_1m WHERE tenant_id = $1`, tenantID).Scan(&rows); err != nil {
 		t.Fatal(err)
 	}
 	if rows != 2 {
-		t.Errorf("linhas do tenant = %d, quero 2", rows)
+		t.Errorf("tenant rows = %d, want 2", rows)
 	}
 }

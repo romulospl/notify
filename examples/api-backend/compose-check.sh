@@ -1,13 +1,14 @@
 #!/bin/sh
-# Confere o backend de exemplo no Compose (#35): cria um tenant com uma chave
-# de ingestão, sobe infra/compose/api-example.yaml, faz requisições e espera as
-# linhas em api_metric_1m. Rodar na raiz do repositório, com o compose.yaml no
-# ar. Apaga o tenant no fim.
+# Checks the example backend in Compose (#35): creates a tenant with an ingest
+# key, starts infra/compose/api-example.yaml, makes requests and waits for the
+# rows in api_metric_1m. Run from the repository root, with compose.yaml up.
+# Deletes the tenant at the end.
 #
-# Ponta a ponta do pipeline de API (#36): confere também status, latência
-# (buckets somando a contagem) e serviço; manda direto ao coletor um trace e um
-# log alegando ser de outro tenant e falha se a métrica cair no tenant errado
-# ou se o marcador do trace/log aparecer em coluna de texto do banco stellytics.
+# End to end of the API pipeline (#36): also checks status, latency (buckets
+# adding up to the count) and service; sends straight to the collector a trace
+# and a log claiming to be from another tenant and fails if the metric lands in
+# the wrong tenant or if the trace/log marker shows up in a text column of the
+# stellytics database.
 set -eu
 
 psql() { docker compose exec -T postgres psql -U postgres -d stellytics -v ON_ERROR_STOP=1 -Atq "$@"; }
@@ -25,8 +26,8 @@ service=$(psql -c "INSERT INTO api_service (tenant_id, name) VALUES ('$tenant', 
 psql -c "INSERT INTO ingest_key (api_service_id, tenant_id, prefix, key_hash, created_by)
   VALUES ('$service', '$tenant', '$prefix', sha256(convert_to('$key', 'UTF8')), 'api-example-$suffix')"
 
-# Segundo serviço do mesmo tenant, só com spans (a D9 ignora spans de serviço
-# que já manda a métrica).
+# Second service of the same tenant, with spans only (D9 ignores spans from a
+# service that already sends the metric).
 prefix2=$({ tr -dc 'a-z2-7' </dev/urandom 2>/dev/null; } | head -c 8)
 key2="ntf_${prefix2}_${secret}"
 service2=$(psql -c "INSERT INTO api_service (tenant_id, name) VALUES ('$tenant', 'spans') RETURNING id")
@@ -64,19 +65,19 @@ for _ in $(seq 1 30); do
 done
 psql -c "SELECT route, method, status_code, request_count FROM api_metric_1m WHERE tenant_id = '$tenant' ORDER BY route"
 if [ "$total" -lt 9 ]; then
-  echo "esperava 9 requisições em api_metric_1m, achei $total"
+  echo "expected 9 requests in api_metric_1m, found $total"
   docker compose -f compose.yaml -f infra/compose/api-example.yaml logs --tail 50 tenant-otelcol example-api || true
   exit 1
 fi
-# A rota sem padrão conhecido foi normalizada pelo coletor do stellytics.
+# The route with no known pattern was normalized by the stellytics collector.
 psql -c "SELECT count(*) FROM api_metric_1m WHERE tenant_id = '$tenant' AND route = '/x/{id}' AND status_code = 404" | grep -qx 1
-# Status certo e latência: os buckets de cada linha somam a contagem.
+# Right status and latency: the buckets of each row add up to the count.
 psql -c "SELECT count(*) FROM api_metric_1m WHERE tenant_id = '$tenant' AND route = '/ledgers/{sequence}' AND status_code = 200 AND request_count = 3" | grep -qx 1
 psql -c "SELECT count(*) FROM api_metric_1m WHERE tenant_id = '$tenant' AND api_service_id = '$service'
   AND ( duration_sum <= 0
        OR (SELECT sum(b) FROM unnest(duration_buckets) b) <> request_count)" | grep -qx 0
 
-# Trace e log enviados direto ao coletor alegando ser do tenant decoy.
+# Trace and log sent straight to the collector claiming to be from the decoy tenant.
 marker="e2emarker$suffix"
 trace=5b8efff798038103d269b633813fc60c
 now=$(date +%s)000000000
@@ -90,15 +91,15 @@ for _ in $(seq 1 30); do
   [ "$n" -ge 1 ] && break
   sleep 2
 done
-# A métrica do span existe e ficou no tenant da chave, nunca no decoy.
+# The span metric exists and stayed in the key's tenant, never in the decoy.
 psql -c "SELECT count(*) FROM api_metric_1m WHERE route = '/$marker/{id}' AND tenant_id = '$tenant' AND api_service_id = '$service2' AND status_code = 201" | grep -qx 1 \
-  || { echo "métrica do span não está no tenant da chave"; exit 1; }
+  || { echo "the span metric is not in the key's tenant"; exit 1; }
 psql -c "SELECT count(*) FROM api_metric_1m WHERE tenant_id = '$decoy'" | grep -qx 0 \
-  || { echo "métrica atribuída ao tenant alegado pelo cliente"; exit 1; }
+  || { echo "metric attributed to the tenant claimed by the client"; exit 1; }
 
-# Nenhum trace, span ou log persistido: o marcador (nome do span, service.name,
-# corpo do log) e o trace ID não aparecem em coluna de texto nenhuma fora das
-# tabelas api_metric_* (onde só a rota agregada pode conter o marcador).
+# No trace, span or log persisted: the marker (span name, service.name, log
+# body) and the trace ID show up in no text column outside the api_metric_*
+# tables (where only the aggregated route may contain the marker).
 psql -c "CREATE TEMP TABLE IF NOT EXISTS e2e_found (n bigint);
 DO \$\$
 DECLARE r record; n bigint; total bigint := 0;
@@ -110,8 +111,8 @@ BEGIN
   LOOP
     EXECUTE format('SELECT count(*) FROM %I.%I WHERE %I::text LIKE %L OR %I::text LIKE %L',
       r.table_schema, r.table_name, r.column_name, '%$marker%', r.column_name, '%$trace%') INTO n;
-    IF n > 0 THEN RAISE WARNING 'achado em %.%.%', r.table_schema, r.table_name, r.column_name; total := total + n; END IF;
+    IF n > 0 THEN RAISE WARNING 'found in %.%.%', r.table_schema, r.table_name, r.column_name; total := total + n; END IF;
   END LOOP;
-  IF total > 0 THEN RAISE EXCEPTION 'trace/span/log persistido (% linhas)', total; END IF;
+  IF total > 0 THEN RAISE EXCEPTION 'trace/span/log persisted (% rows)', total; END IF;
 END \$\$;"
-echo "ok: $total requisições, tenant certo, nada de trace/log persistido"
+echo "ok: $total requests, right tenant, no trace/log persisted"

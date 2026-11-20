@@ -1,9 +1,9 @@
-// Package pgexporter grava as métricas de API no Postgres (#31).
+// Package pgexporter writes the API metrics to Postgres (#31).
 //
-// Recebe traces e métricas já carimbados pelo tenantattr, extrai os pontos de
-// 1 minuto com o pacote httpmetrics e faz o upsert em api_metric_1m (spec do
-// E5, seção 4) com o usuário stellytics_collector. Nada além desses pontos é
-// gravado: nenhum trace, span, log ou atributo de alta cardinalidade.
+// It receives traces and metrics already stamped by tenantattr, extracts the
+// 1-minute points with the httpmetrics package and upserts into api_metric_1m
+// (E5 spec, section 4) with the stellytics_collector user. Nothing besides
+// these points is written: no trace, span, log or high-cardinality attribute.
 package pgexporter
 
 import (
@@ -29,24 +29,24 @@ import (
 	"github.com/romulospl/stellytics/services/collector/components/httpmetrics"
 )
 
-// Type é o nome do exporter na configuração do coletor.
+// Type is the exporter's name in the collector configuration.
 var Type = component.MustNewType("stellyticspg")
 
-// Config do exporter.
+// Config of the exporter.
 type Config struct {
-	// DatabaseURL aponta para o banco stellytics com o usuário stellytics_collector.
+	// DatabaseURL points to the stellytics database with the stellytics_collector user.
 	DatabaseURL string `mapstructure:"database_url"`
 }
 
-// Validate implementa component.ConfigValidator.
+// Validate implements component.ConfigValidator.
 func (c *Config) Validate() error {
 	if c.DatabaseURL == "" {
-		return errors.New("database_url é obrigatória")
+		return errors.New("database_url is required")
 	}
 	return nil
 }
 
-// NewFactory cria a fábrica do exporter.
+// NewFactory creates the exporter's factory.
 func NewFactory() exporter.Factory {
 	return exporter.NewFactory(Type, func() component.Config { return &Config{} },
 		exporter.WithTraces(createTraces, component.StabilityLevelDevelopment),
@@ -54,8 +54,8 @@ func NewFactory() exporter.Factory {
 	)
 }
 
-// Um exporter só por configuração, compartilhado pelos pipelines de traces e
-// de métricas: a D9 (métrica tem prioridade sobre span) precisa do mesmo estado.
+// A single exporter per configuration, shared by the traces and metrics
+// pipelines: D9 (metric takes priority over span) needs the same state.
 var shared = map[*Config]*pgExporter{}
 
 func get(set exporter.Settings, cfg *Config) *pgExporter {
@@ -77,7 +77,7 @@ func createMetrics(ctx context.Context, set exporter.Settings, cfg component.Con
 	return exporterhelper.NewMetrics(ctx, set, cfg, e.pushMetrics, e.options()...)
 }
 
-// writer grava um lote. O do Postgres é o pgWriter; os testes usam outro.
+// writer writes a batch. The Postgres one is pgWriter; the tests use another.
 type writer interface {
 	write(ctx context.Context, b httpmetrics.Batch) error
 }
@@ -87,15 +87,15 @@ type pgExporter struct {
 	logger *zap.Logger
 	agg    *httpmetrics.Aggregator
 
-	started int // quantos pipelines chamaram Start
+	started int // how many pipelines called Start
 	pool    *pgxpool.Pool
 	w       writer
 	stop    context.CancelFunc
 }
 
-// As novas tentativas ficam aqui, sobre o lote já calculado: recalcular a
-// partir do OTLP daria delta zero para as séries cumulativas. Por isso a
-// retentativa do exporterhelper fica desligada.
+// The retries live here, over the already computed batch: recomputing from
+// the OTLP would give a zero delta for the cumulative series. That is why the
+// exporterhelper retry is turned off.
 func (e *pgExporter) options() []exporterhelper.Option {
 	return []exporterhelper.Option{
 		exporterhelper.WithStart(e.start),
@@ -160,8 +160,8 @@ func (e *pgExporter) pushMetrics(ctx context.Context, md pmetric.Metrics) error 
 	return e.save(ctx, e.agg.Metrics(md))
 }
 
-// save grava o lote com até 4 tentativas. Se todas falharem, o lote é
-// descartado com erro permanente, para ninguém recalcular a partir do OTLP.
+// save writes the batch with up to 4 attempts. If all fail, the batch is
+// dropped with a permanent error, so that nobody recomputes from the OTLP.
 func (e *pgExporter) save(ctx context.Context, b httpmetrics.Batch) error {
 	if len(b) == 0 {
 		return nil
@@ -177,11 +177,11 @@ func (e *pgExporter) save(ctx context.Context, b httpmetrics.Batch) error {
 		case <-time.After(wait):
 		}
 	}
-	e.logger.Error("lote de métricas de API descartado", zap.Int("linhas", len(b)), zap.Error(err))
+	e.logger.Error("API metrics batch dropped", zap.Int("rows", len(b)), zap.Error(err))
 	return consumererror.NewPermanent(err)
 }
 
-// upsert soma o ponto à linha, se ela já existir (spec, seção 4).
+// upsert adds the point to the row, if it already exists (spec, section 4).
 const upsert = `
 INSERT INTO api_metric_1m AS m (bucket_start, tenant_id, api_service_id, route, method, status_code,
                                 request_count, duration_sum, duration_buckets)
@@ -193,8 +193,8 @@ ON CONFLICT (tenant_id, api_service_id, route, method, status_code, bucket_start
 
 type pgWriter struct{ pool *pgxpool.Pool }
 
-// write grava o lote numa transação, em ordem fixa de chave, para dois lotes
-// concorrentes não travarem um ao outro.
+// write writes the batch in one transaction, in a fixed key order, so that two
+// concurrent batches do not deadlock each other.
 func (w pgWriter) write(ctx context.Context, b httpmetrics.Batch) error {
 	keys := make([]httpmetrics.Key, 0, len(b))
 	for k := range b {

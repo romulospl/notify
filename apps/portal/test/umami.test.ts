@@ -1,5 +1,5 @@
-// Provisionamento de sites no Umami e leitura de estatísticas (#58), contra
-// o Postgres de DATABASE_URL e um Umami falso (test/fake-umami.ts).
+// Site provisioning in Umami and statistics reads (#58), against
+// the DATABASE_URL Postgres and a fake Umami (test/fake-umami.ts).
 import { randomUUID } from "node:crypto";
 import { eq, inArray, like } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -61,28 +61,28 @@ afterAll(async () => {
   await sql.end();
 });
 
-describe("contexto do tenant", () => {
-  it("vem da associação do usuário, com o status do tenant", async () => {
+describe("tenant context", () => {
+  it("comes from the user's membership, with the tenant status", async () => {
     const ctx = await createMember("removed");
     expect(ctx.memberRole).toBe("owner");
     expect(ctx.tenantStatus).toBe("removed");
   });
 
-  it("é nulo para quem não é membro", async () => {
+  it("is null for someone who is not a member", async () => {
     const userId = randomUUID();
     await db.insert(user).values({ id: userId, name: "T", email: `${userId}${DOMAIN}` });
     expect(await loadTenantContext(userId)).toBeNull();
   });
 });
 
-describe("criação de site", () => {
-  it("normaliza o domínio", () => {
+describe("site creation", () => {
+  it("normalizes the domain", () => {
     expect(normalizeDomain(" HTTPS://App.Example.org/a?b#c ")).toBe("app.example.org");
     expect(normalizeDomain("example.org.")).toBe("example.org");
     expect(normalizeDomain("localhost:3000")).toBe("localhost:3000");
   });
 
-  it("cria o site no Umami e grava o vínculo no stellytics", async () => {
+  it("creates the site in Umami and stores the link in stellytics", async () => {
     const ctx = await createMember();
     const created = await createSite(ctx, { name: " Docs ", domain: "https://Docs.Example.org/start" });
 
@@ -94,19 +94,19 @@ describe("criação de site", () => {
     expect(await listSites(ctx)).toEqual([created]);
   });
 
-  it("usa a chave de API da variável de ambiente e só cria sites", async () => {
+  it("uses the API key from the environment variable and only creates sites", async () => {
     const ctx = await createMember();
     await createSite(ctx, { name: "Only sites", domain: "only.example.org" });
     expect(umami.requests).toEqual([{ method: "POST", path: "/api/websites" }]);
   });
 
-  it("cria o site só com nome e domínio, sem ligar gravação de sessão nem heatmaps (#62)", async () => {
+  it("creates the site with name and domain only, without enabling session recording or heatmaps (#62)", async () => {
     const ctx = await createMember();
     await createSite(ctx, { name: "No recorder", domain: "norec.example.org" });
     expect(umami.createBodies).toEqual([{ name: "No recorder", domain: "norec.example.org" }]);
   });
 
-  it("recusa domínio inválido ou repetido sem chamar o Umami", async () => {
+  it("rejects an invalid or repeated domain without calling Umami", async () => {
     const ctx = await createMember();
     await createSite(ctx, { name: "First", domain: "repeat.example.org" });
     umami.requests.length = 0;
@@ -119,14 +119,14 @@ describe("criação de site", () => {
     expect(umami.requests).toEqual([]);
   });
 
-  it("o mesmo domínio pode existir em tenants diferentes", async () => {
+  it("the same domain may exist in different tenants", async () => {
     const a = await createMember();
     const b = await createMember();
     await createSite(a, { name: "A", domain: "shared.example.org" });
     await expect(createSite(b, { name: "B", domain: "shared.example.org" })).resolves.toBeTruthy();
   });
 
-  it("tenant removido não cria site", async () => {
+  it("a removed tenant creates no site", async () => {
     const ctx = await createMember("removed");
     await expect(createSite(ctx, { name: "Nope", domain: "nope.example.org" })).rejects.toThrow(
       SiteInputError,
@@ -134,18 +134,18 @@ describe("criação de site", () => {
     expect(umami.requests).toEqual([]);
   });
 
-  it("apaga o site do Umami quando a gravação falha", async () => {
+  it("deletes the site from Umami when the write fails", async () => {
     const before = umami.websites.size;
     await expect(
       provisionUmamiWebsite({ name: "Rollback", domain: "rollback.example.org" }, async () => {
-        throw new Error("falha simulada na gravação");
+        throw new Error("simulated write failure");
       }),
-    ).rejects.toThrow("falha simulada");
+    ).rejects.toThrow("simulated write");
     expect(umami.websites.size).toBe(before);
     expect(umami.requests.map((r) => r.method)).toEqual(["POST", "DELETE"]);
   });
 
-  it("falha com erro claro quando a chave é recusada", async () => {
+  it("fails with a clear error when the key is rejected", async () => {
     const ctx = await createMember();
     const original = process.env.UMAMI_API_KEY;
     process.env.UMAMI_API_KEY = "umami_wrong-key";
@@ -160,8 +160,8 @@ describe("criação de site", () => {
   });
 });
 
-describe("leitura de estatísticas", () => {
-  it("lê as estatísticas do próprio site", async () => {
+describe("statistics read", () => {
+  it("reads the statistics of its own site", async () => {
     const ctx = await createMember();
     const own = await createSite(ctx, { name: "Own", domain: "own.example.org" });
     umami.requests.length = 0;
@@ -173,7 +173,7 @@ describe("leitura de estatísticas", () => {
     ]);
   });
 
-  it("recusa site de outro tenant antes de chegar ao Umami", async () => {
+  it("rejects another tenant's site before reaching Umami", async () => {
     const a = await createMember();
     const b = await createMember();
     const ofB = await createSite(b, { name: "B", domain: "b-only.example.org" });
@@ -181,13 +181,13 @@ describe("leitura de estatísticas", () => {
 
     expect(await getSite(a, ofB.id)).toBeNull();
     expect(await getSiteStats(a, ofB.id, RANGE)).toBeNull();
-    // Nem o ID do Umami de B serve como ID de site do portal.
+    // Not even B's Umami ID works as a portal site ID.
     expect(await getSiteStats(a, ofB.umamiWebsiteId, RANGE)).toBeNull();
     expect(await getSiteStats(a, "not-a-uuid", RANGE)).toBeNull();
     expect(umami.requests).toEqual([]);
   });
 
-  it("site arquivado não é lido", async () => {
+  it("an archived site is not read", async () => {
     const ctx = await createMember();
     const archived = await createSite(ctx, { name: "Old", domain: "old.example.org" });
     await db.update(site).set({ archivedAt: new Date() }).where(eq(site.id, archived.id));
@@ -198,8 +198,8 @@ describe("leitura de estatísticas", () => {
   });
 });
 
-describe("consistência entre portal e Umami", () => {
-  it("aponta site sumido do Umami e site do Umami sem vínculo", async () => {
+describe("consistency between portal and Umami", () => {
+  it("flags a site missing from Umami and an Umami site without a link", async () => {
     const ctx = await createMember();
     const kept = await createSite(ctx, { name: "Kept", domain: "kept.example.org" });
     const lost = await createSite(ctx, { name: "Lost", domain: "lost.example.org" });
@@ -207,7 +207,7 @@ describe("consistência entre portal e Umami", () => {
     const orphanId = randomUUID();
     umami.websites.set(orphanId, { id: orphanId, name: "Orphan", domain: "orphan.example.org" });
 
-    // Só o teste monta o contexto à mão; no portal ele vem de requireOperatorContext().
+    // Only the test builds the context by hand; in the portal it comes from requireOperatorContext().
     const operator = { userId: "test-operator" } as OperatorContext;
     const result = await findUmamiInconsistencies(operator);
     expect(result.missingInUmami).toContain(lost.id);

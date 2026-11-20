@@ -64,7 +64,7 @@ Total time until the first dashboard data: **13 min** (machines created at 22:35
 
 | ID | Result | Notes |
 |---|---|---|
-| E1 ● | OK | In the simulation all data stayed on the laptop. The production declaration is in `docs/privacidade.md` (section 6). |
+| E1 ● | OK | In the simulation all data stayed on the laptop. The production declaration is in `docs/privacy.md` (section 6). |
 | E2 ● | OK | `git status` clean on the VPS; `.env.production` ignored by `.gitignore`. On the monitor, `monitoring.env` was outside the repository. Generated monitor files are untracked but not ignored (finding 3). |
 | E3 | Empty | The agent knew every term. |
 | E4 | OK | Site dashboard (2 page views), service dashboard (55 requests) and operator view checked, before and after the restore. |

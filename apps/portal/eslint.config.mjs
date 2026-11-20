@@ -1,29 +1,29 @@
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
-// Camada única de acesso a dados (#18, spec do E2, seção 4, ADR 0003):
-// - só src/lib/data/ usa o cliente do banco para ler e gravar dados dos tenants;
-// - só src/lib/umami/ chama o Umami;
-// - o resto do código usa as funções dessas duas pastas, que recebem um
-//   contexto criado por src/lib/access.ts.
-// Exceções: src/lib/db/ (o próprio cliente e as migrações), access.ts (cria o
-// contexto a partir da sessão) e auth.ts (adaptador do Better Auth).
-// Esquecer o filtro por tenant fora da camada vira erro de lint.
+// Single data access layer (#18, E2 spec, section 4, ADR 0003):
+// - only src/lib/data/ uses the database client to read and write tenant data;
+// - only src/lib/umami/ calls Umami;
+// - the rest of the code uses the functions of these two folders, which take a
+//   context created by src/lib/access.ts.
+// Exceptions: src/lib/db/ (the client itself and the migrations), access.ts
+// (creates the context from the session) and auth.ts (Better Auth adapter).
+// Forgetting the tenant filter outside the layer becomes a lint error.
 
 const dbClient = {
-  // Pega `@/lib/db`, `../db`, `./db/index` e `db/migrate`. O esquema (db/schema)
-  // fica liberado: só define tabelas e tipos, sem conexão.
+  // Matches `@/lib/db`, `../db`, `./db/index` and `db/migrate`. The schema
+  // (db/schema) is allowed: it only defines tables and types, with no connection.
   regex: "(^|/)db(/(index|migrate))?$",
-  message: "Só src/lib/data/ acessa o banco. Use uma função de lá, passando o contexto de lib/access.ts.",
+  message: "Only src/lib/data/ accesses the database. Use a function from there, passing the context from lib/access.ts.",
 };
 const dbDrivers = {
   group: ["postgres", "drizzle-orm/postgres-js", "drizzle-orm/postgres-js/*"],
-  message: "O cliente do banco fica em src/lib/db/. Use as funções de src/lib/data/.",
+  message: "The database client lives in src/lib/db/. Use the functions in src/lib/data/.",
 };
 const umamiHttp = {
-  // read.ts lê pelo ID do Umami, sem conferir o tenant: também é interno.
+  // read.ts reads by the Umami ID, without checking the tenant: it is internal too.
   group: ["@/lib/umami/http", "**/umami/http", "@/lib/umami/read", "**/umami/read"],
-  message: "Só src/lib/umami/ chama o Umami. Use as funções públicas de lá.",
+  message: "Only src/lib/umami/ calls Umami. Use the public functions from there.",
 };
 
 const restrict = (...patterns) => ({
@@ -36,15 +36,15 @@ const config = [
   ...nextVitals,
   ...nextTs,
   { ignores: [".next/**", "dist/**", "next-env.d.ts", "drizzle/**"] },
-  // Páginas, rotas, componentes e o resto de src/: nem banco nem Umami.
+  // Pages, routes, components and the rest of src/: neither database nor Umami.
   {
     files: ["src/**/*.{ts,tsx}"],
     ignores: [...dataLayer, "src/lib/umami/**", "src/lib/db/**"],
     ...restrict(dbClient, dbDrivers, umamiHttp),
   },
-  // Camada de dados: banco sim, Umami só pelas funções de src/lib/umami/.
+  // Data layer: database yes, Umami only through the functions in src/lib/umami/.
   { files: dataLayer, ...restrict(dbDrivers, umamiHttp) },
-  // Cliente do Umami: lê o banco só pelas funções de src/lib/data/.
+  // Umami client: reads the database only through the functions in src/lib/data/.
   { files: ["src/lib/umami/**"], ...restrict(dbClient, dbDrivers) },
 ];
 

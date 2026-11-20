@@ -5,9 +5,9 @@ import { truncatedClientIp } from "./client-ip";
 import { takeToken } from "./rate-limit";
 import { readKeyFromHeader } from "./read-key";
 
-// Base das rotas da API de leitura do SCF (#48, ADR 0006): autenticação por
-// chave, limite por chave e respostas JSON sem cache. Erros não dizem por que
-// a chave foi recusada.
+// Base of the SCF read API routes (#48, ADR 0006): key authentication, per-key
+// limit and uncached JSON responses. Errors do not say why the key was
+// rejected.
 
 const HEADERS = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 
@@ -19,17 +19,17 @@ export function error(status: number, code: string, message: string, headers: Re
   return json({ error: { code, message } }, { status, headers });
 }
 
-// `?period=` aceita as chaves do painel (24h, 7d, 30d, 90d, 12m); sem o
-// parâmetro vale o padrão do painel. Valor desconhecido é erro, não padrão.
+// `?period=` accepts the dashboard's keys (24h, 7d, 30d, 90d, 12m); without the
+// parameter the dashboard default applies. An unknown value is an error, not the default.
 function periodOf(url: URL): Period | null {
   const raw = url.searchParams.get("period");
   if (raw === null) return resolvePeriod(parsePeriodKey(undefined));
   return Object.hasOwn(PERIODS, raw) ? resolvePeriod(parsePeriodKey(raw)) : null;
 }
 
-// Consultas ao banco por minuto e por IP truncado, antes de saber se a chave é
-// válida. Quem usa uma chave boa faz no máximo READ_API_LIMIT (60) por minuto;
-// o resto é folga para vários clientes atrás do mesmo IP.
+// Database lookups per minute and per truncated IP, before knowing whether the
+// key is valid. Whoever uses a good key makes at most READ_API_LIMIT (60) per
+// minute; the rest is slack for several clients behind the same IP.
 export const LOOKUP_LIMIT_PER_IP = 120;
 
 const UNAUTHORIZED = () =>
@@ -40,10 +40,10 @@ export async function handleRead(
   handler: (ctx: OperatorKeyContext, period: Period) => Promise<unknown>,
 ): Promise<Response> {
   const authorization = request.headers.get("authorization");
-  // Header sem o formato de chave: 401 sem tocar no banco nem no limite.
+  // Header without the key format: 401 without touching the database or the limit.
   if (!readKeyFromHeader(authorization)) return UNAUTHORIZED();
-  // Limite por IP ANTES da consulta, para chutes de chave não custarem um
-  // join por requisição sem freio.
+  // Per-IP limit BEFORE the lookup, so key guesses do not cost an unthrottled
+  // join per request.
   const ip = takeToken(`ip:${truncatedClientIp(request.headers.get("x-forwarded-for"))}`, Date.now(), LOOKUP_LIMIT_PER_IP);
   if (!ip.ok) {
     return error(429, "rate_limited", "Too many requests. Try again later.", {
@@ -65,8 +65,8 @@ export async function handleRead(
   try {
     return json(await handler(ctx, period));
   } catch (e) {
-    // Só o nome do erro: o log não leva chave, URL nem detalhe do Umami.
-    console.error("Falha na API de leitura", (e as Error).name);
+    // Only the error name: the log carries no key, URL or Umami detail.
+    console.error("Read API failure", (e as Error).name);
     return error(500, "internal_error", "Something went wrong.");
   }
 }

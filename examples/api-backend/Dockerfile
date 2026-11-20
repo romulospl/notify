@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
-# Imagem do backend de exemplo (#35). O contexto do build é a raiz do repositório:
+# Image of the example backend (#35). The build context is the repository root:
 #   docker build -f examples/api-backend/Dockerfile .
-# Fica fora de apps/ e services/, então o release.yml não a publica.
+# It lives outside apps/ and services/, so release.yml does not publish it.
 
 FROM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53
 RUN corepack enable

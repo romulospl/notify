@@ -1,6 +1,6 @@
 package main
 
-// Testes do limite de repasses simultâneos ao Umami (RELAY_MAX_INFLIGHT).
+// Tests for the limit on concurrent relays to Umami (RELAY_MAX_INFLIGHT).
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 	"github.com/romulospl/stellytics/services/ingest-web/internal/relay"
 )
 
-// slowUmami segura cada /api/send até release fechar.
+// slowUmami holds each /api/send until release is closed.
 type slowUmami struct {
 	release chan struct{}
 	once    sync.Once
@@ -61,7 +61,7 @@ func waitFor(t *testing.T, cond func() bool) {
 	deadline := time.Now().Add(3 * time.Second)
 	for !cond() {
 		if time.Now().After(deadline) {
-			t.Fatal("condição não atingida")
+			t.Fatal("condition not met")
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -88,7 +88,7 @@ func TestSaturationReturns204AndKeepsOtherRoutes(t *testing.T) {
 	umami, inner := newSlowUmami(t)
 	limited := relay.NewLimited(inner, 3, 20*time.Millisecond)
 	s := newSetup(t, func(g *gateway) { g.relay = limited })
-	t.Cleanup(umami.open) // roda antes do Close do gateway, para uma falha não travar
+	t.Cleanup(umami.open) // runs before the gateway's Close, so that a failure does not hang
 
 	a := postAsync(s, eventBody(activeSite), "ua-a")
 	b := postAsync(s, eventBody(activeSite), "ua-b")
@@ -96,23 +96,23 @@ func TestSaturationReturns204AndKeepsOtherRoutes(t *testing.T) {
 
 	resp := post(t, s, "text/plain", eventBody(activeSite), "User-Agent", "ua-c")
 	if resp.StatusCode != http.StatusNoContent {
-		t.Fatalf("status = %d, quero 204", resp.StatusCode)
+		t.Fatalf("status = %d, want 204", resp.StatusCode)
 	}
 	if resp.Header.Get("Retry-After") != "" {
-		t.Error("Retry-After inesperado")
+		t.Error("unexpected Retry-After")
 	}
 	if limited.Dropped() != 1 || umami.started.Load() != 2 {
-		t.Errorf("descartados = %d, umami recebeu %d", limited.Dropped(), umami.started.Load())
+		t.Errorf("dropped = %d, umami received %d", limited.Dropped(), umami.started.Load())
 	}
 
-	// O limite vale só para o repasse: prova inválida, /c, /healthz e site
-	// recusado respondem como sempre, mesmo com o repasse saturado.
+	// The limit applies only to the relay: an invalid proof, /c, /healthz and a
+	// refused site answer as always, even with the relay saturated.
 	bad := strings.Replace(eventBody(activeSite), `"n":"`, `"n":"x`, 1)
 	if r := post(t, s, "text/plain", bad); r.StatusCode != http.StatusNoContent {
-		t.Errorf("prova inválida: %d", r.StatusCode)
+		t.Errorf("invalid proof: %d", r.StatusCode)
 	}
 	if r := post(t, s, "text/plain", eventBody(pendingSite)); r.StatusCode != http.StatusNoContent {
-		t.Errorf("site recusado: %d", r.StatusCode)
+		t.Errorf("refused site: %d", r.StatusCode)
 	}
 	for _, p := range []string{"/c?s=" + activeSite, "/healthz"} {
 		r, err := http.Get(s.server.URL + p)
@@ -125,23 +125,23 @@ func TestSaturationReturns204AndKeepsOtherRoutes(t *testing.T) {
 		}
 	}
 	if limited.Dropped() != 1 {
-		t.Errorf("descartados = %d, quero 1 (as outras rotas não contam)", limited.Dropped())
+		t.Errorf("dropped = %d, want 1 (the other routes do not count)", limited.Dropped())
 	}
 
 	umami.open()
 	for _, ch := range []<-chan *http.Response{a, b} {
 		if r := <-ch; r == nil || r.StatusCode != http.StatusNoContent {
-			t.Fatalf("aceitos deveriam dar 204: %v", r)
+			t.Fatalf("accepted ones should give 204: %v", r)
 		}
 	}
-	// Livre de novo.
+	// Free again.
 	if r := post(t, s, "text/plain", eventBody(activeSite), "User-Agent", "ua-d"); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("depois da saturação: %d", r.StatusCode)
+		t.Fatalf("after saturation: %d", r.StatusCode)
 	}
 }
 
-// A resposta não distingue uma fingerprint já admitida de uma nova que
-// excede a cota, mesmo com todas as vagas de repasse ocupadas.
+// The response does not tell a fingerprint already admitted from a new one that
+// exceeds the quota, even with all the relay slots taken.
 func TestSaturationHidesFingerprintQuota(t *testing.T) {
 	umami, inner := newSlowUmami(t)
 	limited := relay.NewLimited(inner, 1, 10*time.Millisecond)
@@ -154,21 +154,21 @@ func TestSaturationHidesFingerprintQuota(t *testing.T) {
 	waitFor(t, func() bool { return umami.started.Load() == 1 })
 	admitted := post(t, s, "text/plain", eventBody(activeSite), "User-Agent", "ua-hold")
 	if admitted.StatusCode != http.StatusNoContent || limited.Dropped() != 1 {
-		t.Fatalf("fingerprint admitida: status %d, descartes %d", admitted.StatusCode, limited.Dropped())
+		t.Fatalf("admitted fingerprint: status %d, drops %d", admitted.StatusCode, limited.Dropped())
 	}
 	full := post(t, s, "text/plain", eventBody(activeSite), "User-Agent", "ua-new")
 	if full.StatusCode != admitted.StatusCode || full.Header.Get("Retry-After") != admitted.Header.Get("Retry-After") {
-		t.Fatalf("respostas diferentes: admitida %d, cota cheia %d", admitted.StatusCode, full.StatusCode)
+		t.Fatalf("different responses: admitted %d, quota full %d", admitted.StatusCode, full.StatusCode)
 	}
 	if limited.Dropped() != 1 || umami.started.Load() != 1 {
-		t.Fatalf("cota cheia deveria impedir repasse: descartes %d, repasses %d", limited.Dropped(), umami.started.Load())
+		t.Fatalf("a full quota should prevent the relay: drops %d, relays %d", limited.Dropped(), umami.started.Load())
 	}
 }
 
-// Um evento descartado por saturação não gasta a cota de fingerprints do IP:
-// com limite 1, depois de recusado ele pode ser reenviado e a fingerprint
-// ainda cabe; uma segunda, diferente, só é recusada pela cota quando a
-// primeira realmente passou.
+// An event dropped because of saturation does not spend the IP's fingerprint
+// quota: with limit 1, after being refused it can be resent and the fingerprint
+// still fits; a second, different one is only refused by the quota when the
+// first one really went through.
 func TestSaturationDoesNotConsumeFingerprintQuota(t *testing.T) {
 	umami, inner := newSlowUmami(t)
 	limited := relay.NewLimited(inner, 1, 10*time.Millisecond)
@@ -177,32 +177,33 @@ func TestSaturationDoesNotConsumeFingerprintQuota(t *testing.T) {
 		g.fps = fingerprint.New(3, 10*time.Minute)
 	})
 	t.Cleanup(umami.open)
-	// Ocupa a única vaga (conta 1 das 3 fingerprints do IP).
+	// Takes the only slot (counts as 1 of the IP's 3 fingerprints).
 	postAsync(s, eventBody(activeSite), "ua-hold")
 	waitFor(t, func() bool { return umami.started.Load() == 1 })
-	// Mesmo IP: três fingerprints novas, todas recusadas por saturação. Se cada
-	// uma gastasse a cota (limite 3, com a do hold), a terceira cairia na cota (204).
+	// Same IP: three new fingerprints, all refused because of saturation. If
+	// each one spent the quota (limit 3, with the hold one), the third would
+	// hit the quota (204).
 	for _, ua := range []string{"ua-1", "ua-2", "ua-3"} {
 		r := post(t, s, "text/plain", eventBody(activeSite), "User-Agent", ua)
 		if r.StatusCode != http.StatusNoContent {
-			t.Fatalf("%s: status = %d, quero 204", ua, r.StatusCode)
+			t.Fatalf("%s: status = %d, want 204", ua, r.StatusCode)
 		}
 	}
 	umami.open()
 	waitFor(t, func() bool { return limited.InFlight() == 0 })
-	// Agora há vaga: as fingerprints refugadas ainda cabem na cota.
+	// Now there is a slot: the rejected fingerprints still fit in the quota.
 	for _, ua := range []string{"ua-1", "ua-2"} {
 		if r := post(t, s, "text/plain", eventBody(activeSite), "User-Agent", ua); r.StatusCode != http.StatusNoContent {
 			t.Fatalf("%s: %d", ua, r.StatusCode)
 		}
 	}
 	if n := umami.started.Load(); n != 3 {
-		t.Fatalf("umami recebeu %d, quero 3", n)
+		t.Fatalf("umami received %d, want 3", n)
 	}
 }
 
-// Sem RELAY_MAX_INFLIGHT (relay sem o limitador), o comportamento é o de antes:
-// 30 repasses lentos correm juntos, nenhum é recusado.
+// Without RELAY_MAX_INFLIGHT (relay without the limiter), the behaviour is the
+// same as before: 30 slow relays run together, none is refused.
 func TestNoLimitKeepsUnboundedRelay(t *testing.T) {
 	umami, inner := newSlowUmami(t)
 	s := newSetup(t, func(g *gateway) { g.relay = inner })
@@ -213,12 +214,12 @@ func TestNoLimitKeepsUnboundedRelay(t *testing.T) {
 	}
 	waitFor(t, func() bool { return umami.started.Load() == 30 })
 	if umami.peak.Load() != 30 {
-		t.Errorf("pico = %d, quero 30 (sem limite)", umami.peak.Load())
+		t.Errorf("peak = %d, want 30 (no limit)", umami.peak.Load())
 	}
 	umami.open()
 	for _, ch := range chans {
 		if r := <-ch; r == nil || r.StatusCode != http.StatusNoContent {
-			t.Fatalf("resposta %v", r)
+			t.Fatalf("response %v", r)
 		}
 	}
 }
@@ -238,8 +239,8 @@ func TestPanicInRelayFreesSlot(t *testing.T) {
 		t.Fatalf("panic: %d", r.StatusCode)
 	}
 	boom.Store(false)
-	if r := post(t, s, "text/plain", eventBody(activeSite), "User-Agent", "outro"); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("depois do panic: %d (vaga presa?)", r.StatusCode)
+	if r := post(t, s, "text/plain", eventBody(activeSite), "User-Agent", "other"); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("after the panic: %d (slot stuck?)", r.StatusCode)
 	}
 }
 
@@ -252,27 +253,27 @@ func TestLogSaturatedReportsCountOnlyOnChange(t *testing.T) {
 	limited := relay.NewLimited(g, 1, 0)
 	go func() { _ = limited.Send(context.Background(), relay.Event{}, "ua", netip.Addr{}) }()
 	<-g.in
-	_ = limited.Send(context.Background(), relay.Event{Payload: relay.Payload{Website: activeSite}}, "Mozilla-secreto", netip.MustParseAddr("203.0.113.9"))
+	_ = limited.Send(context.Background(), relay.Event{Payload: relay.Payload{Website: activeSite}}, "Mozilla-secret", netip.MustParseAddr("203.0.113.9"))
 
 	var buf syncBuffer
 	log := slog.New(slog.NewJSONHandler(&buf, nil))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { logSaturated(ctx, log, limited, 10*time.Millisecond); close(done) }()
-	waitFor(t, func() bool { return strings.Contains(buf.String(), "saturação") })
-	time.Sleep(60 * time.Millisecond) // vários ticks sem mudança: nenhuma linha nova
+	waitFor(t, func() bool { return strings.Contains(buf.String(), "saturated") })
+	time.Sleep(60 * time.Millisecond) // several ticks with no change: no new line
 	cancel()
 	<-done
 	out := buf.String()
-	if strings.Count(out, "saturação") != 1 {
-		t.Fatalf("esperava uma linha só: %s", out)
+	if strings.Count(out, "saturated") != 1 {
+		t.Fatalf("expected a single line: %s", out)
 	}
-	if !strings.Contains(out, `"descartados":1`) || !strings.Contains(out, `"total":1`) {
-		t.Fatalf("log inesperado: %s", out)
+	if !strings.Contains(out, `"dropped":1`) || !strings.Contains(out, `"total":1`) {
+		t.Fatalf("unexpected log: %s", out)
 	}
-	for _, secret := range []string{activeSite, "Mozilla-secreto", "203.0.113.9"} {
+	for _, secret := range []string{activeSite, "Mozilla-secret", "203.0.113.9"} {
 		if strings.Contains(out, secret) {
-			t.Fatalf("o log não pode conter %q", secret)
+			t.Fatalf("the log must not contain %q", secret)
 		}
 	}
 	close(g.out)
@@ -294,8 +295,8 @@ func (g *slowGate) Send(ctx context.Context, _ relay.Event, _ string, _ netip.Ad
 	return nil
 }
 
-// O cliente que cancela enquanto espera a vaga não gera log de erro nem conta
-// como descarte, e a fingerprint nova dele volta para a cota.
+// A client that cancels while waiting for the slot produces no error log and
+// does not count as a drop, and its new fingerprint goes back to the quota.
 func TestClientCancelWhileWaitingForSlot(t *testing.T) {
 	umami, inner := newSlowUmami(t)
 	limited := relay.NewLimited(inner, 1, 5*time.Second)
@@ -321,30 +322,30 @@ func TestClientCancelWhileWaitingForSlot(t *testing.T) {
 		close(done)
 	}()
 	waitFor(t, func() bool { return limited.InFlight() == 1 })
-	time.Sleep(50 * time.Millisecond) // o handler já está esperando a vaga
+	time.Sleep(50 * time.Millisecond) // the handler is already waiting for the slot
 	cancel()
 	<-done
-	waitFor(t, func() bool { return strings.Contains(buf.String(), "cliente cancelou") })
+	waitFor(t, func() bool { return strings.Contains(buf.String(), "client cancelled") })
 
 	if strings.Contains(buf.String(), `"level":"ERROR"`) {
-		t.Errorf("cancelamento não é erro: %s", buf.String())
+		t.Errorf("cancellation is not an error: %s", buf.String())
 	}
 	if limited.Dropped() != 0 {
-		t.Errorf("descartados = %d", limited.Dropped())
+		t.Errorf("dropped = %d", limited.Dropped())
 	}
-	// A cota (2) tem a fingerprint do hold; a do cancelado foi devolvida, então
-	// uma terceira ainda cabe e chega ao Umami.
+	// The quota (2) holds the hold fingerprint; the cancelled one's was
+	// returned, so a third still fits and reaches Umami.
 	umami.open()
 	waitFor(t, func() bool { return limited.InFlight() == 0 })
 	if r := post(t, s, "text/plain", eventBody(activeSite), "User-Agent", "ua-other"); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("status = %d", r.StatusCode)
 	}
 	if n := umami.started.Load(); n != 2 {
-		t.Fatalf("umami recebeu %d, quero 2 (hold e ua-other)", n)
+		t.Fatalf("umami received %d, want 2 (hold and ua-other)", n)
 	}
 }
 
-// Panic no repasse também devolve a fingerprint nova.
+// A panic in the relay also returns the new fingerprint.
 func TestPanicInRelayReturnsFingerprint(t *testing.T) {
 	var boom atomic.Bool
 	boom.Store(true)
@@ -364,13 +365,14 @@ func TestPanicInRelayReturnsFingerprint(t *testing.T) {
 		t.Fatalf("panic: %d", r.StatusCode)
 	}
 	boom.Store(false)
-	// Limite 1: se ua-1 ainda ocupasse a conta, ua-2 seria descartada (204 sem repasse).
+	// Limit 1: if ua-1 still occupied the count, ua-2 would be dropped (204
+	// without a relay).
 	if r := post(t, s, "text/plain", eventBody(activeSite), "User-Agent", "ua-2"); r.StatusCode != http.StatusNoContent || sent.Load() != 1 {
-		t.Fatalf("status = %d, repassados = %d", r.StatusCode, sent.Load())
+		t.Fatalf("status = %d, relayed = %d", r.StatusCode, sent.Load())
 	}
 }
 
-// Ao desligar, o último minuto parcial ainda é registrado.
+// On shutdown, the last partial minute is still logged.
 func TestLogSaturatedFlushesOnShutdown(t *testing.T) {
 	g := newSlowGate()
 	limited := relay.NewLimited(g, 1, 0)
@@ -381,9 +383,9 @@ func TestLogSaturatedFlushesOnShutdown(t *testing.T) {
 	log := slog.New(slog.NewJSONHandler(&buf, nil))
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	logSaturated(ctx, log, limited, time.Hour) // retorna na hora, sem nenhum tick
-	if !strings.Contains(buf.String(), `"descartados":1`) {
-		t.Fatalf("sem linha final: %q", buf.String())
+	logSaturated(ctx, log, limited, time.Hour) // returns immediately, without any tick
+	if !strings.Contains(buf.String(), `"dropped":1`) {
+		t.Fatalf("no final line: %q", buf.String())
 	}
 	close(g.out)
 }

@@ -1,13 +1,13 @@
-# Backend de exemplo com dual-export OTLP (#35). Exige o compose.yaml da raiz
-# (coletor no ar) e uma chave de ingestão criada em /services no portal:
+# Example backend with OTLP dual-export (#35). Requires the root compose.yaml
+# (collector running) and an ingest key created at /services in the portal:
 #
 #   STELLYTICS_INGEST_KEY=ntf_... docker compose -f compose.yaml \
 #     -f infra/compose/api-example.yaml up -d --wait
 #
-# O app (porta 4010) exporta para o OTel Collector do tenant (tenant-otelcol),
-# que manda o mesmo dado para o "APM próprio" (exporter debug, ver os logs) e
-# para o coletor do stellytics. Guia em examples/api-backend/README.md.
-# Caminhos relativos à raiz do repositório (diretório do compose.yaml).
+# The app (port 4010) exports to the tenant's OTel Collector (tenant-otelcol),
+# which sends the same data to its "own APM" (debug exporter, see the logs) and
+# to the stellytics collector. Guide in examples/api-backend/README.md.
+# Paths relative to the repository root (the compose.yaml directory).
 services:
   example-api:
     build:
@@ -31,12 +31,12 @@ services:
     restart: unless-stopped
 
   tenant-otelcol:
-    # OpenTelemetry Collector core, a mesma versão do coletor do stellytics.
+    # OpenTelemetry Collector core, the same version as the stellytics collector.
     image: otel/opentelemetry-collector:0.164.0@sha256:28b6d41ac51bff6b41ba5e8fe503569ffb9d6a1ea90f7a78419e86f34e44f750
     command: ["--config=/etc/otelcol/config.yaml"]
     environment:
       STELLYTICS_OTLP_ENDPOINT: ${STELLYTICS_OTLP_ENDPOINT:-http://collector:4318}
-      STELLYTICS_INGEST_KEY: ${STELLYTICS_INGEST_KEY:?crie uma chave em /services no portal}
+      STELLYTICS_INGEST_KEY: ${STELLYTICS_INGEST_KEY:?create a key at /services in the portal}
     volumes:
       - ./examples/api-backend/otelcol.yaml:/etc/otelcol/config.yaml:ro
     depends_on:

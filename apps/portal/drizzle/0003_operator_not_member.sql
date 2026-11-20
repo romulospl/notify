@@ -1,19 +1,19 @@
--- Escrita à mão (drizzle-kit generate --custom). Spec do E2, D2 (#19).
+-- Written by hand (drizzle-kit generate --custom). E2 spec, D2 (#19).
 --
--- Operador SCF não é membro de tenant. O banco recusa as duas formas de
--- quebrar a regra: pôr um operador num tenant e promover um membro a
--- operador. É uma segunda barreira; o portal e o script de administração
--- já conferem antes.
+-- An SCF operator is not a tenant member. The database rejects both ways of
+-- breaking the rule: putting an operator in a tenant and promoting a member
+-- to operator. It is a second barrier; the portal and the administration
+-- script already check first.
 CREATE FUNCTION operator_not_member() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_TABLE_NAME = 'tenant_member' THEN
     IF EXISTS (SELECT 1 FROM "user" WHERE id = NEW.user_id AND role = 'operator') THEN
-      RAISE EXCEPTION 'operador não pode ser membro de tenant (D2)' USING ERRCODE = 'check_violation';
+      RAISE EXCEPTION 'an operator cannot be a tenant member (D2)' USING ERRCODE = 'check_violation';
     END IF;
   ELSIF NEW.role = 'operator' AND OLD.role IS DISTINCT FROM 'operator' THEN
     IF EXISTS (SELECT 1 FROM tenant_member WHERE user_id = NEW.id) THEN
-      RAISE EXCEPTION 'membro de tenant não pode virar operador (D2)' USING ERRCODE = 'check_violation';
+      RAISE EXCEPTION 'a tenant member cannot become an operator (D2)' USING ERRCODE = 'check_violation';
     END IF;
   END IF;
   RETURN NEW;

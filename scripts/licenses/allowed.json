@@ -1,5 +1,5 @@
 {
-  "comment": "Allowlist de licencas das dependencias de producao: licencas aprovadas pela OSI, com excecoes especificas e temporarias para dependencias de build. Veja CONTRIBUTING.md. Ids SPDX; expressoes OR passam se uma alternativa estiver aqui, AND exige todas. Excecoes: date e expires em AAAA-MM-DD, prazo de no maximo 183 dias; package npm pode terminar em * (prefixo).",
+  "comment": "Allowlist of licenses for the production dependencies: OSI-approved licenses, with specific, temporary exceptions for build dependencies. See CONTRIBUTING.md. SPDX ids; OR expressions pass if one alternative is here, AND requires all of them. Exceptions: date and expires in YYYY-MM-DD, a period of at most 183 days; an npm package may end in * (prefix).",
   "allowed": [
     "0BSD",
     "Apache-2.0",
@@ -16,7 +16,7 @@
       "ecosystem": "npm",
       "package": "caniuse-lite",
       "license": "CC-BY-4.0",
-      "reason": "Aceita CC-BY-4.0 para caniuse-lite, dependencia nao OSI usada na ferramenta de build next/browserslist; atribuicao em docs/avisos-de-terceiros.md. Nao e distribuida no standalone do portal, e essa ausencia e conferida no teste da imagem. Revisar ao vencer.",
+      "reason": "Accepts CC-BY-4.0 for caniuse-lite, a non-OSI dependency used in the next/browserslist build tool; attribution in docs/third-party-notices.md. It is not distributed in the portal standalone, and that absence is checked in the image test. Review on expiry.",
       "date": "2026-11-15",
       "expires": "2027-05-15"
     },
@@ -24,9 +24,17 @@
       "ecosystem": "npm",
       "package": "@img/sharp-libvips-*",
       "license": "LGPL-3.0-or-later",
-      "reason": "O pacote LGPL de libvips e dependencia transitiva usada na instalacao/build do Next. A otimizacao de imagens esta desligada e sharp e libvips sao removidos do standalone antes da imagem final; o teste da imagem verifica a ausencia. Excecao de build temporaria, nao uma autorizacao para distribuir a biblioteca; revisar ao vencer.",
+      "reason": "The LGPL libvips package is a transitive dependency used in the Next install/build. Image optimization is turned off and sharp and libvips are removed from the standalone before the final image; the image test verifies the absence. A temporary build exception, not an authorization to distribute the library; review on expiry.",
       "date": "2026-11-15",
       "expires": "2027-05-15"
+    },
+    {
+      "ecosystem": "npm",
+      "package": "khroma",
+      "license": "Unknown",
+      "reason": "khroma is MIT-licensed (license file in the package and in its repository), but its package.json has no license field, so the checker reads it as Unknown. It is a transitive dependency of mermaid, which draws the diagrams of the guides at /docs. Review on expiry; remove once the package declares its license.",
+      "date": "2026-11-20",
+      "expires": "2027-05-20"
     }
   ]
 }

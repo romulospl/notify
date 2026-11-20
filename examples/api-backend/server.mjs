@@ -1,12 +1,12 @@
-// Backend de exemplo instrumentado com OpenTelemetry (#35).
+// Example backend instrumented with OpenTelemetry (#35).
 //
-// Mede cada requisição na métrica http.server.request.duration (histograma em
-// segundos, convenções semânticas do OTel) e exporta por OTLP/HTTP:
-//   - para o backend próprio do tenant (APM ou OTel Collector), em
+// Measures each request in the http.server.request.duration metric (histogram
+// in seconds, OTel semantic conventions) and exports over OTLP/HTTP:
+//   - to the tenant's own backend (APM or OTel Collector), in
 //     OTEL_EXPORTER_OTLP_ENDPOINT;
-//   - e, se STELLYTICS_OTLP_ENDPOINT e STELLYTICS_INGEST_KEY estiverem definidos,
-//     também para o coletor do stellytics (dual-export direto pelo SDK).
-// Sem nenhum dos dois, só serve as rotas.
+//   - and, if STELLYTICS_OTLP_ENDPOINT and STELLYTICS_INGEST_KEY are set,
+//     also to the stellytics collector (dual-export straight from the SDK).
+// With neither of them, it only serves the routes.
 import http from "node:http";
 import { metrics } from "@opentelemetry/api";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-proto";
@@ -20,13 +20,13 @@ import {
 const port = Number(process.env.PORT ?? 4010);
 const interval = Number(process.env.EXPORT_INTERVAL_MS ?? 10000);
 
-// Endpoint base OTLP/HTTP (sem /v1/metrics).
+// OTLP/HTTP base endpoint (without /v1/metrics).
 function reader(endpoint, headers) {
   return new PeriodicExportingMetricReader({
     exporter: new OTLPMetricExporter({
       url: `${endpoint.replace(/\/$/, "")}/v1/metrics`,
       headers,
-      // Delta é o recomendado pelo stellytics (spec do E5, seção 2).
+      // Delta is what stellytics recommends (E5 spec, section 2).
       temporalityPreference: AggregationTemporality.DELTA,
     }),
     exportIntervalMillis: interval,
@@ -59,7 +59,7 @@ const duration = provider
     unit: "s",
     description: "Duration of HTTP server requests.",
     advice: {
-      // Limites recomendados pelas convenções do OTel, os mesmos do stellytics.
+      // Boundaries recommended by the OTel conventions, the same as stellytics.
       explicitBucketBoundaries: [
         0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5,
         10,
@@ -67,7 +67,7 @@ const duration = provider
     },
   });
 
-// Rotas com o padrão já conhecido: o http.route vai pronto, sem IDs.
+// Routes with an already known pattern: http.route goes out ready, without IDs.
 const routes = [
   { method: "GET", pattern: /^\/accounts\/([A-Z0-9]{56})$/, route: "/accounts/{account_id}" },
   { method: "GET", pattern: /^\/accounts\/([A-Z0-9]{56})\/payments$/, route: "/accounts/{account_id}/payments" },
@@ -96,7 +96,7 @@ const server = http.createServer((req, res) => {
     "http.request.method": req.method ?? "GET",
     "http.response.status_code": status,
   };
-  // Sem padrão conhecido, vai o caminho e o coletor do stellytics normaliza.
+  // With no known pattern, the path goes out and the stellytics collector normalizes it.
   if (match) attrs["http.route"] = match.route;
   else attrs["url.path"] = path;
   duration.record((performance.now() - start) / 1000, attrs);
@@ -106,7 +106,7 @@ server.listen(port, () => {
   console.log(`example-api-backend on :${port}, ${readers.length} OTLP destination(s)`);
 });
 
-// Exporta o que falta antes de sair.
+// Exports what is left before exiting.
 async function stop() {
   server.close();
   await provider.shutdown();

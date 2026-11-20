@@ -1,6 +1,7 @@
 package main
 
-// Testes da #25: o desafio em GET /c e o descarte de eventos sem prova.
+// Tests for #25: the challenge on GET /c and the dropping of events without a
+// proof.
 
 import (
 	"encoding/json"
@@ -28,7 +29,7 @@ func TestChallenge(t *testing.T) {
 		"Access-Control-Allow-Origin": "*",
 	} {
 		if got := resp.Header.Get(k); got != want {
-			t.Errorf("%s = %q, quero %q", k, got, want)
+			t.Errorf("%s = %q, want %q", k, got, want)
 		}
 	}
 	var c proof.Challenge
@@ -36,27 +37,27 @@ func TestChallenge(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c.Bits != 4 || c.Token == "" {
-		t.Fatalf("desafio = %+v", c)
+		t.Fatalf("challenge = %+v", c)
 	}
 	if err := testProofs.Verify(activeSite, c.Token, proof.Solve(c.Token, c.Bits)); err != nil {
-		t.Errorf("token do desafio não vale para o site: %v", err)
+		t.Errorf("challenge token is not valid for the site: %v", err)
 	}
 
-	for _, q := range []string{"", "?s=", "?s=nao-e-uuid"} {
+	for _, q := range []string{"", "?s=", "?s=not-a-uuid"} {
 		resp, err := http.Get(s.server.URL + "/c" + q)
 		if err != nil {
 			t.Fatal(err)
 		}
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusBadRequest {
-			t.Errorf("/c%s: status = %d, quero 400", q, resp.StatusCode)
+			t.Errorf("/c%s: status = %d, want 400", q, resp.StatusCode)
 		}
 	}
 }
 
 func TestEventWithoutValidProofDiscarded(t *testing.T) {
-	// Um desafio emitido há 11 minutos pela mesma chave.
-	old := proof.New([]byte("chave-de-teste-com-pelo-menos-32-bytes"), 10*time.Minute, 4).
+	// A challenge issued 11 minutes ago with the same key.
+	old := proof.New([]byte("test-key-with-at-least-32-bytes-long"), 10*time.Minute, 4).
 		WithClock(func() time.Time { return time.Now().Add(-11 * time.Minute) }).
 		Challenge(activeSite).Token
 
@@ -69,32 +70,32 @@ func TestEventWithoutValidProofDiscarded(t *testing.T) {
 	}
 
 	cases := map[string]string{
-		// Um POST direto, como o curl faria.
-		"sem prova":             `{"type":"event",` + payload + `}`,
-		"token inventado":       `{"type":"event","p":{"t":"` + strings.Repeat("A", 43) + `","n":"1"},` + payload + `}`,
-		"nonce sem trabalho":    `{"type":"event","p":{"t":"` + valid.Token + `","n":"` + bad + `"},` + payload + `}`,
-		"token de outro site":   `{"type":"event","p":{"t":"` + otherSite.Token + `","n":"` + proof.Solve(otherSite.Token, 4) + `"},` + payload + `}`,
-		"token expirado":        `{"type":"event","p":{"t":"` + old + `","n":"` + proof.Solve(old, 4) + `"},` + payload + `}`,
-		"prova em formato ruim": `{"type":"event","p":"abc",` + payload + `}`,
+		// A direct POST, as curl would do.
+		"no proof":                `{"type":"event",` + payload + `}`,
+		"made-up token":           `{"type":"event","p":{"t":"` + strings.Repeat("A", 43) + `","n":"1"},` + payload + `}`,
+		"nonce without work":      `{"type":"event","p":{"t":"` + valid.Token + `","n":"` + bad + `"},` + payload + `}`,
+		"token from another site": `{"type":"event","p":{"t":"` + otherSite.Token + `","n":"` + proof.Solve(otherSite.Token, 4) + `"},` + payload + `}`,
+		"expired token":           `{"type":"event","p":{"t":"` + old + `","n":"` + proof.Solve(old, 4) + `"},` + payload + `}`,
+		"badly formatted proof":   `{"type":"event","p":"abc",` + payload + `}`,
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
 			s := newSetup(t)
 			resp := post(t, s, "text/plain", body)
 			want := http.StatusNoContent
-			if name == "prova em formato ruim" {
+			if name == "badly formatted proof" {
 				want = http.StatusBadRequest
 			}
 			if resp.StatusCode != want {
-				t.Errorf("status = %d, quero %d", resp.StatusCode, want)
+				t.Errorf("status = %d, want %d", resp.StatusCode, want)
 			}
 			if n := len(s.umami.received()); n != 0 {
-				t.Errorf("umami recebeu %d eventos, quero 0", n)
+				t.Errorf("umami received %d events, want 0", n)
 			}
 		})
 	}
 
-	t.Run("prova válida", func(t *testing.T) {
+	t.Run("valid proof", func(t *testing.T) {
 		s := newSetup(t)
 		body := `{"type":"event","p":{"t":"` + valid.Token + `","n":"` + proof.Solve(valid.Token, 4) + `"},` + payload + `}`
 		if resp := post(t, s, "text/plain", body); resp.StatusCode != http.StatusNoContent {
@@ -102,10 +103,10 @@ func TestEventWithoutValidProofDiscarded(t *testing.T) {
 		}
 		got := s.umami.received()
 		if len(got) != 1 {
-			t.Fatalf("umami recebeu %d eventos, quero 1", len(got))
+			t.Fatalf("umami received %d events, want 1", len(got))
 		}
 		if _, ok := got[0].body["p"]; ok {
-			t.Error("a prova foi repassada ao Umami")
+			t.Error("the proof was relayed to Umami")
 		}
 	})
 }

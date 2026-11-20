@@ -1,6 +1,6 @@
-// Limite de requisições da API de leitura (#48, ADR 0006): janela fixa de um
-// minuto por chave, em memória. Com mais de uma instância do portal o limite
-// vale por instância; para o uso previsto (poucas chaves do SCF) isso basta.
+// Request limit of the read API (#48, ADR 0006): a fixed one-minute window per
+// key, in memory. With more than one portal instance the limit applies per
+// instance; for the expected use (a few SCF keys) that is enough.
 
 export const READ_API_LIMIT = 60;
 const WINDOW_MS = 60_000;
@@ -11,8 +11,8 @@ const entries = new Map<string, Entry>();
 export type RateResult = { ok: true } | { ok: false; retryAfterSeconds: number };
 
 export function takeToken(key: string, now: number = Date.now(), limit: number = READ_API_LIMIT): RateResult {
-  // Descarta janelas vencidas quando o mapa cresce (há uma entrada por chave e
-  // por IP truncado), para a memória não aumentar sem limite.
+  // Discards expired windows when the map grows (there is one entry per key and
+  // per truncated IP), so memory does not grow without bound.
   if (entries.size > 10_000) {
     for (const [k, e] of entries) if (now - e.windowStart >= WINDOW_MS) entries.delete(k);
   }

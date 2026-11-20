@@ -1,15 +1,15 @@
-// Servidor estático mínimo dos exemplos de HTML e SPA, sem dependências.
+// Minimal static server for the HTML and SPA examples, with no dependencies.
 //
-//   node ../serve.mjs <pasta> [spa]
+//   node ../serve.mjs <folder> [spa]
 //
-// Troca o comentário <!-- stellytics:script --> das páginas pela tag do script de
-// rastreamento, montada a partir das variáveis de ambiente:
-//   STELLYTICS_WEBSITE_ID   ID do site no Umami (obrigatório)
-//   STELLYTICS_GATEWAY_URL  origem do gateway (padrão http://127.0.0.1:3002)
-//   STELLYTICS_SCRIPT_VERSION  versão do script (padrão: a mais nova publicada)
-//   PORT                porta (padrão 4001)
+// Replaces the <!-- stellytics:script --> comment in the pages with the tracking
+// script tag, built from the environment variables:
+//   STELLYTICS_WEBSITE_ID   ID of the site in Umami (required)
+//   STELLYTICS_GATEWAY_URL  gateway origin (default http://127.0.0.1:3002)
+//   STELLYTICS_SCRIPT_VERSION  script version (default: the newest published one)
+//   PORT                port (default 4001)
 //   HOST                listen address (default 127.0.0.1; 0.0.0.0 in a container)
-// No modo spa, caminhos sem arquivo devolvem o index.html (roteamento no navegador).
+// In spa mode, paths with no file return index.html (routing in the browser).
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve } from "node:path";
@@ -23,7 +23,7 @@ const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; ch
 
 async function scriptTag() {
   const website = process.env.STELLYTICS_WEBSITE_ID;
-  if (!website) throw new Error("defina STELLYTICS_WEBSITE_ID com o ID do site no Umami");
+  if (!website) throw new Error("set STELLYTICS_WEBSITE_ID to the ID of the site in Umami");
   const gateway = (process.env.STELLYTICS_GATEWAY_URL ?? "http://127.0.0.1:3002").replace(/\/$/, "");
   const sri = JSON.parse(
     await readFile(new URL("../packages/tracker/published/sri.json", import.meta.url), "utf8"),
@@ -31,7 +31,7 @@ async function scriptTag() {
   const version =
     process.env.STELLYTICS_SCRIPT_VERSION ??
     Object.keys(sri).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).at(-1);
-  if (!sri[version]) throw new Error(`versão ${version} do script não publicada`);
+  if (!sri[version]) throw new Error(`script version ${version} is not published`);
   return (
     `<script defer src="${gateway}/s/v${version}/n.js" integrity="${sri[version]}" ` +
     `crossorigin="anonymous" data-site="${website}"></script>`

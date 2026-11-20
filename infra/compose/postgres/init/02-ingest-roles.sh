@@ -1,13 +1,13 @@
 #!/bin/sh
-# Cria os usuários do banco stellytics usados pelo gateway web (stellytics_ingest) e
-# pelo coletor (stellytics_collector), com o mínimo de permissão (spec do E2, D4).
-# As visões que eles leem e os GRANTs vêm das migrações do portal.
+# Creates the stellytics database users used by the web gateway (stellytics_ingest) and
+# by the collector (stellytics_collector), with minimal privileges (E2 spec, D4).
+# The views they read and the GRANTs come from the portal migrations.
 #
-# No Compose roda só com o volume vazio, depois de 01-databases.sh. Para um
-# volume que já existe (sem apagar os dados):
+# In Compose it runs only with an empty volume, after 01-databases.sh. For a
+# volume that already exists (without erasing the data):
 #   docker compose exec -T postgres sh < infra/compose/postgres/init/02-ingest-roles.sh
-# O CI usa o mesmo script contra o Postgres de serviço (PGHOST etc.).
-# Idempotente: se o papel já existe, só atualiza a senha.
+# CI uses the same script against the service Postgres (PGHOST etc.).
+# Idempotent: if the role already exists, it only updates the password.
 set -eu
 
 psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER:-postgres}" --dbname postgres \
@@ -20,7 +20,7 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r)
 ALTER ROLE stellytics_ingest LOGIN PASSWORD :'ingest_pw';
 ALTER ROLE stellytics_collector LOGIN PASSWORD :'collector_pw';
 GRANT CONNECT ON DATABASE stellytics TO stellytics_ingest, stellytics_collector;
--- Deixa o portal assumir esses papéis (SET ROLE) nos testes de permissão, sem
--- herdar nada deles. O portal já é dono das tabelas, então não ganha acesso novo.
+-- Lets the portal assume these roles (SET ROLE) in the permission tests, without
+-- inheriting anything from them. The portal already owns the tables, so it gains no new access.
 GRANT stellytics_ingest, stellytics_collector TO stellytics WITH INHERIT FALSE, SET TRUE;
 SQL

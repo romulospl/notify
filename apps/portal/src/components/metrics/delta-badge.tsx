@@ -1,8 +1,9 @@
 import type { Delta } from "@/lib/format";
 
-// Variação contra o período anterior (#28, #29). A cor diz se a mudança é boa
-// (depende da métrica: rejeição subir é ruim) e sempre vem com seta e texto,
-// nunca só a cor. Cores de estado da skill dataviz.
+// Change against the previous period (#28, #29). The color says whether the
+// change is good (it depends on the metric: bounce rate going up is bad) and
+// always comes with an arrow and text, never color alone. Status colors from
+// the dataviz skill.
 export function DeltaBadge({ delta, upIsGood = true }: { delta: NonNullable<Delta>; upIsGood?: boolean }) {
   if (delta.direction === "flat") return <span className="text-muted">{delta.text}</span>;
   const good = (delta.direction === "up") === upIsGood;

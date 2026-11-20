@@ -1,6 +1,6 @@
 #!/bin/sh
-# Cria um usuário e um banco para cada consumidor: umami (gerenciado pelo Umami)
-# e stellytics (tenants, chaves e métricas de API). Roda só com o volume vazio.
+# Creates a user and a database for each consumer: umami (managed by Umami)
+# and stellytics (tenants, keys and API metrics). Runs only with an empty volume.
 set -eu
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres \

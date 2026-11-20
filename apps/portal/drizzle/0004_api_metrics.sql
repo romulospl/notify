@@ -1,13 +1,13 @@
--- Escrita à mão (drizzle-kit generate --custom). Spec do E5, seção 4 (#33).
+-- Written by hand (drizzle-kit generate --custom). E5 spec, section 4 (#33).
 --
--- Métricas de API: api_metric_1m (gravada pelo coletor), api_metric_1h e
--- api_metric_1d (consolidadas pelo job da #34). As três têm as mesmas colunas,
--- são particionadas por mês em bucket_start e têm uma partição default, para
--- nunca recusar um ponto.
+-- API metrics: api_metric_1m (written by the collector), api_metric_1h and
+-- api_metric_1d (rolled up by the #34 job). All three have the same columns,
+-- are partitioned by month on bucket_start and have a default partition, so
+-- a point is never rejected.
 --
--- duration_buckets conta as durações nos 15 buckets do spec (D2), com os
--- limites superiores, em segundos, da recomendação do OpenTelemetry para
--- http.server.request.duration e um último bucket acima de 10 s.
+-- duration_buckets counts the durations in the 15 buckets of the spec (D2),
+-- with the upper bounds, in seconds, from the OpenTelemetry recommendation for
+-- http.server.request.duration and a last bucket above 10 s.
 DO $$
 DECLARE
   t text;
@@ -27,21 +27,21 @@ BEGIN
         PRIMARY KEY (tenant_id, api_service_id, route, method, status_code, bucket_start)
       ) PARTITION BY RANGE (bucket_start)$sql$, t);
     EXECUTE format('CREATE TABLE %I PARTITION OF %I DEFAULT', t || '_default', t);
-    -- Painéis: o período de um tenant, filtrado depois por serviço e rota.
+    -- Dashboards: a tenant's period, filtered afterwards by service and route.
     EXECUTE format('CREATE INDEX %I ON %I (tenant_id, bucket_start)', t || '_tenant_time', t);
   END LOOP;
 END
 $$;
 --> statement-breakpoint
 
--- Limites superiores dos buckets de duração, em segundos (spec, D2).
+-- Upper bounds of the duration buckets, in seconds (spec, D2).
 CREATE FUNCTION api_metric_bounds() RETURNS double precision[]
 LANGUAGE sql IMMUTABLE PARALLEL SAFE
 RETURN ARRAY[0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]::double precision[];
 --> statement-breakpoint
 
--- Soma dois arrays de buckets posição a posição. Usada no ON CONFLICT do
--- coletor e no agregado abaixo.
+-- Adds two bucket arrays position by position. Used in the collector's
+-- ON CONFLICT and in the aggregate below.
 CREATE FUNCTION api_metric_add_buckets(a bigint[], b bigint[]) RETURNS bigint[]
 LANGUAGE sql IMMUTABLE PARALLEL SAFE
 RETURN CASE
@@ -51,7 +51,7 @@ RETURN CASE
 END;
 --> statement-breakpoint
 
--- Soma os buckets de várias linhas: api_metric_sum_buckets(duration_buckets).
+-- Sums the buckets of several rows: api_metric_sum_buckets(duration_buckets).
 CREATE AGGREGATE api_metric_sum_buckets(bigint[]) (
   SFUNC = api_metric_add_buckets,
   STYPE = bigint[],
@@ -59,9 +59,9 @@ CREATE AGGREGATE api_metric_sum_buckets(bigint[]) (
 );
 --> statement-breakpoint
 
--- Percentil q (0 a 1) a partir dos buckets, interpolando linearmente dentro do
--- bucket onde ele cai. No último bucket (acima de 10 s) devolve 10. Nulo sem
--- requisições.
+-- Percentile q (0 to 1) from the buckets, interpolating linearly inside the
+-- bucket where it falls. In the last bucket (above 10 s) it returns 10. Null
+-- with no requests.
 CREATE FUNCTION api_metric_quantile(buckets bigint[], q double precision) RETURNS double precision
 LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE AS $$
 DECLARE
@@ -96,9 +96,10 @@ END
 $$;
 --> statement-breakpoint
 
--- Cria as partições mensais (UTC) do mês corrente e dos `months` seguintes nas
--- três tabelas. Se a partição default já tiver linhas do mês (o job atrasou),
--- elas são movidas para a partição nova. Idempotente; o job da #34 chama todo dia.
+-- Creates the monthly partitions (UTC) for the current month and the next
+-- `months` in the three tables. If the default partition already has rows for
+-- the month (the job ran late), they are moved to the new partition.
+-- Idempotent; the #34 job calls it every day.
 CREATE FUNCTION api_metric_ensure_partitions(months integer DEFAULT 2) RETURNS void
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -126,9 +127,9 @@ $$;
 SELECT api_metric_ensure_partitions(2);
 --> statement-breakpoint
 
--- Permissões (spec, seção 4). O coletor só grava o balde de 1 minuto, pelo
--- INSERT ... ON CONFLICT DO UPDATE, que exige também SELECT nas colunas lidas.
--- O consolidado e a manutenção são do dono (stellytics).
+-- Privileges (spec, section 4). The collector only writes the 1-minute bucket,
+-- through INSERT ... ON CONFLICT DO UPDATE, which also requires SELECT on the
+-- columns it reads. The rollups and the maintenance belong to the owner (stellytics).
 REVOKE ALL ON api_metric_1m, api_metric_1h, api_metric_1d FROM PUBLIC;
 --> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE ON api_metric_1m TO stellytics_collector;

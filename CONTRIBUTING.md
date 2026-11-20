@@ -48,7 +48,7 @@ Rules the tests must cover:
 
 - Dependencies must use an [OSI](https://opensource.org/licenses)-approved license; specific, temporary exceptions for build tools are recorded in `scripts/licenses/allowed.json` and reviewed on the stated date.
 - Pin exact versions and commit the lockfile (`pnpm-lock.yaml`, `services/go.sum`). CI fails if the lockfile is out of date.
-- Only adopt releases that are at least 14 days old, except for the narrow exception for critical or high security fixes described in the [runbook](docs/runbooks/vulnerabilidades.md). pnpm enforces `minimumReleaseAge`; Renovate still depends on being installed and on GitHub alerts.
+- Only adopt releases that are at least 14 days old, except for the narrow exception for critical or high security fixes described in the [runbook](docs/runbooks/vulnerabilities.md). pnpm enforces `minimumReleaseAge`; Renovate still depends on being installed and on GitHub alerts.
 - GitHub Actions pinned by SHA, with the tag in a comment.
 
 ### Dependency and license alerts
@@ -68,7 +68,7 @@ node scripts/deps/check-licenses.mjs --npm /tmp/npm-licenses.json --go /tmp/go-l
 node --test scripts/deps/*.test.mjs   # tests for the checkers
 ```
 
-**Vulnerability.** Read the package, the fixed version and the path (the report shows which dependency pulls it in). Prefer upgrading, respecting the 14-day wait. If the fix is not yet 14 days old, wait for the date it becomes eligible (the `govulncheck` job stays red until the image is bumped, which is expected and short) and consider a mitigation in the meantime; the 14-day rule is not relaxed. For a transitive dependency, upgrade the one that pulls it in or use `pnpm.overrides` with an exact version. `moderate` and `low` findings from `pnpm audit` do not fail the job but show up in the log: handle them when a fix exists. Never silence a `high` or `critical` alert, or change the `audit` threshold, to turn the job green. A red job with "Nao consegui consultar" is not a vulnerability: it is an endpoint or network failure, run it again.
+**Vulnerability.** Read the package, the fixed version and the path (the report shows which dependency pulls it in). Prefer upgrading, respecting the 14-day wait. If the fix is not yet 14 days old, wait for the date it becomes eligible (the `govulncheck` job stays red until the image is bumped, which is expected and short) and consider a mitigation in the meantime; the 14-day rule is not relaxed. For a transitive dependency, upgrade the one that pulls it in or use `pnpm.overrides` with an exact version. `moderate` and `low` findings from `pnpm audit` do not fail the job but show up in the log: handle them when a fix exists. Never silence a `high` or `critical` alert, or change the `audit` threshold, to turn the job green. A red job with "Could not query" is not a vulnerability: it is an endpoint or network failure, run it again.
 
 **License not on the list.** The allowlist is `scripts/licenses/allowed.json` (SPDX ids). An `OR` expression (dual license) passes if one alternative is on the list; with `AND`, all must be; `X WITH exception` counts as `X`. No license, `UNLICENSED`, `Unknown` and `SEE LICENSE IN ...` always fail. What to do, in order:
 

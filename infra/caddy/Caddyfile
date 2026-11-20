@@ -1,20 +1,20 @@
-# Caddy de produção (ADR 0014, ADR 0016): única porta de entrada, com TLS automático.
+# Production Caddy (ADR 0014, ADR 0016): the only entry point, with automatic TLS.
 #
-# Regras conferidas na revisão da #14 (infra/README.md):
-# - nenhuma rota leva ao Umami, nem à interface nem à API (#62);
-# - o gateway publica só /e, /c, /s/ e /healthz; o resto responde 404, menos o
-#   /healthz/stack, que o próprio Caddy responde (checagem da pilha);
-# - o coletor publica só o OTLP (HTTP em /v1/traces, /v1/metrics e /v1/logs, e
-#   gRPC), sempre com chave de ingestão; o resto responde 404 (ADR 0012).
+# Rules checked in the #14 review (infra/README.md):
+# - no route leads to Umami, neither the UI nor the API (#62);
+# - the gateway publishes only /e, /c, /s/ and /healthz; the rest answers 404,
+#   except /healthz/stack, which Caddy itself answers (stack check);
+# - the collector publishes only OTLP (HTTP at /v1/traces, /v1/metrics and
+#   /v1/logs, and gRPC), always with an ingest key; the rest answers 404 (ADR 0012).
 #
-# O nome do host da ingestão não pode ter termos que ad blockers bloqueiam
-# (`umami`, `analytics`, `track`, `collect`; ver CLAUDE.md).
+# The ingestion host name must not contain terms that ad blockers block
+# (`umami`, `analytics`, `track`, `collect`; see CLAUDE.md).
 
 {
 	email {$ACME_EMAIL}
-	# Nenhum log guarda o IP do cliente, os cabeçalhos ou a URL com query: nem
-	# os de erro (por exemplo, 502 quando o gateway reinicia), que o Caddy
-	# grava mesmo sem access log. O IP completo nunca é persistido (CLAUDE.md).
+	# No log keeps the client IP, the headers or the URL with its query: not even
+	# the error logs (for example, 502 when the gateway restarts), which Caddy
+	# writes even without an access log. The full IP is never persisted (CLAUDE.md).
 	log default {
 		output stderr
 		format filter {
@@ -26,10 +26,10 @@
 			request>tls delete
 		}
 	}
-	# Sem trusted_proxies: o Caddy descarta o X-Forwarded-For que chega e manda
-	# o IP real da conexão. O gateway só confia no X-Forwarded-For do Caddy
-	# (TRUSTED_PROXIES em compose/prod.yaml). Para o IP real chegar ao Caddy, o
-	# Docker da VPS roda com userland-proxy desligado (init.sh, configure-docker.py).
+	# No trusted_proxies: Caddy drops the incoming X-Forwarded-For and sends
+	# the real connection IP. The gateway trusts only Caddy's X-Forwarded-For
+	# (TRUSTED_PROXIES in compose/prod.yaml). For the real IP to reach Caddy, the
+	# VPS Docker runs with userland-proxy off (init.sh, configure-docker.py).
 }
 
 (security_headers) {
@@ -37,7 +37,7 @@
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
-		# Sem o cabeçalho "Server: Caddy".
+		# No "Server: Caddy" header.
 		-Server
 	}
 }
@@ -56,9 +56,9 @@
 
 {$INGEST_HOST} {
 	import security_headers
-	# Estado da pilha na VPS para o monitoramento externo: 200 enquanto o
-	# stellytics-check (infra/scripts/stack-check.py) mantiver o arquivo
-	# stack-ok, 503 sem ele. Só o código; os motivos ficam no journal da VPS.
+	# Stack status on the VPS for the external monitoring: 200 while
+	# stellytics-check (infra/scripts/stack-check.py) keeps the stack-ok
+	# file, 503 without it. Only the code; the reasons stay in the VPS journal.
 	handle /healthz/stack {
 		header Cache-Control "no-store"
 		@stackok file {
@@ -82,8 +82,8 @@
 	}
 }
 
-# Ingestão de API (ADR 0012): OTLP/HTTP e OTLP/gRPC no mesmo host, na 443. A
-# chave de ingestão vai no cabeçalho Authorization, que o log acima não guarda.
+# API ingestion (ADR 0012): OTLP/HTTP and OTLP/gRPC on the same host, on 443. The
+# ingest key goes in the Authorization header, which the log above does not keep.
 {$API_HOST} {
 	import security_headers
 	@grpc {

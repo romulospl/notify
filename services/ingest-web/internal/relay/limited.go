@@ -9,23 +9,24 @@ import (
 	"time"
 )
 
-// ErrSaturated indica que não surgiu vaga de repasse dentro de QueueWait: o
-// evento é descartado, não adiado.
-var ErrSaturated = errors.New("relay: repasses simultâneos no limite")
+// ErrSaturated means no relay slot came up within QueueWait: the event is
+// dropped, not deferred.
+var ErrSaturated = errors.New("relay: concurrent relays at the limit")
 
-// Sender é o que o gateway usa para repassar um evento.
+// Sender is what the gateway uses to relay an event.
 type Sender interface {
 	Send(ctx context.Context, ev Event, userAgent string, truncatedIP netip.Addr) error
 }
 
-// Limited limita quantos repasses ao Umami correm ao mesmo tempo (semáforo).
-// Quem chega com todas as vagas ocupadas espera até wait por uma; passado o
-// prazo, Send devolve ErrSaturated sem tocar no Umami. Assim o gateway nunca
-// segura mais que max requisições no Umami nem mais que (chegadas por segundo
-// x wait) esperando vaga, em vez de acumular tudo enquanto o Umami está lento.
+// Limited limits how many relays to Umami run at the same time (semaphore).
+// Whoever arrives with all the slots taken waits up to wait for one; once the
+// deadline passes, Send returns ErrSaturated without touching Umami. This way
+// the gateway never holds more than max requests in Umami nor more than
+// (arrivals per second x wait) waiting for a slot, instead of piling everything
+// up while Umami is slow.
 //
-// A vaga é devolvida por defer: erro, timeout, cancelamento do cliente e panic
-// do Sender a liberam.
+// The slot is returned by defer: error, timeout, client cancellation and a
+// panic in the Sender release it.
 type Limited struct {
 	next    Sender
 	slots   chan struct{}
@@ -36,13 +37,13 @@ type Limited struct {
 	changed chan struct{}
 }
 
-// NewLimited envolve next com até max repasses simultâneos e espera de até
-// wait por uma vaga (wait 0 recusa na hora). max precisa ser maior que zero.
+// NewLimited wraps next with up to max concurrent relays and a wait of up to
+// wait for a slot (wait 0 refuses immediately). max must be greater than zero.
 func NewLimited(next Sender, max int, wait time.Duration) *Limited {
 	return &Limited{next: next, slots: make(chan struct{}, max), wait: wait, bySite: make(map[string]int), changed: make(chan struct{})}
 }
 
-// Send repassa ev quando há (ou surge a tempo) uma vaga.
+// Send relays ev when there is a slot (or one comes up in time).
 func (l *Limited) Send(ctx context.Context, ev Event, userAgent string, truncatedIP netip.Addr) error {
 	if err := l.acquire(ctx, ev.Payload.Website); err != nil {
 		return err
@@ -51,8 +52,8 @@ func (l *Limited) Send(ctx context.Context, ev Event, userAgent string, truncate
 	return l.next.Send(ctx, ev, userAgent, truncatedIP)
 }
 
-// Uma vaga permanece reservada para outros sites quando há pelo menos duas.
-// O mapa só contém sites com repasses ativos e tem no máximo cap(slots) entradas.
+// One slot stays reserved for other sites when there are at least two. The map
+// only holds sites with active relays and has at most cap(slots) entries.
 func (l *Limited) acquire(ctx context.Context, site string) error {
 	var timer *time.Timer
 	if l.wait > 0 {
@@ -103,8 +104,9 @@ func (l *Limited) release(site string) {
 	l.mu.Unlock()
 }
 
-// Dropped é o total de eventos recusados por saturação desde o início.
+// Dropped is the total number of events refused because of saturation since the
+// start.
 func (l *Limited) Dropped() uint64 { return l.dropped.Load() }
 
-// InFlight é quantos repasses estão em andamento agora.
+// InFlight is how many relays are in progress now.
 func (l *Limited) InFlight() int { return len(l.slots) }

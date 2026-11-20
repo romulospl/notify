@@ -1,6 +1,6 @@
-# Só para o teste da pilha de produção (test/prod-stack-test.sh e o job
-# `prod-stack` do CI). Acrescenta um S3 local (SeaweedFS, Apache-2.0) no lugar
-# do armazenamento S3 de produção. Nunca use em produção.
+# Only for the production stack test (test/prod-stack-test.sh and the CI
+# `prod-stack` job). Adds a local S3 (SeaweedFS, Apache-2.0) in place of
+# the production S3 storage. Never use in production.
 
 services:
   s3:
