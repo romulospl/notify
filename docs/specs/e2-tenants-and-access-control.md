@@ -4,10 +4,10 @@
 - **Date:** 13 November 2026
 - **Epic:** [#2 (E2)](https://github.com/romulospl/stellytics/issues/2)
 - **Issues covered:** #16, #58, #59, #60, #17, #18, #19, #20 and #21
-- **Depends on:** [ADR 0003](../adr/0003-portal-isolation.md)
+- **Depends on:** [ADR 0003](../decisions.md#0003-portal-isolation)
 - **Implementation:** [what was done in E2](../e2-implementation.md)
 
-This document fixes the contract that the E2 issues must respect: the data model of the `stellytics` database, the roles, the isolation rule, the ingest key and what each tenant status blocks. A decision with discarded alternatives goes in an ADR; only the chosen contract goes here.
+This document fixes the contract that the E2 issues must respect: the data model of the `stellytics` database, the roles, the isolation rule, the ingest key and what each tenant status blocks. A decision with discarded alternatives goes in `docs/decisions.md`; only the chosen contract goes here.
 
 The six decisions marked **D1** to **D6** were confirmed on 13 November 2026. They are gathered in [section 9](#9-decisions-made), with the discarded alternative of each one.
 
@@ -214,7 +214,7 @@ Contract between the portal (#59) and the collector (#30).
 3. With the email confirmed, they enter the project name. The portal creates the `tenant` with status `active` and the row in `tenant_member` with `owner`, in the same transaction.
 4. They register sites and API services. On creating a service, they receive the first ingest key.
 
-When sign-up with approval is turned on (`SIGNUP_APPROVAL`, #49, [ADR 0007](../adr/0007-sign-up-with-approval.md)), step 3 creates the tenant as `pending`. The operator approves (`active`) or rejects (`removed`, with a reason) at `/operator/approvals`, and each decision goes to the `audit_log` (`tenant.approved`, `tenant.rejected`).
+When sign-up with approval is turned on (`SIGNUP_APPROVAL`, #49, [ADR 0007](../decisions.md#0007-sign-up-with-approval)), step 3 creates the tenant as `pending`. The operator approves (`active`) or rejects (`removed`, with a reason) at `/operator/approvals`, and each decision goes to the `audit_log` (`tenant.approved`, `tenant.rejected`).
 
 ### Site in Umami (#58)
 
@@ -260,7 +260,7 @@ Each new dashboard (#28 and #37) adds its own cases to this suite.
 - **Member invites.** The model accepts several users per tenant, but there is no issue for the invite flow. Today only whoever creates the project has access. If it is needed for the pilots, create the issue.
 - **Deletion of one's own account and of the project by the tenant.** The member's email is personal data, so the privacy document (#40) must provide for how the person requests erasure.
 - **Erasing the data of a removed tenant.**
-- **SCF API keys for reading the metrics** (#48, decided in [ADR 0006](../adr/0006-scf-read-api.md)) and **sign-up with approval** (#49), which are post-MVP. The model already provides for the `pending` status.
+- **SCF API keys for reading the metrics** (#48, decided in [ADR 0006](../decisions.md#0006-scf-read-api)) and **sign-up with approval** (#49), which are post-MVP. The model already provides for the `pending` status.
 - **Schema of the API metrics**, which is in the E5 spec.
 
 ## 11. Effect on the issues

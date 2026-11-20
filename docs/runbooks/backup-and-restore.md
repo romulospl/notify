@@ -1,6 +1,6 @@
 # Runbook: backup and restore
 
-The full description (continuous WAL, daily backup at 03:00 UTC by the `stellytics-backup.timer` that `deploy.sh` installs, retention of `WALG_RETAIN_FULL` (default 7), the step-by-step restore and going back to a point in time) is in [`docs/deploy.md`](../deploy.md), sections "Backup" and "Restore the database", and the decision is in [ADR 0016](../adr/0016-production-on-a-vps.md). **Do not repeat the command blocks from here: use the ones there.** This runbook says when to act, how to diagnose and how to check.
+The full description (continuous WAL, daily backup at 03:00 UTC by the `stellytics-backup.timer` that `deploy.sh` installs, retention of `WALG_RETAIN_FULL` (default 7), the step-by-step restore and going back to a point in time) is in [`docs/deploy.md`](../deploy.md), sections "Backup" and "Restore the database", and the decision is in [ADR 0016](../decisions.md#0016-production-on-a-vps). **Do not repeat the command blocks from here: use the ones there.** This runbook says when to act, how to diagnose and how to check.
 
 The scripts are in [`infra/compose/postgres/`](../../infra/compose/postgres/): `backup.sh` becomes `stellytics-backup` and `restore.sh` becomes `stellytics-restore` inside the Postgres image (`Dockerfile`).
 

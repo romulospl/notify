@@ -1,6 +1,6 @@
 # E2: what was implemented
 
-Record of the implementation of epic [E2 (#2)](https://github.com/romulospl/stellytics/issues/2), multi-tenant, sign-up and access control, done on **13 November 2026**. The contract these issues follow is in the [E2 spec](specs/e2-tenants-and-access-control.md) and in [ADR 0003](adr/0003-portal-isolation.md). This document records what was built, where it is, the choices made during implementation and what is missing.
+Record of the implementation of epic [E2 (#2)](https://github.com/romulospl/stellytics/issues/2), multi-tenant, sign-up and access control, done on **13 November 2026**. The contract these issues follow is in the [E2 spec](specs/e2-tenants-and-access-control.md) and in [ADR 0003](decisions.md#0003-portal-isolation). This document records what was built, where it is, the choices made during implementation and what is missing.
 
 ## 1. Status
 
@@ -129,7 +129,7 @@ The E2 spec and ADR 0003 came in together, in commit `75658a7`.
 - **Choices:**
   - the removal reason is required (3 to 500 characters), because the project sees it on the dashboard; the reactivation one is optional and stays only in the `audit_log` (the `status_reason` column goes back to null);
   - removing what is already removed, or reactivating what is not, writes nothing (returns `"unchanged"`); two operators at the same time produce a single record;
-  - reactivating applies only to `removed`. A `pending` tenant is not approved here: that is done by `approveTenant` and `rejectTenant` (#49, [ADR 0007](adr/0007-sign-up-with-approval.md)).
+  - reactivating applies only to `removed`. A `pending` tenant is not approved here: that is done by `approveTenant` and `rejectTenant` (#49, [ADR 0007](decisions.md#0007-sign-up-with-approval)).
 - **Screens:** form and status history at `/operator/tenants/[tenantId]` (`status-form.tsx`, actions in `actions.ts`). The actions call `requireOperatorContext()` before anything else, so a tenant member gets 404.
 - **Ingestion:** nothing changed in the gateway or in the views. `ingest_site` and `ingest_key_active` (migration 0002) already require `tenant.status = 'active'`, so the web gateway starts dropping the events within 1 minute (its cache). The test `services/ingest-web/e2e/tenant_status_test.go` checks this end to end, with the real Umami.
 - **What already existed and still holds:** a member of a removed project can still sign in, sees the notice with the reason at `/dashboard` and cannot register a site, service or key (only revoke a key).

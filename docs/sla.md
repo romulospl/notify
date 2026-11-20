@@ -1,8 +1,8 @@
 # Availability and vulnerability fix targets and commitments
 
-Issue [#52](https://github.com/romulospl/stellytics/issues/52). Architecture decision in [ADR 0016](adr/0016-production-on-a-vps.md) (production on a single VPS, without high availability).
+Issue [#52](https://github.com/romulospl/stellytics/issues/52). Architecture decision in [ADR 0016](decisions.md#0016-production-on-a-vps) (production on a single VPS, without high availability).
 
-> **Required reading.** The production architecture **does not sustain the RFP targets** (99.99% for ingestion and 99.90% for dashboards): it is a single VPS, with a single Postgres and no replica ([ADR 0016](adr/0016-production-on-a-vps.md)). High availability was taken out of scope because the RFP does not demand it as an architecture requirement. This document separates what is an RFP **target** from what is a project **commitment**: the commitment is **99.5% per month for ingestion and for dashboards**, and vulnerability fixes within **24 hours (critical) and 7 calendar days (high)**. Today there is a proof of concept live (`stellytics.xyz`, `e.stellytics.xyz` and `otlp.stellytics.xyz`), hosted in Brazil and without pilots; production moves to an EU region in Tranche 1. No availability measurement has been published yet.
+> **Required reading.** The production architecture **does not sustain the RFP targets** (99.99% for ingestion and 99.90% for dashboards): it is a single VPS, with a single Postgres and no replica ([ADR 0016](decisions.md#0016-production-on-a-vps)). High availability was taken out of scope because the RFP does not demand it as an architecture requirement. This document separates what is an RFP **target** from what is a project **commitment**: the commitment is **99.5% per month for ingestion and for dashboards**, and vulnerability fixes within **24 hours (critical) and 7 calendar days (high)**. Today there is a proof of concept live (`stellytics.xyz`, `e.stellytics.xyz` and `otlp.stellytics.xyz`), hosted in Brazil and without pilots; production moves to an EU region in Tranche 1. No availability measurement has been published yet.
 
 ## 1. The RFP targets
 
@@ -68,7 +68,7 @@ By the 5th business day of the following month, a public note in `docs/` or an i
 
 ## 4. What each target needs
 
-Production is a single VPS, with Docker Compose ([ADR 0016](adr/0016-production-on-a-vps.md)). Ingestion replica, Postgres replica, failover and load balancer **do not exist** in the repository: they were removed for being outside what the RFP requires. For reference, what each target would take:
+Production is a single VPS, with Docker Compose ([ADR 0016](decisions.md#0016-production-on-a-vps)). Ingestion replica, Postgres replica, failover and load balancer **do not exist** in the repository: they were removed for being outside what the RFP requires. For reference, what each target would take:
 
 - **99.9% for ingestion:** two or more ingestion instances behind a load balancer or floating IP, rolling deploy, a pager in addition to email.
 - **99.9% for dashboards:** a Postgres replica with rehearsed promotion, a replicated portal with only one instance running migrations.

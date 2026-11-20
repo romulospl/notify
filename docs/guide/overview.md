@@ -9,7 +9,7 @@ Stellar Community Fund reviewers rely on usage numbers that each project reports
 ## Two layers, one platform
 
 - **Web analytics:** page views, visitors, referrers, countries, devices, custom events and Stellar Wallets Kit connections, from one small script.
-- **API analytics:** requests, status codes and p50/p95 latency per normalized route, from the OpenTelemetry metrics your API already produces.
+- **API analytics:** requests, status codes and p50/p95 latency per normalized route, from the OpenTelemetry metrics of your Node.js API.
 
 You can use only one of them, or both.
 

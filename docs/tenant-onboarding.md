@@ -4,12 +4,12 @@ For anyone who will measure a Stellar ecosystem project on the platform: from si
 
 > **Validation status.** The snippets in this guide were checked against the repository examples and against the code of the screens (see [PR #108](https://github.com/romulospl/stellytics/pull/108)). On 2026-11-19 the team followed the guide end to end against the local Compose stack: sign-up and e-mail, project, site, static HTML and SPA examples, a custom event, a service with its ingest key, `examples/api-backend` with dual-export, and both dashboards; details on [#43](https://github.com/romulospl/stellytics/issues/43). Validation with a **real pilot** (acceptance criterion 2 of #43) **has not happened yet**: it depends on the pilots of issues [#45](https://github.com/romulospl/stellytics/issues/45) and [#46](https://github.com/romulospl/stellytics/issues/46). Until then, treat the guide as not validated by an external project.
 
-Conventions: `<gateway>` is the web ingestion host and `<collector>` is the API collector host (the instance's `API_HOST`), both as the host name only, without `https://`. The portal shows both: the gateway in each site's installation tag and the collector on each service's **Ingest keys** tab. In production, the URLs are `https://<gateway>` and `https://<collector>`, on port 443; the collector serves OTLP/HTTP and gRPC on the same host ([ADR 0012](adr/0012-api-ingestion-through-caddy.md)). In local Compose, the portal is at `http://localhost:3000` (with `127.0.0.1` it refuses the sign-in and sign-up forms), the gateway at `http://localhost:3002` and the collector at `http://127.0.0.1:4318` (HTTP) and `127.0.0.1:4317` (gRPC). No real production has been deployed yet (`docs/progress.md`); confirm the addresses with whoever operates the instance before configuring.
+Conventions: `<gateway>` is the web ingestion host and `<collector>` is the API collector host (the instance's `API_HOST`), both as the host name only, without `https://`. The portal shows both: the gateway in each site's installation tag and the collector on each service's **Ingest keys** tab. In production, the URLs are `https://<gateway>` and `https://<collector>`, on port 443; the collector serves OTLP/HTTP and gRPC on the same host ([ADR 0012](decisions.md#0012-api-ingestion-through-caddy)). In local Compose, the portal is at `http://localhost:3000` (with `127.0.0.1` it refuses the sign-in and sign-up forms), the gateway at `http://localhost:3002` and the collector at `http://127.0.0.1:4318` (HTTP) and `127.0.0.1:4317` (gRPC). No real production has been deployed yet (`docs/progress.md`); confirm the addresses with whoever operates the instance before configuring.
 
 Terms used in this guide:
 
 - **SCF:** Stellar Community Fund, which funds the projects and is the audience of stellytics. An **SCF operator** is an account with a view of all projects.
-- **ADR:** a record of an architecture decision of the project, in [`docs/adr/`](adr/README.md).
+- **ADR:** a numbered architecture decision of the project, summarized in [`docs/decisions.md`](decisions.md).
 - **SRI** (Subresource Integrity): the browser checks the hash of the script file before running it and refuses it if it does not match.
 - **SPA** (single-page app, which changes screens without reloading) and **SSR** (server-side rendering: the page is built on the server).
 - **OpenTelemetry (OTel):** an open standard for metrics, traces and logs. **OTLP** is the protocol it uses to send that data.
@@ -139,7 +139,7 @@ window.stellytics?.event("signup_clicked", { plan: "pro", seats: 3 });
 - Name: 1 to 50 characters among letters, digits and `_ . : -`, starting with a letter or digit. Properties: up to 10, with a key of up to 40 characters and a text value (up to 100 bytes), number or true/false. Anything outside that is ignored.
 - **Do not send personal or wallet data:** address, public key, transaction hash, transferred amount, e-mail. The gateway only limits type and size; the content is the project's responsibility.
 - `window.stellytics` only exists after the script loads, and **there is no queue**: a call before that is lost. Always use `window.stellytics?.event(...)`.
-- **Stellar Wallets Kit events (v1.5.0, opt-in, not automatic):** the script does **not** capture anything from the kit on its own. It only reaches the kit if **you** hand it over, with one call, after initializing the kit (see [ADR 0010](adr/0010-wallets-kit-opt-in-adapter.md)):
+- **Stellar Wallets Kit events (v1.5.0, opt-in, not automatic):** the script does **not** capture anything from the kit on its own. It only reaches the kit if **you** hand it over, with one call, after initializing the kit (see [ADR 0010](decisions.md#0010-wallets-kit-opt-in-adapter)):
 
   ```js
   window.stellytics?.wallets(StellarWalletsKit, KitEventType);
@@ -147,7 +147,7 @@ window.stellytics?.event("signup_clicked", { plan: "pro", seats: 3 });
 
   - Call it **once** (calling it again with the same kit does not duplicate the subscription). It returns a function that cancels the subscription. If the kit or the enum are invalid, nothing happens and the page does not break.
   - It only subscribes to `WALLET_SELECTED` (sends `wallet_selected` with `{ wallet: "freighter" }`, the module ID) and `DISCONNECT` (sends `wallet_disconnected`, with no data). It **never** subscribes to `STATE_UPDATED` and never sends address, public key, `networkPassphrase`, hash or amount. An ID that is not a plain module name (up to 32 characters) is ignored.
-  - **Use v1.5.0.** The kit remembers the last wallet in the browser and announces it at subscription time; v1.3.0 and v1.4.0 counted that as `wallet_selected` on every visit by someone who had already connected. v1.5.0 only counts choices made by the user ([ADR 0015](adr/0015-optional-rfp-features.md)).
+  - **Use v1.5.0.** The kit remembers the last wallet in the browser and announces it at subscription time; v1.3.0 and v1.4.0 counted that as `wallet_selected` on every visit by someone who had already connected. v1.5.0 only counts choices made by the user ([ADR 0015](decisions.md#0015-optional-rfp-features)).
   - Since `window.stellytics` has no queue, call it after the script loads (`window.stellytics?.wallets(...)`; if the script may take a while, repeat the call on the window's `load`, it is idempotent).
   - If you prefer to subscribe by hand and use `stellytics.event`, the handler receives `{ eventType, payload }`: the id is in `e.payload.id`, **never** in `e.id`, and `STATE_UPDATED` is still forbidden (it carries the address):
 

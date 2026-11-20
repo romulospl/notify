@@ -6,7 +6,7 @@ Thanks for your interest in stellytics. This guide explains how to set up the en
 
 - **Bugs and questions:** open an [issue](https://github.com/romulospl/stellytics/issues/new/choose) using the matching template.
 - **Vulnerabilities:** do not open a public issue; follow [`SECURITY.md`](SECURITY.md).
-- **Large or architectural changes:** open an issue before writing code. Architecture decisions become an ADR in [`docs/adr/`](docs/adr/README.md), based on the [template](docs/adr/template.md). An accepted ADR is never rewritten: create a new one and mark the old one as superseded.
+- **Large or architectural changes:** open an issue before writing code. Architecture decisions are recorded as a numbered section in [`docs/decisions.md`](docs/decisions.md); a changed decision updates its own section and status.
 
 ## Environment
 
@@ -100,7 +100,7 @@ Pull requests:
 - Describe what changed and how you tested it.
 - CI must be green to merge.
 
-Everything in the repository is written in English: code, comments, documentation, ADRs, issues, commits and pull requests.
+Everything in the repository is written in English: code, comments, documentation, decisions, issues, commits and pull requests.
 
 ## License
 

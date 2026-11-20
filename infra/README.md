@@ -1,6 +1,6 @@
 # infra
 
-Infrastructure rebuildable from this repository: one VPS with Docker Compose for production and a separate host for monitoring ([ADR 0016](../docs/adr/0016-production-on-a-vps.md)). Step by step in [`docs/deploy.md`](../docs/deploy.md); the install scripts are `init.sh` and `deploy.sh` at the repository root.
+Infrastructure rebuildable from this repository: one VPS with Docker Compose for production and a separate host for monitoring ([ADR 0016](../docs/decisions.md#0016-production-on-a-vps)). Step by step in [`docs/deploy.md`](../docs/deploy.md); the install scripts are `init.sh` and `deploy.sh` at the repository root.
 
 | Folder | Tool | Role |
 |---|---|---|
@@ -9,7 +9,7 @@ Infrastructure rebuildable from this repository: one VPS with Docker Compose for
 | [`compose/test/`](compose/test/) | Docker Compose | Production stack test with a local S3 (`prod-stack-test.sh`, CI `infra` job) and data migration between operators (`data-migration-test.sh`, same CI job) |
 | [`caddy/`](caddy/) | Caddy | Container proxy and automatic TLS |
 | [`scripts/`](scripts/) | SSH, Postgres, Python | Admin tunnel to the production Postgres and Umami; export, import and fingerprint of the databases for handover ([`docs/handover.md`](../docs/handover.md)); helpers used by `init.sh` and `deploy.sh`, including the per-minute stack check (`stack-check.py`) |
-| [`monitoring/`](monitoring/) | Prometheus, blackbox, Alertmanager | External monitoring on a separate host, configured by `configure.sh`: probes the portal, ingestion and the VPS stack check from outside and alerts by email ([#15](https://github.com/romulospl/stellytics/issues/15), [ADR 0005](../docs/adr/0005-external-monitoring.md)) |
+| [`monitoring/`](monitoring/) | Prometheus, blackbox, Alertmanager | External monitoring on a separate host, configured by `configure.sh`: probes the portal, ingestion and the VPS stack check from outside and alerts by email ([#15](https://github.com/romulospl/stellytics/issues/15), [ADR 0005](../docs/decisions.md#0005-external-monitoring)) |
 
 ## Umami only on the internal network
 

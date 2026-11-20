@@ -1,6 +1,6 @@
 # Production deployment
 
-Production is one Debian or Ubuntu VPS running Docker Compose ([ADR 0016](adr/0016-production-on-a-vps.md)): Caddy, portal, web ingestion gateway, API collector, rollup job, Umami and Postgres with continuous encrypted backup, plus external monitoring on a second host. Files are in [`infra/`](../infra/README.md).
+Production is one Debian or Ubuntu VPS running Docker Compose ([ADR 0016](decisions.md#0016-production-on-a-vps)): Caddy, portal, web ingestion gateway, API collector, rollup job, Umami and Postgres with continuous encrypted backup, plus external monitoring on a second host. Files are in [`infra/`](../infra/README.md).
 
 > **Status.** [#42](https://github.com/romulospl/stellytics/issues/42) is closed: the guide was followed end to end on 2026-11-19 with local stand-ins for DNS, certificates, SMTP and S3 (see "How this guide was checked"). Not yet done: a run on a real account by an operator from outside the team, and the backup of the current production ([#182](https://github.com/romulospl/stellytics/issues/182)).
 
@@ -164,7 +164,7 @@ compose run --rm --no-deps \
 
 ## Monitoring
 
-A second host checks the portal and ingestion from outside every 15 seconds and sends email when something is down ([ADR 0005](adr/0005-external-monitoring.md)). Set it up after production and DNS, or it starts alerting.
+A second host checks the portal and ingestion from outside every 15 seconds and sends email when something is down ([ADR 0005](decisions.md#0005-external-monitoring)). Set it up after production and DNS, or it starts alerting.
 
 What cannot be seen from outside is checked on the VPS: `deploy.sh` installs `stellytics-check.timer`, which runs [`infra/scripts/stack-check.py`](../infra/scripts/stack-check.py) every minute. It checks that every container is running and healthy (rollup turns unhealthy when the rollup stops), that Postgres is archiving WAL, that the newest base backup is at most 26 hours old and that the data disk is below 90% (`STACK_CHECK_DISK_MAX_PERCENT`). Caddy answers `https://<ingest_host>/healthz/stack` with 200 while the check passes and 503 otherwise (status code only); the monitor probes it. The reasons are in `journalctl -u stellytics-check -n 20`.
 
@@ -202,7 +202,7 @@ For a test deploy, or after a handover ([`handover.md`](handover.md)) once the n
 
 - **High availability:** one VPS; if it fails, the service is down until a new VPS is restored (ADR 0016).
 - **Provisioning:** the VPS, firewall, DNS and bucket are created by hand.
-- **Rate limits:** Caddy does not limit by IP and the collector does not limit by key; the collector's memory cap is `COLLECTOR_MEM_LIMIT` (default `512m`). The SCF read API limit is in the portal's memory ([ADR 0006](adr/0006-scf-read-api.md)).
+- **Rate limits:** Caddy does not limit by IP and the collector does not limit by key; the collector's memory cap is `COLLECTOR_MEM_LIMIT` (default `512m`). The SCF read API limit is in the portal's memory ([ADR 0006](decisions.md#0006-scf-read-api)).
 - **Restore in production:** tested in CI with a local S3, not against the real bucket. Rehearse on a throwaway VPS before you need it.
 - **Umami and Postgres upgrades:** by PR only (images pinned by digest); there is no major Postgres upgrade guide.
 - **Handover:** plan and tested data migration in [`handover.md`](handover.md) ([#54](https://github.com/romulospl/stellytics/issues/54)).
