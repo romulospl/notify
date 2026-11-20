@@ -29,7 +29,7 @@ sudo ./deploy.sh
 - `init.sh` installs Docker and Compose from Docker's repository, applies the Docker settings the stack needs (`userland-proxy` off, so Caddy sees the real client IP) and creates `.env.production` with random secrets and mode `0600`.
 - In `.env.production`, fill in the four hosts, `ACME_EMAIL`, `SMTP_URL`, `MAIL_FROM` and the backup bucket (`WALG_S3_PREFIX`, `WALG_S3_ENDPOINT`, `WALG_S3_REGION`, `WALG_S3_ACCESS_KEY`, `WALG_S3_SECRET_KEY`). Do not change the generated secrets. URL-encode special characters in the SMTP password.
 - **Copy `WALG_LIBSODIUM_KEY` to the team's password vault, outside the VPS.** Without it no backup can be restored, and it cannot be rotated.
-- `deploy.sh` validates the file, builds the portal, gateway, collector and rollup images from the checkout, starts [`infra/compose/prod.yaml`](../infra/compose/prod.yaml) and installs the daily backup timer. Postgres, Umami and Caddy use pinned images. To run the signed release images instead, set `PORTAL_IMAGE`, `INGEST_WEB_IMAGE`, `COLLECTOR_IMAGE` and `ROLLUP_IMAGE` to their digests; `deploy.sh` does not verify signatures, so run `cosign verify` yourself first ([`release.yml`](../.github/workflows/release.yml)).
+- `deploy.sh` validates the file, builds the portal, gateway, collector and rollup images from the checkout, starts [`infra/compose/prod.yaml`](../infra/compose/prod.yaml) and installs the daily backup timer. Postgres, Umami and Caddy use pinned images. To run the signed release images instead, set `PORTAL_IMAGE`, `INGEST_WEB_IMAGE`, `COLLECTOR_IMAGE` and `ROLLUP_IMAGE` to their digests: `deploy.sh` pulls those instead of building them. It does not verify signatures, so run `cosign verify` yourself first ([`release.yml`](../.github/workflows/release.yml)).
 
 Only Caddy publishes ports. Postgres listens on loopback only and Umami only on the internal network. `docker compose down` keeps the data; never use `down -v`.
 
@@ -66,7 +66,7 @@ docker compose --env-file .env.production -f infra/compose/prod.yaml
    ```
 
    Further operators come from `operator:promote` with the same `DATABASE_URL`.
-4. The first base backup starts by itself: when the bucket has none, `deploy.sh` starts `stellytics-backup` in the background. Check it with `docker compose --env-file .env.production -f infra/compose/prod.yaml exec -T -u postgres postgres wal-g backup-list`.
+4. The first base backup starts by itself: when the bucket has none, `deploy.sh` starts `stellytics-backup` in the background. If it cannot list the backups within 2 minutes, it stops with an error after the stack is up: check `WALG_S3_*` and run it again. Check the backup with `docker compose --env-file .env.production -f infra/compose/prod.yaml exec -T -u postgres postgres wal-g backup-list`.
 
 ## 3. Check production
 
