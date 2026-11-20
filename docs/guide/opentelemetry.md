@@ -1,29 +1,33 @@
 # OpenTelemetry
 
-Send your Node.js API's HTTP metrics to stellytics next to the monitoring you already have.
+Send your API's HTTP metrics to stellytics next to the monitoring you already have. Any language with an OpenTelemetry SDK works, or an OpenTelemetry Collector in front of your API.
 
 ## Requirements
 
-- **Node.js 22.15 or newer**, the minimum of the OpenTelemetry JS packages below.
+- An API that exports OpenTelemetry metrics over OTLP, from any language's SDK or through an OpenTelemetry Collector.
 - An ingest key (`ntf_...`) and the collector address (`<collector>`).
 
 ## What stellytics reads
 
-- **Endpoint:** `https://<collector>/v1/metrics` (OTLP over HTTP).
+- **Endpoint:** `https://<collector>/v1/metrics` (OTLP over HTTP), or `<collector>:443` (OTLP over gRPC).
 - **Header:** `Authorization: Bearer ntf_<your-ingest-key>`.
-- **Metric:** the `http.server.request.duration` histogram, in seconds, with the default buckets. The HTTP instrumentation below emits it.
-- **Attributes:** `http.request.method`, `http.response.status_code` and, when known, `http.route`. Without `http.route`, the path is [normalized](route-normalization.md).
+- **Metric:** the `http.server.request.duration` histogram, in seconds, with the SDK's default explicit buckets. The standard HTTP server instrumentation of each SDK emits it. HTTP server spans also work, but sampled traces undercount.
+- **Attributes:** `http.request.method`, `http.response.status_code` and, when known, `http.route`. Without `http.route`, the path is [normalized](route-normalization.md); set it in your own middleware when you want exact routes.
 - **Temporality:** delta.
 
 The ingest key decides which project and service the data belongs to. Any `service.name` or project attribute you send is ignored.
 
-## Install
+## Dual export
+
+Keep your current exporter and add a second one for stellytics, with the `Authorization` header. The idea is the same in every language: two OTLP metric exporters on one meter provider. The standard `OTEL_EXPORTER_OTLP_*` variables configure a single destination, so the second one is set in code, or in a Collector.
+
+## Example: Node.js
+
+These package versions need Node.js 22.15 or newer.
 
 ```bash
 npm install --save-exact @opentelemetry/sdk-node@0.300.0 @opentelemetry/instrumentation-http@0.300.0 @opentelemetry/exporter-metrics-otlp-proto@0.300.0 @opentelemetry/sdk-metrics@3.0.0
 ```
-
-## Instrument your server
 
 Create `instrumentation.mjs`. It measures every request your HTTP server handles (Express, Fastify and `node:http` all run on it) and sends the metric to two places: your current backend and stellytics.
 
@@ -55,13 +59,11 @@ STELLYTICS_INGEST_KEY=ntf_... node --import ./instrumentation.mjs server.js
 
 Use the full URL, ending in `/v1/metrics`: the exporter does not add the path when you pass `url`.
 
-## Record it yourself
+To skip the instrumentation, create the histogram with a `MeterProvider` and record each request's duration, method, status and route yourself. [`examples/api-backend`](../../examples/api-backend/README.md) is a runnable Node.js service that does exactly this, with dual export.
 
-If you prefer not to use the instrumentation, create the histogram with a `MeterProvider` and record each request's duration, method, status and route. [`examples/api-backend`](../../examples/api-backend/README.md) is a runnable Node.js service that does exactly this, with dual export.
+## Example: OpenTelemetry Collector
 
-## Already running an OpenTelemetry Collector?
-
-Add one exporter and list it in your metrics pipeline:
+For any language, if your API already sends to a Collector, add one exporter and list it in your metrics pipeline:
 
 ```yaml
 exporters:

@@ -30,7 +30,7 @@ More in [Script tag](script-tag.md).
 ## 3. Measure your API
 
 1. Keep the ingest key in a secrets manager: it cannot be shown again.
-2. On your Node.js API (22.15 or newer), add a second OTLP exporter next to the one you already use:
+2. Add a second OTLP exporter to your API, in any language, next to the one you already use:
 
 ```text
 POST https://<collector>/v1/metrics
