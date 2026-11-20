@@ -83,7 +83,6 @@ Record the time from "started reading" to the first dashboard data, hands-on tim
 
 Not confirmed, from reading the guide:
 
-- D7 and D9: the tunnel logs in as `root`; the guide has no fallback when root SSH login is disabled.
 - D24: the guide now has a "Remove a deployment" section, added after the simulation; check that it is enough.
 
 ## 7. Report template
