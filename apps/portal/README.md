@@ -12,7 +12,7 @@ The interface is in English, because the audience is the Stellar ecosystem proje
 |---|---|
 | `/` | Home page |
 | `/demo` | The dashboards of the demo project: web traffic and API metrics |
-| `/demo/operator` | The SCF operator view of the demo project |
+| `/operator` | The SCF operator view of the demo project |
 | `/p/<slug>` | Public card of the demo project (30-day totals only). Any other slug answers 404 before anything is read |
 | `/docs`, `/docs/<slug>` | Documentation index and the guides of this repository, rendered from their Markdown files; `mermaid` blocks are drawn as diagrams |
 | `/api/v1/projects`, `/api/v1/web`, `/api/v1/api` | Read-only API for the SCF, authenticated by a read key ([ADR 0006](../../docs/adr/0006-scf-read-api.md)) |
@@ -20,7 +20,7 @@ The interface is in English, because the audience is the Stellar ecosystem proje
 
 ### What the demo shows
 
-- With `DEMO_TENANT_SLUG` empty (the default), `/demo`, `/demo/operator` and `/p/<slug>` show sample data from `src/lib/demo-sample.ts`. Nothing is read from the database or Umami.
+- With `DEMO_TENANT_SLUG` empty (the default), `/demo`, `/operator` and `/p/<slug>` show sample data from `src/lib/demo-sample.ts`. Nothing is read from the database or Umami.
 - With `DEMO_TENANT_SLUG` set to a project's slug, they show that one project. An unknown or inactive project answers 404.
 - No other project has a public page.
 

@@ -103,11 +103,11 @@ Logs: `compose logs <service>` (caddy, portal, ingest-web, collector, rollup, um
 
 ### Optional: public demo with real data
 
-`/demo` and `/demo/operator` work without sign-in. Out of the box they show **sample data** (made-up numbers; only the home page says so). To show a real project instead, use one you own: everything in it becomes public.
+`/demo` and `/operator` work without sign-in. Out of the box they show **sample data** (made-up numbers; only the home page says so). To show a real project instead, use one you own: everything in it becomes public.
 
 1. Sign up and create the project (for example "Stellytics"). At `/sites`, add a website whose domain is exactly `<portal_host>`; at `/services`, create a service and an ingest key and point a backend at `https://<api_host>` (for example [`examples/api-backend`](../examples/api-backend/README.md), with `STELLYTICS_OTLP_ENDPOINT` and `STELLYTICS_INGEST_KEY`).
 2. Put the project's slug in `DEMO_TENANT_SLUG` in `.env.production` (the SCF operator sees the slug in `/operator`) and run `sudo ./deploy.sh`.
-3. Check: `curl -s https://<portal_host>/ | grep data-site` shows the tracker tag with the hash of the newest version in `packages/tracker/published/sri.json`, and `/demo` and `/demo/operator` open in a private window.
+3. Check: `curl -s https://<portal_host>/ | grep data-site` shows the tracker tag with the hash of the newest version in `packages/tracker/published/sri.json`, and `/demo` and `/operator` open in a private window.
 
 Leave `DEMO_TENANT_SLUG` empty to go back to the sample data.
 

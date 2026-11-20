@@ -47,7 +47,7 @@ export const env = {
   get signupApproval() {
     return ["1", "true"].includes((process.env.SIGNUP_APPROVAL ?? "").trim().toLowerCase());
   },
-  // Public demo (/demo, /demo/operator and the tracker tag on the home page):
+  // Public demo (/demo, /operator and the tracker tag on the home page):
   // slug of the one tenant those pages read. Empty (the default): the demo
   // shows sample data (src/lib/demo-sample.ts) and the home page carries no tracker.
   get demoTenantSlug() {

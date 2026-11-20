@@ -41,8 +41,8 @@ import { getSiteStats } from "@/lib/umami/stats";
 import { getServiceDashboard } from "@/lib/data/api-metrics";
 import { resolvePeriod } from "@/lib/period";
 import Home from "@/app/page";
-import DemoPage from "@/app/demo/page";
-import DemoOperatorPage from "@/app/demo/operator/page";
+import DemoPage from "@/app/(demo)/demo/page";
+import DemoOperatorPage from "@/app/(demo)/operator/page";
 import PublicCardPage from "@/app/p/[slug]/page";
 import { getDemoApiOverview } from "@/lib/data/operator/api";
 import { listApiServices } from "@/lib/data/api-services";
@@ -397,7 +397,7 @@ describe("SCF read keys (#48)", () => {
   });
 });
 
-// Public demo (/, /demo, /demo/operator): no session, fixed on the tenant of
+// Public demo (/, /demo, /operator): no session, fixed on the tenant of
 // DEMO_TENANT_SLUG. Here A is the demo tenant and B is a regular one.
 describe("public demo", () => {
   // The home page asks Better Auth for the session; anonymous here.

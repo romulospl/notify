@@ -1,4 +1,4 @@
-// Short in-memory cache for the public demo pages (/, /demo, /demo/operator).
+// Short in-memory cache for the public demo pages (/, /demo, /operator).
 // They are open to anyone, so without it every anonymous request would turn
 // into several Umami and Postgres reads. Keys are built by the pages from the
 // demo tenant, the period key and the resource ID, never from free text, so
