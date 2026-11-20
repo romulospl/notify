@@ -68,7 +68,7 @@ def validate(path):
         "STELLYTICS_INGEST_DB_PASSWORD", "STELLYTICS_COLLECTOR_DB_PASSWORD",
         "UMAMI_APP_SECRET", "PORTAL_AUTH_SECRET", "INGEST_PROOF_SECRET",
         "PORTAL_HOST", "PORTAL_ALIAS_HOST", "INGEST_HOST", "API_HOST",
-        "ACME_EMAIL", "SMTP_URL", "MAIL_FROM",
+        "ACME_EMAIL",
         "WALG_S3_PREFIX", "WALG_S3_ENDPOINT", "WALG_S3_REGION",
         "WALG_S3_ACCESS_KEY", "WALG_S3_SECRET_KEY", "WALG_LIBSODIUM_KEY",
     )
@@ -78,6 +78,11 @@ def validate(path):
 
     if values["POSTGRES_PASSWORD"] in {"postgres", "password", "CHANGE_ME"}:
         raise SystemExit("deploy: POSTGRES_PASSWORD still uses an insecure value")
+
+    # The demo of a real project reads its web statistics through the Umami
+    # API; without the service account key /demo and /operator fail.
+    if values.get("DEMO_TENANT_SLUG") and not values.get("UMAMI_API_KEY"):
+        raise SystemExit("deploy: DEMO_TENANT_SLUG needs UMAMI_API_KEY (docs/deploy.md, \"First start\"); leave it empty for sample data")
 
     # Release images: all four or none. deploy.sh builds from the checkout when
     # none is set and pulls them, without building, when all four are.

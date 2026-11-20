@@ -49,8 +49,6 @@ PORTAL_ALIAS_HOST=alias.localhost
 INGEST_HOST=ingest.localhost
 API_HOST=api.localhost
 ACME_EMAIL=ops@example.org
-SMTP_URL=smtp://127.0.0.1:25
-MAIL_FROM=stellytics <no-reply@example.org>
 STELLYTICS_DATA_DIR=$work/data
 POSTGRES_ADMIN_PORT=15432
 EOF

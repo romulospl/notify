@@ -2,6 +2,8 @@
 
 Production is one Debian or Ubuntu VPS running Docker Compose ([ADR 0016](decisions.md#0016-production-on-a-vps)): Caddy, portal, web ingestion gateway, API collector, rollup job, Umami and Postgres with continuous encrypted backup, plus external monitoring on a second host. Files are in [`infra/`](../infra/README.md).
 
+In this version the portal is public and read-only ([`apps/portal/README.md`](../apps/portal/README.md)): `/demo` and `/operator` show sample data, or one real project named in `DEMO_TENANT_SLUG`. It has no sign-up, no login and sends no email.
+
 > **Status.** [#42](https://github.com/romulospl/stellytics/issues/42) is closed: the guide was followed end to end on 2026-11-19 with local stand-ins for DNS, certificates, SMTP and S3 (see "How this guide was checked"). Not yet done: a run on a real account by an operator from outside the team, and the backup of the current production ([#182](https://github.com/romulospl/stellytics/issues/182)).
 
 ## What you need
@@ -9,7 +11,6 @@ Production is one Debian or Ubuntu VPS running Docker Compose ([ADR 0016](decisi
 - A VPS with root access, reachable on ports 22, 80 and 443 only (set the firewall at the provider). Keep `/srv/stellytics` (`STELLYTICS_DATA_DIR`) on a disk that survives the VPS if the provider offers one.
 - Four DNS names pointing to the VPS (A and, if available, AAAA): `PORTAL_HOST`, `PORTAL_ALIAS_HOST`, `INGEST_HOST` and `API_HOST`.
 - An S3-compatible bucket for the Postgres backup, with an access key that can read and write it.
-- A real SMTP service for sign-up confirmation and password reset (SPF, DKIM and DMARC of the `MAIL_FROM` domain are up to you).
 - A second, small host for monitoring, ideally with another provider or region.
 - `git` on both hosts, to clone the repository (minimal Debian images do not include it: `apt-get install -y git`).
 - On your own machine, for the first start: SSH, `git`, Node 24 and pnpm (`corepack enable` picks the version pinned in `package.json`).
@@ -27,9 +28,9 @@ sudo ./deploy.sh
 ```
 
 - `init.sh` installs Docker and Compose from Docker's repository, applies the Docker settings the stack needs (`userland-proxy` off, so Caddy sees the real client IP) and creates `.env.production` with random secrets and mode `0600`.
-- In `.env.production`, fill in the four hosts, `ACME_EMAIL`, `SMTP_URL`, `MAIL_FROM` and the backup bucket (`WALG_S3_PREFIX`, `WALG_S3_ENDPOINT`, `WALG_S3_REGION`, `WALG_S3_ACCESS_KEY`, `WALG_S3_SECRET_KEY`). Do not change the generated secrets. URL-encode special characters in the SMTP password.
+- In `.env.production`, fill in the four hosts, `ACME_EMAIL` and the backup bucket (`WALG_S3_PREFIX`, `WALG_S3_ENDPOINT`, `WALG_S3_REGION`, `WALG_S3_ACCESS_KEY`, `WALG_S3_SECRET_KEY`). Do not change the generated secrets. `SMTP_URL` and `MAIL_FROM` are optional: nothing in this version sends email.
 - **Copy `WALG_LIBSODIUM_KEY` to the team's password vault, outside the VPS.** Without it no backup can be restored, and it cannot be rotated.
-- `deploy.sh` validates the file, builds the portal, gateway, collector and rollup images from the checkout, starts [`infra/compose/prod.yaml`](../infra/compose/prod.yaml) and installs the daily backup timer. Postgres, Umami and Caddy use pinned images. To run the signed release images instead, set all four of `PORTAL_IMAGE`, `INGEST_WEB_IMAGE`, `COLLECTOR_IMAGE` and `ROLLUP_IMAGE` to their digests: `deploy.sh` pulls those instead of building them (Postgres is still built). It does not verify signatures, so run `cosign verify` yourself first ([`release.yml`](../.github/workflows/release.yml)).
+- `deploy.sh` validates the file, builds the portal, gateway, collector and rollup images from the checkout, starts [`infra/compose/prod.yaml`](../infra/compose/prod.yaml), installs the daily backup and stack check timers, and ends with the service status and the demo addresses. It refuses `DEMO_TENANT_SLUG` without `UMAMI_API_KEY`. Postgres, Umami and Caddy use pinned images. To run the signed release images instead, set all four of `PORTAL_IMAGE`, `INGEST_WEB_IMAGE`, `COLLECTOR_IMAGE` and `ROLLUP_IMAGE` to their digests: `deploy.sh` pulls those instead of building them (Postgres is still built). It does not verify signatures, so run `cosign verify` yourself first ([`release.yml`](../.github/workflows/release.yml)).
 
 Only Caddy publishes ports. Postgres listens on loopback only and Umami only on the internal network. `docker compose down` keeps the data; never use `down -v`.
 
@@ -48,7 +49,7 @@ docker compose --env-file .env.production -f infra/compose/prod.yaml
    ```bash
    ssh -N -L 127.0.0.1:15432:127.0.0.1:5432 -L 127.0.0.1:13001:172.30.0.20:3000 <user>@<vps-ip>
    ```
-2. Create the Umami service account key so the portal can create sites. In a clone with Node 24 on your machine (not the VPS), with the tunnel open:
+2. Create the Umami service account key, which the portal uses to read web statistics (needed for a demo with real data; the sample data does not use it). In a clone with Node 24 on your machine (not the VPS), with the tunnel open:
 
    ```bash
    corepack enable && pnpm install --frozen-lockfile   # once per clone; this step and the next need it
@@ -57,7 +58,7 @@ docker compose --env-file .env.production -f infra/compose/prod.yaml
    ```
 
    The script prints the key once. Put it in `UMAMI_API_KEY` in `.env.production` and run `sudo ./deploy.sh` again.
-3. Create the first SCF operator (global view; email already confirmed), with the tunnel open (Postgres at `127.0.0.1:15432`):
+3. Create the first SCF operator (email already confirmed). The public demo does not need it: this version has no login, so the account only matters for the next version of the portal. With the tunnel open (Postgres at `127.0.0.1:15432`):
 
    ```bash
    read -rs OPERATOR_PASSWORD && export OPERATOR_PASSWORD   # at least 12 characters
@@ -92,12 +93,10 @@ nc -vz -w3 <vps-ip> 5432   # closed (Postgres only on loopback)
 
 On the VPS: `compose ps`, `compose port postgres 5432` (must show `127.0.0.1`) and `systemctl list-timers stellytics-backup.timer`.
 
-In a browser:
+In a private browser window:
 
-1. At `https://<portal_host>/sign-up`, create an account, confirm it through the email link (if no email arrives, check `SMTP_URL`/`MAIL_FROM` and `compose logs portal`), create the project at `/onboarding` and add a site at `/sites`.
-2. Install the script on the site (served at `https://<ingest_host>/s/v<version>/n.js`; versions and SRI hashes in [`sri.json`](../packages/tracker/published/sri.json); snippets in [`examples/README.md`](../examples/README.md)), open a page and see the visit in the site dashboard within minutes.
-3. Log in as the operator at `/operator` and check that the project appears.
-4. At `/services`, create a service and an ingest key, point a backend at `https://<api_host>` (OTLP/HTTP; [`examples/api-backend/README.md`](../examples/api-backend/README.md)) and see requests in the service dashboard within a minute or two.
+1. Open `https://<portal_host>/`, `/demo`, `/operator` and `/docs`. With `DEMO_TENANT_SLUG` empty, the demo pages show the sample data; with a slug, that project (an unknown or inactive slug answers 404; `compose logs portal` says why).
+2. The tracking script is served at `https://<ingest_host>/s/v<version>/n.js` (versions and SRI hashes in [`sri.json`](../packages/tracker/published/sri.json)): `curl -fsS -o /dev/null -w '%{http_code}\n' https://<ingest_host>/s/v<version>/n.js` answers 200.
 
 Logs: `compose logs <service>` (caddy, portal, ingest-web, collector, rollup, umami, postgres).
 
@@ -105,8 +104,8 @@ Logs: `compose logs <service>` (caddy, portal, ingest-web, collector, rollup, um
 
 `/demo` and `/operator` work without sign-in. Out of the box they show **sample data** (made-up numbers; only the home page says so). To show a real project instead, use one you own: everything in it becomes public.
 
-1. Sign up and create the project (for example "Stellytics"). At `/sites`, add a website whose domain is exactly `<portal_host>`; at `/services`, create a service and an ingest key and point a backend at `https://<api_host>` (for example [`examples/api-backend`](../examples/api-backend/README.md), with `STELLYTICS_OTLP_ENDPOINT` and `STELLYTICS_INGEST_KEY`).
-2. Put the project's slug in `DEMO_TENANT_SLUG` in `.env.production` (the SCF operator sees the slug in `/operator`) and run `sudo ./deploy.sh`.
+1. The project must already exist in the `stellytics` database, with a website whose domain is exactly `<portal_host>` and, for API metrics, a service and ingest key used by a backend pointed at `https://<api_host>` (for example [`examples/api-backend`](../examples/api-backend/README.md)). This version of the portal cannot create projects, sites, services or keys ([`apps/portal/README.md`](../apps/portal/README.md)); they come from a previous version or a database import ([`handover.md`](handover.md)).
+2. Set `UMAMI_API_KEY` (step 2 of "First start") and the project's slug in `DEMO_TENANT_SLUG` in `.env.production`, then run `sudo ./deploy.sh`.
 3. Check: `curl -s https://<portal_host>/ | grep data-site` shows the tracker tag with the hash of the newest version in `packages/tracker/published/sri.json`, and `/demo` and `/operator` open in a private window.
 
 Leave `DEMO_TENANT_SLUG` empty to go back to the sample data.
