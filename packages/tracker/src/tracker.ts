@@ -104,7 +104,14 @@ export function pageUrl(location: Location | URL): string {
     if (KEPT_PARAMS.test(key)) kept.append(key, value);
   });
   const query = kept.toString();
-  return location.pathname + (query ? `?${query}` : "");
+  return location.pathname + (query ? `?${query}` : "") + hashRoute(location.hash);
+}
+
+// Rota de SPA no fragmento (#/rota ou #!/rota), sem query; âncoras (#secao) e
+// fragmentos que não são rota (ex.: #access_token=...) não saem.
+function hashRoute(hash: string): string {
+  const match = /^#!?(\/[^?#]*)/.exec(hash);
+  return match ? `#${match[1]}` : "";
 }
 
 // Referenciador sem query string nem fragmento; vazio quando é a própria página.
@@ -304,7 +311,7 @@ export function start(script: HTMLScriptElement | null): () => void {
       if (next === current) return;
       const previous = current;
       current = next;
-      send(next, location.origin + previous.split("?")[0]);
+      send(next, location.origin + previous.replace(/\?[^#]*/, ""));
     }, NAVIGATION_DELAY_MS);
   };
 
@@ -317,6 +324,7 @@ export function start(script: HTMLScriptElement | null): () => void {
     };
   }
   addEventListener("popstate", onNavigate);
+  addEventListener("hashchange", onNavigate);
 
   return () => {
     delete (window as unknown as { stellytics?: StellyticsApi }).stellytics;
@@ -324,5 +332,6 @@ export function start(script: HTMLScriptElement | null): () => void {
     history.pushState = pushState;
     history.replaceState = replaceState;
     removeEventListener("popstate", onNavigate);
+    removeEventListener("hashchange", onNavigate);
   };
 }

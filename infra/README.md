@@ -6,7 +6,7 @@ Infrastructure rebuildable from this repository: one VPS with Docker Compose for
 |---|---|---|
 | [`compose/`](compose/) | Docker Compose | Local environment ([#12](https://github.com/romulospl/stellytics/issues/12)), included by the root `compose.yaml`, and production (`prod.yaml`) |
 | [`compose/postgres/`](compose/postgres/) | Postgres + WAL-G | Database creation scripts and, in production, the image with continuous backup to S3-compatible storage (`Dockerfile`, `stellytics-backup`, `stellytics-restore`) |
-| [`compose/test/`](compose/test/) | Docker Compose | Production stack test with a local S3 (`prod-stack-test.sh`, CI `infra` job) and data migration between operators (`data-migration-test.sh`, outside CI) |
+| [`compose/test/`](compose/test/) | Docker Compose | Production stack test with a local S3 (`prod-stack-test.sh`, CI `infra` job) and data migration between operators (`data-migration-test.sh`, same CI job) |
 | [`caddy/`](caddy/) | Caddy | Container proxy and automatic TLS |
 | [`scripts/`](scripts/) | SSH, Postgres, Python | Admin tunnel to the production Postgres and Umami; export, import and fingerprint of the databases for handover ([`docs/transferencia.md`](../docs/transferencia.md)); helpers used by `init.sh` and `deploy.sh`, including the per-minute stack check (`stack-check.py`) |
 | [`monitoring/`](monitoring/) | Prometheus, blackbox, Alertmanager | External monitoring on a separate host, configured by `configure.sh`: probes the portal, ingestion and the VPS stack check from outside and alerts by email ([#15](https://github.com/romulospl/stellytics/issues/15), [ADR 0005](../docs/adr/0005-monitoramento-externo.md)) |
