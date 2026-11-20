@@ -11,7 +11,7 @@ Each project measures the usage of its website and API. SCF operators get one co
 | Page | What it shows |
 |---|---|
 | [`/demo`](https://stellytics.xyz/demo) | The dashboards a project sees: web traffic and API metrics |
-| [`/demo/operator`](https://stellytics.xyz/demo/operator) | The SCF operator view: projects side by side |
+| [`/operator`](https://stellytics.xyz/operator) | The SCF operator view: projects side by side |
 | [`/p/stellytics`](https://stellytics.xyz/p/stellytics) | The public card of the demo project: 30-day totals only |
 | [`/docs`](https://stellytics.xyz/docs) | The guides in this repository, rendered with their diagrams |
 

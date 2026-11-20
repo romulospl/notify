@@ -35,7 +35,7 @@ export type OperatorContext = {
   readonly [operatorContextBrand]: true;
 };
 
-// Context of the public demo (/demo and /demo/operator): no session, fixed on
+// Context of the public demo (/demo and /operator): no session, fixed on
 // the one tenant named by DEMO_TENANT_SLUG. It carries no user and is not a
 // TenantContext or an OperatorContext, so only the read functions that accept
 // TenantReadContext or DemoContext take it: nothing that writes, and nothing

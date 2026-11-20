@@ -12,7 +12,7 @@ export function DemoTabs({ cardHref }: { cardHref: string }) {
   const pathname = usePathname();
   const tabs: { href: string; label: string; icon: IconName }[] = [
     { href: "/demo", label: "Tenet", icon: "layers" },
-    { href: "/demo/operator", label: "SCF operator", icon: "shield" },
+    { href: "/operator", label: "SCF operator", icon: "shield" },
     { href: cardHref, label: "Public card", icon: "eye" },
   ];
   return (

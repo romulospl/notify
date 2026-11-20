@@ -89,7 +89,7 @@ export default async function DemoOperatorPage({ searchParams }: { searchParams:
         project. The real view adds filtering, sorting and side-by-side comparison, and requires an operator account.
         All times in UTC.
       </p>
-      <PeriodPicker current={period.key} href={(k) => `/demo/operator?period=${k}`} />
+      <PeriodPicker current={period.key} href={(k) => `/operator?period=${k}`} />
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard label="Enrolled projects" value={formatCount(web.projects.length)} />

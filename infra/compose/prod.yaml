@@ -127,7 +127,7 @@ services:
       # Sign-up with prior approval (#49, ADR 0007); off by default.
       SIGNUP_APPROVAL: ${SIGNUP_APPROVAL:-false}
       # Public demo: slug of the one tenant shown without sign-in at
-      # /demo and /demo/operator. Empty: sample data.
+      # /demo and /operator. Empty: sample data.
       DEMO_TENANT_SLUG: ${DEMO_TENANT_SLUG:-}
       # Gateway address in the installation tag shown on each site's page.
       INGEST_URL: https://${INGEST_HOST:?}
