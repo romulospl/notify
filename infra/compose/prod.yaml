@@ -8,7 +8,8 @@
 #   taken from PORTAL_IMAGE, INGEST_WEB_IMAGE, COLLECTOR_IMAGE and ROLLUP_IMAGE
 #   (for example the signed release images, by digest);
 # - Postgres is the Debian variant with WAL-G (postgres/Dockerfile), archiving
-#   WAL continuously to S3-compatible object storage, encrypted on the client;
+#   WAL continuously to S3-compatible object storage, encrypted on the client,
+#   when WALG_S3_* is set (without it there is no backup);
 # - Caddy terminates TLS and proxies portal, gateway and collector (OTLP/HTTP
 #   and OTLP/gRPC) over the Docker network; Postgres listens only on loopback
 #   for the SSH admin tunnel;
@@ -37,14 +38,15 @@ services:
       STELLYTICS_INGEST_DB_PASSWORD: ${STELLYTICS_INGEST_DB_PASSWORD:?}
       STELLYTICS_COLLECTOR_DB_PASSWORD: ${STELLYTICS_COLLECTOR_DB_PASSWORD:?}
       # WAL-G (ADR 0004): continuous WAL and base backups in Object Storage,
-      # encrypted on the client before leaving the VM.
-      WALG_S3_PREFIX: ${WALG_S3_PREFIX:?}
-      AWS_ENDPOINT: ${WALG_S3_ENDPOINT:?}
-      AWS_REGION: ${WALG_S3_REGION:?}
-      AWS_ACCESS_KEY_ID: ${WALG_S3_ACCESS_KEY:?}
-      AWS_SECRET_ACCESS_KEY: ${WALG_S3_SECRET_KEY:?}
+      # encrypted on the client before leaving the VM. Optional: with
+      # WALG_S3_PREFIX empty there is no backup (deploy.sh warns).
+      WALG_S3_PREFIX: ${WALG_S3_PREFIX:-}
+      AWS_ENDPOINT: ${WALG_S3_ENDPOINT:-}
+      AWS_REGION: ${WALG_S3_REGION:-}
+      AWS_ACCESS_KEY_ID: ${WALG_S3_ACCESS_KEY:-}
+      AWS_SECRET_ACCESS_KEY: ${WALG_S3_SECRET_KEY:-}
       AWS_S3_FORCE_PATH_STYLE: "true"
-      WALG_LIBSODIUM_KEY: ${WALG_LIBSODIUM_KEY:?}
+      WALG_LIBSODIUM_KEY: ${WALG_LIBSODIUM_KEY:-}
       WALG_LIBSODIUM_KEY_TRANSFORM: hex
       WALG_COMPRESSION_METHOD: brotli
       # Base backups kept by stellytics-backup (one per day).
@@ -57,8 +59,9 @@ services:
       - wal_level=replica
       - -c
       - archive_mode=on
+      # Without a bucket the segment is dropped instead of piling up in pg_wal.
       - -c
-      - archive_command=wal-g wal-push %p
+      - archive_command=test -z "$$WALG_S3_PREFIX" || wal-g wal-push %p
       # At most 60 s of data outside the backup when there is little writing.
       - -c
       - archive_timeout=60

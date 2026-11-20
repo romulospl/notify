@@ -10,7 +10,7 @@ In this version the portal is public and read-only ([`apps/portal/README.md`](..
 
 - A VPS with root access, reachable on ports 22, 80 and 443 only (set the firewall at the provider). Keep `/srv/stellytics` (`STELLYTICS_DATA_DIR`) on a disk that survives the VPS if the provider offers one.
 - Four DNS names pointing to the VPS (A and, if available, AAAA): `PORTAL_HOST`, `PORTAL_ALIAS_HOST`, `INGEST_HOST` and `API_HOST`.
-- An S3-compatible bucket for the Postgres backup, with an access key that can read and write it.
+- Optional: an S3-compatible bucket for the Postgres backup, with an access key that can read and write it. Without it the stack runs with **no backup** (enough for the demo): losing the VPS disk loses all data.
 - A second, small host for monitoring, ideally with another provider or region.
 - `git` on both hosts, to clone the repository (minimal Debian images do not include it: `apt-get install -y git`).
 - On your own machine, for the first start: SSH, `git`, Node 24 and pnpm (`corepack enable` picks the version pinned in `package.json`).
@@ -28,9 +28,9 @@ sudo ./deploy.sh
 ```
 
 - `init.sh` installs Docker and Compose from Docker's repository, applies the Docker settings the stack needs (`userland-proxy` off, so Caddy sees the real client IP) and creates `.env.production` with random secrets and mode `0600`.
-- In `.env.production`, fill in the four hosts, `ACME_EMAIL` and the backup bucket (`WALG_S3_PREFIX`, `WALG_S3_ENDPOINT`, `WALG_S3_REGION`, `WALG_S3_ACCESS_KEY`, `WALG_S3_SECRET_KEY`). Do not change the generated secrets. `SMTP_URL` and `MAIL_FROM` are optional: nothing in this version sends email.
-- **Copy `WALG_LIBSODIUM_KEY` to the team's password vault, outside the VPS.** Without it no backup can be restored, and it cannot be rotated.
-- `deploy.sh` validates the file, builds the portal, gateway, collector and rollup images from the checkout, starts [`infra/compose/prod.yaml`](../infra/compose/prod.yaml), installs the daily backup and stack check timers, and ends with the service status and the demo addresses. It refuses `DEMO_TENANT_SLUG` without `UMAMI_API_KEY`. Postgres, Umami and Caddy use pinned images. To run the signed release images instead, set all four of `PORTAL_IMAGE`, `INGEST_WEB_IMAGE`, `COLLECTOR_IMAGE` and `ROLLUP_IMAGE` to their digests: `deploy.sh` pulls those instead of building them (Postgres is still built). It does not verify signatures, so run `cosign verify` yourself first ([`release.yml`](../.github/workflows/release.yml)).
+- In `.env.production`, fill in the four hosts and `ACME_EMAIL` and, for backup, the bucket (`WALG_S3_PREFIX`, `WALG_S3_ENDPOINT`, `WALG_S3_REGION`, `WALG_S3_ACCESS_KEY`, `WALG_S3_SECRET_KEY`, all or none; `WALG_LIBSODIUM_KEY` is required with them). Do not change the generated secrets. `SMTP_URL` and `MAIL_FROM` are optional: nothing in this version sends email.
+- With backup, **copy `WALG_LIBSODIUM_KEY` to the team's password vault, outside the VPS.** Without it no backup can be restored, and it cannot be rotated.
+- `deploy.sh` validates the file, builds the portal, gateway, collector and rollup images from the checkout, starts [`infra/compose/prod.yaml`](../infra/compose/prod.yaml), installs the stack check timer and, with a bucket, the daily backup timer, and ends with the service status, the demo addresses and a warning when there is no backup. Filling in the bucket later and running it again turns the backup on; emptying it removes the backup timer. It refuses `DEMO_TENANT_SLUG` without `UMAMI_API_KEY`. Postgres, Umami and Caddy use pinned images. To run the signed release images instead, set all four of `PORTAL_IMAGE`, `INGEST_WEB_IMAGE`, `COLLECTOR_IMAGE` and `ROLLUP_IMAGE` to their digests: `deploy.sh` pulls those instead of building them (Postgres is still built). It does not verify signatures, so run `cosign verify` yourself first ([`release.yml`](../.github/workflows/release.yml)).
 
 Only Caddy publishes ports. Postgres listens on loopback only and Umami only on the internal network. `docker compose down` keeps the data; never use `down -v`.
 
@@ -74,7 +74,7 @@ docker compose --env-file .env.production -f infra/compose/prod.yaml
    ```
 
    It runs the admin command inside the portal container, which already has the database, so there is no tunnel and no secret leaves the server. Invites by email (ADR 0017) are **disabled in this version**: the portal has no page to accept them, so `operator.sh invite` refuses and sends nothing. `operator.sh list` shows operators and pending invites, `operator.sh uninvite --email <email>` cancels one, `operator.sh demote --email <email>` removes the role, and `operator.sh promote --email <email>` still works for an existing account without a project. The portal has no screen for any of this (D3): whoever can SSH into the server with sudo controls who is an operator, so give each person their own SSH key and remove the key to remove the person.
-4. The first base backup starts by itself: when the bucket has none, `deploy.sh` starts `stellytics-backup` in the background. If it cannot list the backups within 2 minutes, it stops with an error after the stack is up: check `WALG_S3_*` and run it again. Check the backup with `docker compose --env-file .env.production -f infra/compose/prod.yaml exec -T -u postgres postgres wal-g backup-list`.
+4. With backup, the first base backup starts by itself: when the bucket has none, `deploy.sh` starts `stellytics-backup` in the background. If it cannot list the backups within 2 minutes, it stops with an error after the stack is up: check `WALG_S3_*` and run it again. Check the backup with `docker compose --env-file .env.production -f infra/compose/prod.yaml exec -T -u postgres postgres wal-g backup-list`.
 
 ## 3. Check production
 
@@ -83,7 +83,7 @@ From any machine, without logging in:
 ```bash
 curl -fsS https://<portal_host>/api/health            # portal: {"ok":true}
 curl -fsS https://<ingest_host>/healthz                # gateway: ok (503 when Postgres or Umami is down)
-curl -fsS https://<ingest_host>/healthz/stack          # stack check: ok (503 until the first base backup exists)
+curl -fsS https://<ingest_host>/healthz/stack          # stack check: ok (with backup, 503 until the first base backup exists)
 curl -fsS "https://<ingest_host>/c?s=00000000-0000-4000-8000-000000000000"  # challenge {"t":...,"d":12}
 curl -s -o /dev/null -w '%{http_code}\n' https://<ingest_host>/api/send    # 404: Umami has no public route
 curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/json' -d '{}' https://<api_host>/v1/metrics  # 401: the collector requires an ingest key
@@ -91,7 +91,7 @@ nc -vz -w3 <vps-ip> 443    # open (Caddy)
 nc -vz -w3 <vps-ip> 5432   # closed (Postgres only on loopback)
 ```
 
-On the VPS: `compose ps`, `compose port postgres 5432` (must show `127.0.0.1`) and `systemctl list-timers stellytics-backup.timer`.
+On the VPS: `compose ps`, `compose port postgres 5432` (must show `127.0.0.1`) and, with backup, `systemctl list-timers stellytics-backup.timer`.
 
 In a private browser window:
 
@@ -121,6 +121,8 @@ Leave `DEMO_TENANT_SLUG` empty to go back to the sample data.
 **Rotating a secret.** Database users are created once, on an empty volume, and keep their old password. In order: edit `.env.production`; run `deploy.sh` (services may stay unhealthy until the next step); update the password in the database (`compose exec -T postgres sh < infra/compose/postgres/init/02-ingest-roles.sh` for the ingest and collector users; `compose exec -T postgres psql -U postgres -c "ALTER ROLE <role> PASSWORD '<new>'"` for `stellytics`, `umami` and `postgres`); then `compose restart portal umami ingest-web`. Events received in between are dropped. Other secrets: `PORTAL_AUTH_SECRET` ends all portal sessions; `UMAMI_APP_SECRET` ends Umami sessions (create a new service account key if the portal gets 401); `INGEST_PROOF_SECRET` invalidates pending challenges for up to 5 minutes. `WALG_LIBSODIUM_KEY` cannot be changed. Details in [`runbooks/secret-rotation.md`](runbooks/secret-rotation.md).
 
 ## Backup
+
+Only with the bucket in `WALG_S3_*`; without it none of this exists and the restore below is impossible.
 
 - **Continuous WAL:** Postgres sends each WAL segment to the bucket through `archive_command`, at most 60 seconds after the write, encrypted on the VPS.
 - **Daily base backup** at 03:00 UTC by `stellytics-backup.timer`, keeping the newest `WALG_RETAIN_FULL` (default 7).
@@ -165,7 +167,7 @@ compose run --rm --no-deps \
 
 A second host checks the portal and ingestion from outside every 15 seconds and sends email when something is down ([ADR 0005](decisions.md#0005-external-monitoring)). Set it up after production and DNS, or it starts alerting.
 
-What cannot be seen from outside is checked on the VPS: `deploy.sh` installs `stellytics-check.timer`, which runs [`infra/scripts/stack-check.py`](../infra/scripts/stack-check.py) every minute. It checks that every container is running and healthy (rollup turns unhealthy when the rollup stops), that Postgres is archiving WAL, that the newest base backup is at most 26 hours old and that the data disk is below 90% (`STACK_CHECK_DISK_MAX_PERCENT`). Caddy answers `https://<ingest_host>/healthz/stack` with 200 while the check passes and 503 otherwise (status code only); the monitor probes it. The reasons are in `journalctl -u stellytics-check -n 20`.
+What cannot be seen from outside is checked on the VPS: `deploy.sh` installs `stellytics-check.timer`, which runs [`infra/scripts/stack-check.py`](../infra/scripts/stack-check.py) every minute. It checks that every container is running and healthy (rollup turns unhealthy when the rollup stops), that Postgres is archiving WAL and the newest base backup is at most 26 hours old (skipped without backup, `STACK_CHECK_BACKUP=off`) and that the data disk is below 90% (`STACK_CHECK_DISK_MAX_PERCENT`). Caddy answers `https://<ingest_host>/healthz/stack` with 200 while the check passes and 503 otherwise (status code only); the monitor probes it. The reasons are in `journalctl -u stellytics-check -n 20`.
 
 1. Install Docker Engine with the Compose plugin on the monitoring host from Docker's repository ([docs.docker.com/engine/install](https://docs.docker.com/engine/install/), the same repository `init.sh` uses; Debian's own `docker.io` package has no `docker compose`), then clone the repository.
 2. Create `monitoring.env` (mode `0600`, outside git) with the variables listed at the top of [`infra/monitoring/configure.sh`](../infra/monitoring/configure.sh): the hosts, `API_URL=https://<api_host>/v1/metrics`, the alert email and SMTP. **Recommended:** a `DEADMAN_URL` from an external heartbeat service, so you learn when the monitor itself is down.

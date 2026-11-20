@@ -21,6 +21,8 @@ data.
 
 COMPOSE defaults to that value (run from the repository root).
 STACK_CHECK_DISK_MAX_PERCENT changes the disk limit (default 90).
+STACK_CHECK_BACKUP=off skips the WAL archiving and base backup checks;
+deploy.sh sets it when WALG_S3_* is empty (stack without backup).
 """
 
 import argparse
@@ -122,14 +124,12 @@ def main():
     parser.add_argument("data_dir", type=Path, help="STELLYTICS_DATA_DIR of the stack")
     args = parser.parse_args()
     limit = int(os.environ.get("STACK_CHECK_DISK_MAX_PERCENT", "90"))
+    backup = os.environ.get("STACK_CHECK_BACKUP", "on").strip().lower() != "off"
 
     problems = []
-    checks = (
-        check_services,
-        check_wal_archiving,
-        lambda: check_base_backup(datetime.now(timezone.utc)),
-        lambda: check_disk(args.data_dir, limit),
-    )
+    checks = [check_services, lambda: check_disk(args.data_dir, limit)]
+    if backup:
+        checks += [check_wal_archiving, lambda: check_base_backup(datetime.now(timezone.utc))]
     for check in checks:
         try:
             problems += check()
