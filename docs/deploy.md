@@ -2,7 +2,7 @@
 
 Production is one Debian or Ubuntu VPS running Docker Compose ([ADR 0016](adr/0016-producao-em-vps.md)): Caddy, portal, web ingestion gateway, API collector, rollup job, Umami and Postgres with continuous encrypted backup, plus external monitoring on a second host. Files are in [`infra/`](../infra/README.md).
 
-> **Scope.** [#42](https://github.com/romulospl/stellytics/issues/42) is not done yet: its acceptance criterion (someone outside the team deploys by following only this guide) needs a real account.
+> **Status.** [#42](https://github.com/romulospl/stellytics/issues/42) is closed: the guide was followed end to end on 2026-11-19 with local stand-ins for DNS, certificates, SMTP and S3 (see "How this guide was checked"). Not yet done: a run on a real account by an operator from outside the team, and the backup of the current production ([#182](https://github.com/romulospl/stellytics/issues/182)).
 
 ## What you need
 
@@ -29,7 +29,7 @@ sudo ./deploy.sh
 - `init.sh` installs Docker and Compose from Docker's repository, applies the Docker settings the stack needs (`userland-proxy` off, so Caddy sees the real client IP) and creates `.env.production` with random secrets and mode `0600`.
 - In `.env.production`, fill in the four hosts, `ACME_EMAIL`, `SMTP_URL`, `MAIL_FROM` and the backup bucket (`WALG_S3_PREFIX`, `WALG_S3_ENDPOINT`, `WALG_S3_REGION`, `WALG_S3_ACCESS_KEY`, `WALG_S3_SECRET_KEY`). Do not change the generated secrets. URL-encode special characters in the SMTP password.
 - **Copy `WALG_LIBSODIUM_KEY` to the team's password vault, outside the VPS.** Without it no backup can be restored, and it cannot be rotated.
-- `deploy.sh` validates the file, builds the portal, gateway, collector and rollup images from the checkout, starts [`infra/compose/prod.yaml`](../infra/compose/prod.yaml) and installs the daily backup timer. Postgres, Umami and Caddy use pinned images. To run the signed release images instead, set all four of `PORTAL_IMAGE`, `INGEST_WEB_IMAGE`, `COLLECTOR_IMAGE` and `ROLLUP_IMAGE` to their digests: `deploy.sh` then pulls them instead of building (Postgres is still built). It does not verify signatures, so run `cosign verify` yourself first ([`release.yml`](../.github/workflows/release.yml)).
+- `deploy.sh` validates the file, builds the portal, gateway, collector and rollup images from the checkout, starts [`infra/compose/prod.yaml`](../infra/compose/prod.yaml) and installs the daily backup timer. Postgres, Umami and Caddy use pinned images. To run the signed release images instead, set all four of `PORTAL_IMAGE`, `INGEST_WEB_IMAGE`, `COLLECTOR_IMAGE` and `ROLLUP_IMAGE` to their digests: `deploy.sh` pulls those instead of building them (Postgres is still built). It does not verify signatures, so run `cosign verify` yourself first ([`release.yml`](../.github/workflows/release.yml)).
 
 Only Caddy publishes ports. Postgres listens on loopback only and Umami only on the internal network. `docker compose down` keeps the data; never use `down -v`.
 
@@ -41,7 +41,13 @@ docker compose --env-file .env.production -f infra/compose/prod.yaml
 
 ## 2. First start
 
-1. Open a tunnel to Umami and change its initial password (`admin`/`umami`): `infra/scripts/admin-tunnel.sh <vps-ip>`.
+1. Open a tunnel to Umami and change its initial password (`admin`/`umami`): run `infra/scripts/admin-tunnel.sh <vps-ip>` on your machine, sign in at `http://127.0.0.1:13001` and change the password in the Umami profile settings. Keep the tunnel open for items 2 and 3.
+
+   The script signs in as `root`. If root SSH login is disabled on the VPS, open the same tunnel as your own user (port forwarding does not need root):
+
+   ```bash
+   ssh -N -L 127.0.0.1:15432:127.0.0.1:5432 -L 127.0.0.1:13001:172.30.0.20:3000 <user>@<vps-ip>
+   ```
 2. Create the Umami service account key so the portal can create sites. In a clone with Node 24 on your machine (not the VPS), with the tunnel open:
 
    ```bash
@@ -60,7 +66,7 @@ docker compose --env-file .env.production -f infra/compose/prod.yaml
    ```
 
    Further operators come from `operator:promote` with the same `DATABASE_URL`.
-4. The first base backup starts by itself: when the bucket has none, `deploy.sh` starts `stellytics-backup` in the background. Check it with `docker compose --env-file .env.production -f infra/compose/prod.yaml exec -T -u postgres postgres wal-g backup-list`.
+4. The first base backup starts by itself: when the bucket has none, `deploy.sh` starts `stellytics-backup` in the background. If it cannot list the backups within 2 minutes, it stops with an error after the stack is up: check `WALG_S3_*` and run it again. Check the backup with `docker compose --env-file .env.production -f infra/compose/prod.yaml exec -T -u postgres postgres wal-g backup-list`.
 
 ## 3. Check production
 

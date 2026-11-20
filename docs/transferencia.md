@@ -37,7 +37,7 @@ Plano e procedimento para passar a operação do stellytics a um operador da com
 |---|---|
 | `POSTGRES_PASSWORD`, `UMAMI_DB_PASSWORD`, `STELLYTICS_DB_PASSWORD`, `STELLYTICS_INGEST_DB_PASSWORD`, `STELLYTICS_COLLECTOR_DB_PASSWORD` | **Gere de novo.** No caminho lógico os papéis do banco novo são criados pelos scripts de `infra/compose/postgres/init/` com as senhas novas; o teste usou senhas diferentes das da origem em todos eles |
 | `PORTAL_AUTH_SECRET` | **Mantenha** se quiser que os usuários continuem logados e os links de e-mail em andamento valham: no teste, a sessão criada na origem continuou válida no destino com o mesmo valor. Trocar derruba todas as sessões (efeito esperado, `rotacao-de-segredos.md`); a troca de valor **não foi testada** na migração |
-| `UMAMI_APP_SECRET` | **Mantenha.** Só se testou com o mesmo valor. O `rotacao-de-segredos.md` diz que trocá-lo derruba as sessões do Umami e pode invalidar a chave de API; o efeito sobre a contagem de visitantes do mês **não foi medido** |
+| `UMAMI_APP_SECRET` | **Keep it.** Umami 3.4.1 derives the visitor salt from this secret and the start of the month (`SALT_ROTATION`, default `month`), so a new value makes every returning visitor count again as unique for the rest of the month. Only the same value was tested. Changing it also drops the Umami sessions and may invalidate the API key (`rotacao-de-segredos.md`) |
 | `UMAMI_API_KEY` | **Confira.** Se a chave vive no banco do Umami, ela migra e continua valendo; **isso não foi testado** (o teste não criou a conta de serviço). Se o portal receber 401 do Umami, gere outra (`docs/deploy.md`, passo 5, item 3) |
 | `INGEST_PROOF_SECRET` | **Gere de novo** (os desafios duram minutos; alguns eventos podem ser descartados na virada) |
 | `SMTP_URL`, e `SMTP_PASSWORD` e `DEADMAN_URL` do monitoramento | Do novo operador |
@@ -148,7 +148,7 @@ Na VPS **nova**, como root, na pasta do checkout, com o Postgres no ar e os dema
 ### Fase 4: depois (T até T+30)
 
 1. **Operadores do SCF:** o novo operador cria as contas dele (`operator:create` ou `operator:promote`, com `DATABASE_URL` pelo túnel) e rebaixa as antigas (`operator:demote`). Decide sobre as chaves de leitura do SCF (`/operator/api`): reemitir e revogar as antigas.
-2. **Rotacione** o que o antigo operador conhecia e que migrou: a senha do Umami (já feita), `PORTAL_AUTH_SECRET` e `UMAMI_APP_SECRET` (derrubam sessões; avise), e as credenciais de SMTP se foram compartilhadas.
+2. **Rotate** what the old operator knew and that migrated: the Umami password (already done), `PORTAL_AUTH_SECRET` (drops sessions; warn users) and the SMTP credentials if they were shared. Rotate `UMAMI_APP_SECRET` only on the first day of a month (UTC): it is part of the visitor salt, so changing it mid-month inflates that month's unique visitors.
 3. Monitorar: o monitoramento novo vendo a produção nova, `pg_stat_archiver`, `backup-list` com um backup por dia.
 4. **Período de reversão: 30 dias** (proposta). O antigo mantém a infraestrutura **ligada, mas sem receber tráfego** (aplicação parada, DNS no novo), o bucket antigo e a chave antiga guardados.
 5. Ao fim: o antigo apaga a VPS, o host de monitoramento, o bucket e as credenciais; **destrói a `WALG_LIBSODIUM_KEY` antiga** e o `.env.production` antigo; revoga os acessos que tinha (organização do GitHub, DNS, domínio).
