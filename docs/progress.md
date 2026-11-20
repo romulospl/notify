@@ -1,17 +1,18 @@
 # Project progress
 
-Record of what has been done, the decisions taken and the next steps. Updated on **2026-11-19**.
+Record of what has been done, the decisions taken and the next steps. Updated on **2026-11-20**.
 
 ## Summary
 
 | Item | Status |
 |---|---|
 | MVP scope | Defined from the RFP (section [MVP](#1-mvp-defined-from-the-rfp)) |
-| Backlog | 10 epics and 78 issues on GitHub; 16 open: epics E1, E7, E8, E9 and E10, plus #43–#47, #64, #65, #140, #174 and #182 |
+| Backlog | 10 epics and 78 issues on GitHub; 2 open: #174 (handover) and #182 (production backup). On 2026-11-20 the other open issues were closed as not planned: epics E1, E7, E8, E9 and E10, plus #43–#47, #64, #65 and #140 |
 | Base tool | **Umami v3.4.1** ([ADR 0001](adr/0001-base-tool.md)) |
 | Architecture and stack | Defined ([ADR 0002](adr/0002-architecture-and-stack.md)) |
 | Production | One VPS with Docker Compose and Caddy, installed by `init.sh` and `deploy.sh`, continuous WAL-G backup, no high availability ([ADR 0016](adr/0016-production-on-a-vps.md)). Portal, web gateway, Umami, OTel collector and rollup all run in `infra/compose/prod.yaml`. External monitoring by `infra/monitoring/configure.sh` (#15). A proof of concept is live at `stellytics.xyz`, `e.stellytics.xyz` and `otlp.stellytics.xyz`, with no pilots yet. Data residency region: the proof of concept runs in **Brazil**; production moves to an **EU region** in Tranche 1 |
 | Code | Epics E2–E6 closed: portal, tracking script and web gateway, API pipeline, and the tenant and SCF web and API dashboards. Details in [`e2-implementation.md`](e2-implementation.md), [`e4-implementation.md`](e4-implementation.md) and [`e6-implementation.md`](e6-implementation.md) |
+| Portal | Since #186 (2026-11-20) the portal is a public, read-only demo: `/demo`, `/demo/operator`, `/p/<slug>`, `/docs` and the read API. Sign-up, login and the signed-in tenant and operator pages were removed; the library layer behind them and its tests remain ([`dev/portal.md`](dev/portal.md)) |
 | Validation | Deploy guide followed end to end with local stand-ins: team rehearsal on a clean Ubuntu 24.04 container (PR #176) and a full run of [`validation/deploy.md`](validation/deploy.md) on throwaway VMs, including alerts, restore and rollback (PR #178). #42 closed on 2026-11-19; an outside-operator run is optional, for later |
 | What remains for the MVP | Pilots (#44 → #45/#46 → #47), validation of the onboarding guide by the pilots (#43) and an account action (#140). Production backup (#182) is needed before the hosting window, not for the POC. See [section 6](#6-next-steps) |
 
@@ -176,6 +177,8 @@ The early drafts of the proposal and interest form (PR #112) were removed from t
 | `docs/progress.md` | This record |
 
 ## 6. Next steps
+
+The issues below, except #174 and #182, were closed as not planned on 2026-11-20; the list is kept as the record of what the MVP still lacked.
 
 MVP, in dependency order:
 
