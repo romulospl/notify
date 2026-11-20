@@ -81,14 +81,15 @@ compose up -d --build --wait
 
 # 1. Caddy routes (internal certificate for *.localhost).
 get() { curl -sk -o /dev/null -w '%{http_code}' --resolve "$1:443:127.0.0.1" "https://$1$2"; }
-[ "$(get portal.localhost /sign-in)" = 200 ] || fail "portal at /sign-in"
+[ "$(get portal.localhost /docs)" = 200 ] || fail "portal at /docs"
+[ "$(get portal.localhost /api/health)" = 200 ] || fail "portal at /api/health"
 # The optimizer is not used by the portal; no sharp/libvips library or
 # caniuse-lite data package should be shipped in the standalone. The 404 has
 # an empty body (proxy guard); Next's native 404 would come with HTML, so the
 # response also checks that the guard was not removed. The trailing slash gets
 # Next's own 308 normalization and, once the redirect is followed, the guard's
 # 404; the percent-encoded path proves that the guard decodes (without
-# that it would become a redirect to /sign-in).
+# that the request would pass the guard and get Next's own answer).
 img404=$(curl -sk --resolve portal.localhost:443:127.0.0.1 -o /dev/null -w '%{http_code} %{size_download}' "https://portal.localhost/_next/image?url=%2Ffavicon.ico&w=64&q=75")
 [ "$img404" = "404 0" ] || fail "image optimizer should be off (returned \"$img404\", expected 404 with an empty body)"
 img404=$(curl -sk --resolve portal.localhost:443:127.0.0.1 -o /dev/null -w '%{http_code} %{size_download}' "https://portal.localhost/_next/%69mage?url=%2Ffavicon.ico&w=64&q=75")
@@ -104,7 +105,7 @@ for path in /api/send /api/heartbeat /api/websites /api/record /; do
 done
 # On the portal host, /api/heartbeat belongs to Next (404), not Umami.
 [ "$(curl -sk --resolve portal.localhost:443:127.0.0.1 https://portal.localhost/api/heartbeat)" != "ok" ] || fail "the portal host reaches Umami"
-[ "$(curl -sk --resolve alias.localhost:443:127.0.0.1 -o /dev/null -w '%{http_code}' https://alias.localhost/sign-in)" = 301 ] || fail "the portal alias does not redirect"
+[ "$(curl -sk --resolve alias.localhost:443:127.0.0.1 -o /dev/null -w '%{http_code}' https://alias.localhost/docs)" = 301 ] || fail "the portal alias does not redirect"
 
 # API host (ADR 0012): only OTLP, and only with an ingest key.
 post() { curl -sk -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' \

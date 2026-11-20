@@ -1,6 +1,6 @@
 -- Sample data for the migration test (data-migration-test.sh, #54).
 -- Runs as superuser on the stellytics database, after the portal migrations and the
--- sign-up of two users through the API. psql variables: alice_email, operator_email,
+-- creation of two users by the administration command. psql variables: alice_email, operator_email,
 -- umami_site (ID of a site already created in Umami), key_active, key_revoked,
 -- key_archived, key_removed (full ntf_... keys; only the hash goes to the database).
 \set ON_ERROR_STOP on

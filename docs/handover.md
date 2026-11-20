@@ -247,7 +247,7 @@ On both paths, the destination's `db-fingerprint.sh` came out **identical to the
 
 Afterwards, with the application running at the destination:
 
-- **login with the source's password works** and the **session created at the source stays valid** (same `portal_auth_secret`);
+- **the portal is up on the migrated database** and the **accounts keep the source's password hashes**;
 - Umami (without a fork) opened the migrated database and returned **the same statistics** (`/stats`: 60 page views, 18 visitors), and the `admin` login migrated along;
 - the **original ingest key** (SHA-256 of 32 bytes) is still accepted by `ingest_key_active`, and the other three stay out of it;
 - the `audit_log` **is still insert-only**: `UPDATE`, `DELETE` and `TRUNCATE` are refused by the triggers and `INSERT` passes;

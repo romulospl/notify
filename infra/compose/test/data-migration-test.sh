@@ -3,7 +3,7 @@
 #
 # Starts an ORIGIN stack (Postgres 17 with WAL-G, Umami and portal, with the
 # production images and Compose), writes real data to both databases
-# (including a portal session and events in Umami), and migrates to empty
+# (including portal accounts and events in Umami), and migrates to empty
 # DESTINATION stacks, with different passwords and backup key, in two ways:
 #
 #   A. logical: infra/scripts/db-export.sh and db-import.sh (pg_dump/pg_restore);
@@ -11,7 +11,7 @@
 #      bucket and restored with stellytics-restore.
 #
 # In each one, proves by query that the destination is identical (db-fingerprint.sh) and
-# that the system works on it: login with the old password, old session still valid,
+# that the system works on it: portal up with the accounts and their passwords,
 # Umami with the same statistics, ingest keys accepted by the views and
 # audit_log still insert-only. Shows the time of each step.
 #
@@ -119,28 +119,21 @@ new_stack origin 0 "$libsodium_origin" "$auth_secret" "$umami_secret"
 lap "origin up (portal applied the migrations; Umami created its schema)"
 o_url=$(portal_url)
 
-# Two users through the portal's real API (the password becomes the Better Auth hash).
+# Two users through the portal's administration command (the password becomes
+# the Better Auth hash). The portal has no sign-up or sign-in; Alice is created
+# as an operator and demoted, which leaves a regular user with a verified email.
 password="test-password-$(rand 4)"
-signup() {
-  curl -s -o /dev/null -X POST "$o_url/api/auth/sign-up/email" -H 'Content-Type: application/json' \
-    -H 'Origin: https://portal.localhost' -d "{\"email\":\"$1\",\"password\":\"$password\",\"name\":\"$2\"}"
+create_user() { # email name
+  compose exec -T -e OPERATOR_PASSWORD="$password" portal node scripts/operator.mjs create --email "$1" --name "$2" >/dev/null
 }
-signup alice@example.org Alice; signup operator@example.org Operator
-# With no SMTP in the test, the email confirmation is done directly in the database.
-pgsql stellytics -c "update \"user\" set email_verified = true where email in ('alice@example.org','operator@example.org')"
-login() { # url email -> cookie
-  curl -s -D - -o /dev/null -X POST "$1/api/auth/sign-in/email" -H 'Content-Type: application/json' \
-    -H 'Origin: https://portal.localhost' -d "{\"email\":\"$2\",\"password\":\"$password\"}" |
-    tr -d '\r' | sed -n 's/^[Ss]et-[Cc]ookie: \(__Secure-better-auth.session_token=[^;]*\).*/\1/p' | head -1
-}
-cookie=$(login "$o_url" alice@example.org)
-[ -n "$cookie" ] || fail "login on the origin returned no session cookie"
-session_email() { # url cookie
-  curl -s "$1/api/auth/get-session" -H "Cookie: $2" -H 'Origin: https://portal.localhost' |
-    sed -n 's/.*"email":"\([^"]*\)".*/\1/p' | head -1
-}
-[ "$(session_email "$o_url" "$cookie")" = alice@example.org ] || fail "the session is not valid on the origin"
-ok "users created by the portal; Alice's session valid on the origin"
+create_user alice@example.org Alice; create_user operator@example.org Operator
+compose exec -T portal node scripts/operator.mjs demote --email alice@example.org >/dev/null
+portal_code() { curl -s -o /dev/null -w '%{http_code}' "$1$2"; } # url path
+accounts() { pgsql stellytics -c "select string_agg(u.email || ':' || a.password, ',' order by u.email) from \"user\" u join account a on a.user_id = u.id where a.password is not null"; }
+accounts_origin=$(accounts)
+[ "$(echo "$accounts_origin" | tr ',' '\n' | grep -c .)" = 2 ] || fail "expected two accounts with a password on the origin"
+[ "$(portal_code "$o_url" /api/health)" = 200 ] || fail "the portal does not answer on the origin"
+ok "users created by the portal's administration command; portal up on the origin"
 
 # Umami: a site and real events, through the same /api/send the gateway uses.
 token=$(umami_curl -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
@@ -195,10 +188,11 @@ cp "$ENVF" "$work/origin.env.bak"
 verify_destination() { # name: the system works on the destination
   local url token2 stats_dest
   url=$(portal_url)
-  [ "$(login "$url" alice@example.org)" != "" ] || fail "[$NAME] login with the old password failed"
-  ok "[$NAME] login with the origin's password works"
-  [ "$(session_email "$url" "$cookie")" = alice@example.org ] || fail "[$NAME] the origin's session is not valid"
-  ok "[$NAME] the session created on the origin is still valid"
+  [ "$(portal_code "$url" /api/health)" = 200 ] || fail "[$NAME] the portal does not answer"
+  [ "$(portal_code "$url" /docs)" = 200 ] || fail "[$NAME] the portal does not serve /docs"
+  ok "[$NAME] the portal is up on the migrated database"
+  [ "$(accounts)" = "$accounts_origin" ] || fail "[$NAME] the accounts or their password hashes differ from the origin"
+  ok "[$NAME] the accounts keep the origin's password hashes"
   token2=$(umami_curl -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
     -d '{"username":"admin","password":"umami"}' | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
   stats_dest=$(umami_stats "$token2")
