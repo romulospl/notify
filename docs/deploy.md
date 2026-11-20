@@ -41,7 +41,13 @@ docker compose --env-file .env.production -f infra/compose/prod.yaml
 
 ## 2. First start
 
-1. Open a tunnel to Umami and change its initial password (`admin`/`umami`): `infra/scripts/admin-tunnel.sh <vps-ip>`.
+1. Open a tunnel to Umami and change its initial password (`admin`/`umami`): run `infra/scripts/admin-tunnel.sh <vps-ip>` on your machine, sign in at `http://127.0.0.1:13001` and change the password in the Umami profile settings. Keep the tunnel open for items 2 and 3.
+
+   The script signs in as `root`. If root SSH login is disabled on the VPS, open the same tunnel as your own user (port forwarding does not need root):
+
+   ```bash
+   ssh -N -L 127.0.0.1:15432:127.0.0.1:5432 -L 127.0.0.1:13001:172.30.0.20:3000 <user>@<vps-ip>
+   ```
 2. Create the Umami service account key so the portal can create sites. In a clone with Node 24 on your machine (not the VPS), with the tunnel open:
 
    ```bash
