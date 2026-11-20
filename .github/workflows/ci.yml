@@ -138,9 +138,10 @@ jobs:
           curl -fsS http://127.0.0.1:3000/api/health
           # Mailpit receives the portal emails (#60).
           curl -fsS http://127.0.0.1:8025/api/v1/info >/dev/null
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/sign-up)" = 200
-          # A private route without a session redirects to the login.
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/dashboard)" = 307
+          # The portal is public (demo and docs): no sign-up, no signed-in pages.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/demo)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/docs)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/dashboard)" = 404
       # #62: Umami exists only on the internal network. None of its ports is
       # published and no published address (gateway, portal, Mailpit...) answers
       # Umami's /api/send or /api/record.
