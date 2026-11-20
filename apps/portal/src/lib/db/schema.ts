@@ -239,6 +239,30 @@ export const operatorApiKey = pgTable(
   ],
 );
 
+// Invite to become an SCF operator (ADR 0017). Only the admin script
+// (scripts/operator.mjs invite) creates one; the invited person opens the
+// emailed link, picks a name and password, and the account is created as an
+// operator. Valid for 3 days and used once. A row only exists while the invite
+// is pending: accepting, revoking or re-inviting deletes it, and the script
+// purges expired ones, so no email stays here after use. The ingestion roles
+// cannot see it (0010_operator_invite.sql).
+export const operatorInvite = pgTable(
+  "operator_invite",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // Always lowercase. At most one invite per email.
+    email: text("email").notNull().unique(),
+    // SHA-256 of the token in the link. The token itself is never stored.
+    tokenHash: bytea("token_hash").notNull().unique(),
+    createdAt: timestamps.createdAt,
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    check("operator_invite_hash_length", sql`octet_length(${t.tokenHash}) = 32`),
+    check("operator_invite_email_lowercase", sql`${t.email} = lower(${t.email})`),
+  ],
+);
+
 // Só recebe inserções: um gatilho recusa UPDATE e DELETE (0002_ingest_views.sql
 // e 0009_erasure.sql). A única mudança aceita troca actor_user_id pelo marcador
 // '[apagado]' na exclusão de conta (#154). Sem chave estrangeira, para o

@@ -1,9 +1,9 @@
 import "server-only";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { db } from "./db";
-import { operatorApiKey, tenant, tenantMember, user } from "./db/schema";
+import { operatorApiKey, operatorInvite, tenant, tenantMember, user } from "./db/schema";
 import { READ_KEY_PATTERN, readKeyFromHeader } from "./read-key";
 import { requireSession } from "./session";
 
@@ -135,4 +135,37 @@ export async function authenticateReadKey(authorization: string | null): Promise
     }
   }
   return { userId: row.createdBy, keyId: row.id } as OperatorKeyContext;
+}
+
+// Context of someone holding an operator invite link (ADR 0017). The token in
+// the link is the credential: there is no session yet. Only acceptOperatorInvite
+// (src/lib/data/operator-invite.ts) takes it.
+declare const operatorInviteContextBrand: unique symbol;
+
+export type OperatorInviteContext = {
+  readonly inviteId: string;
+  readonly email: string;
+  readonly expiresAt: Date;
+  readonly [operatorInviteContextBrand]: true;
+};
+
+// 32 random bytes in base64url, as created by scripts/operator.mjs.
+export const INVITE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
+// Null for any failure (bad format, unknown token, already used, revoked or
+// expired: a used or revoked invite no longer has a row); the page shows the same message in every case.
+export async function loadOperatorInvite(token: string): Promise<OperatorInviteContext | null> {
+  if (!INVITE_TOKEN_PATTERN.test(token)) return null;
+  const tokenHash = createHash("sha256").update(token, "utf8").digest();
+  const [row] = await db
+    .select({ inviteId: operatorInvite.id, email: operatorInvite.email, expiresAt: operatorInvite.expiresAt })
+    .from(operatorInvite)
+    .where(
+      and(
+        eq(operatorInvite.tokenHash, tokenHash),
+        gt(operatorInvite.expiresAt, sql`now()`),
+      ),
+    )
+    .limit(1);
+  return row ? (row as OperatorInviteContext) : null;
 }

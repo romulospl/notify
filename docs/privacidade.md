@@ -49,6 +49,7 @@ Tabelas `user`, `account`, `session` e `verification` (`apps/portal/src/lib/db/s
 - `user`: nome, e-mail, papel e datas. `account`: senha com hash (Better Auth). `tenant_member`: vínculo do usuário com o projeto.
 - `session`: token, expiração e **`user_agent`**. O `ip_address` é sempre nulo, porque o hook `databaseHooks.session.create.before` em `apps/portal/src/lib/auth.ts` o zera. Ou seja, o User-Agent de quem entra no portal **é gravado**; o IP não.
 - `verification`: tokens de confirmação de e-mail e de redefinição de senha.
+- `operator_invite` (ADR 0017): o e-mail de quem foi convidado para ser operador do SCF e o SHA-256 do token do convite, só enquanto o convite está pendente. A linha é apagada quando o convite é aceito, cancelado ou substituído, e o script de administração apaga os expirados.
 - O Better Auth usa um cookie de sessão no portal (necessário para o login). Sessão de 7 dias, renovada a cada dia de uso. Isso vale só para o portal, não para os sites dos tenants.
 - O limite de tentativas por IP (`rateLimit` em `auth.ts`) é em memória, por instância. Se o Better Auth ou o Next.js registram o IP em log em algum ponto **não foi verificado**.
 
@@ -79,7 +80,7 @@ O portal envia por SMTP (`apps/portal/src/lib/mail.ts`, variável `SMTP_URL`) s�
 ## 5. Quem acessa
 
 - Cada tenant vê só os próprios dados; o tenant vem sempre da sessão (ADR 0003, suíte `apps/portal/test/isolation.test.ts`).
-- O operador do SCF tem leitura global (painéis `/operator`, `/operator/web`, `/operator/api`) e hoje só escreve para remover e reativar projeto. Operadores nascem só por comando de administração, que grava no `audit_log`.
+- O operador do SCF tem leitura global (painéis `/operator`, `/operator/web`, `/operator/api`) e hoje só escreve para remover e reativar projeto. Operadores nascem só por comando de administração, direto ou por um convite por e-mail que o comando cria (ADR 0017), e cada passo grava no `audit_log`.
 - O Umami fica só na rede interna: sem porta publicada e sem rota no Caddy (`docs/umami.md`, #62). Gravação de sessão e heatmaps estão desligados, e há teste (`TestRecorderRecordsNothing`).
 - Quem administra a VPS e o banco por SSH também acessa tudo. Não há controle de acesso documentado além do túnel de administração (`docs/deploy.md`); processo de acesso e registro **não verificados**.
 
@@ -95,6 +96,7 @@ O portal envia por SMTP (`apps/portal/src/lib/mail.ts`, variável `SMTP_URL`) s�
 | `api_metric_1h`, `api_metric_1d` | 25 meses | idem |
 | Eventos web no Umami | **183 dias, cerca de seis meses** (#154): o job de consolidação (`services/rollup`) apaga eventos e sessões mais antigos, com `UMAMI_DATABASE_URL` e `UMAMI_RETENTION_DAYS` | `services/rollup/main.go`, `docs/umami.md` |
 | Conta, sessões, sites, chaves | Apagadas na exclusão da própria conta (`/settings`) ou no apagamento de projeto removido pelo operador (#154) | `src/lib/data/erasure.ts` |
+| `operator_invite` | Até ser aceito, cancelado ou substituído; os expirados são apagados na próxima execução do script de administração (o link vale 3 dias) | `scripts/operator.mjs`, ADR 0017 |
 | `audit_log` | Para sempre, **anonimizado** na exclusão da conta: `actor_user_id` vira `[apagado]`, única mudança que o gatilho aceita (migração `0009_erasure.sql`) | esquema |
 | Backups | WAL-G: os `WALG_RETAIN_FULL` (padrão 7) backups base mais recentes mais o WAL contínuo entre eles, cifrados no cliente. Dados apagados continuam nos backups até saírem da janela | `infra/compose/postgres/backup.sh`, ADR 0016 |
 

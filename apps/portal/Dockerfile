@@ -19,6 +19,8 @@ COPY apps/portal apps/portal
 # each site's page (src/lib/tracker-snippet.ts).
 COPY packages/tracker/published/sri.json packages/tracker/published/sri.json
 RUN pnpm --filter @stellytics/portal build
+# Operator admin command bundled with its dependencies (ADR 0017).
+RUN pnpm --filter @stellytics/portal build:operator
 # O otimizador de imagem está desligado: sharp e libvips não são distribuídos
 # no standalone; caniuse-lite também não vai para a imagem. Remove os pacotes
 # e os links para eles; como o libvips é o único módulo nativo esperado, um
@@ -38,6 +40,11 @@ COPY --from=build --chown=app:app /repo/apps/portal/.next/standalone ./
 COPY --from=build --chown=app:app /repo/apps/portal/.next/static ./apps/portal/.next/static
 # Migrações aplicadas na subida quando RUN_MIGRATIONS=true (src/instrumentation.ts).
 COPY --from=build --chown=app:app /repo/apps/portal/drizzle ./apps/portal/drizzle
+# Operator admin command (#19, ADR 0017), run on the server with
+# operator.sh at the repository root. It uses the container's DATABASE_URL, SMTP_URL,
+# MAIL_FROM and BETTER_AUTH_URL, so no secret leaves the server. Bundled by
+# scripts/build-operator.mjs: the standalone output has no node_modules for it.
+COPY --from=build --chown=app:app /repo/apps/portal/dist/operator.mjs ./apps/portal/scripts/operator.mjs
 USER app
 WORKDIR /app/apps/portal
 EXPOSE 3000

@@ -35,7 +35,7 @@ const dataLayer = ["src/lib/data/**", "src/lib/access.ts", "src/lib/auth.ts"];
 const config = [
   ...nextVitals,
   ...nextTs,
-  { ignores: [".next/**", "next-env.d.ts", "drizzle/**"] },
+  { ignores: [".next/**", "dist/**", "next-env.d.ts", "drizzle/**"] },
   // Páginas, rotas, componentes e o resto de src/: nem banco nem Umami.
   {
     files: ["src/**/*.{ts,tsx}"],

@@ -22,6 +22,7 @@ Record of the project's architecture decisions. Each ADR describes the context, 
 | [0014](0014-infra-em-docker-compose.md) | Production infrastructure on Docker Compose | Accepted; Ansible deploy superseded by 0016 | 18/11/2026 |
 | [0015](0015-optional-rfp-features.md) | Adopting the optional RFP features: custom events and wallets | Accepted | 19/11/2026 |
 | [0016](0016-producao-em-vps.md) | Production on a single VPS, without high availability | Accepted | 19/11/2026 |
+| [0017](0017-operator-invites.md) | Operator invites by email, created only by the admin script | Accepted | 20/11/2026 |
 
 ## How to write a new ADR
 

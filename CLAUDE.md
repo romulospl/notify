@@ -25,7 +25,7 @@ Monorepo structure from ADR 0002. Two languages: **TypeScript** for the UI and b
 | `packages/tracker` | Versioned, immutable tracking script | [docs/dev/tracker.md](docs/dev/tracker.md) |
 | `services/ingest-web` | Web gateway: JS proof, fingerprints, truncated IP, relay to Umami | [docs/dev/ingest-web.md](docs/dev/ingest-web.md) |
 | `services/collector`, `services/rollup` | OTel collector (OCB) and metric rollup/retention | [docs/dev/api-pipeline.md](docs/dev/api-pipeline.md) |
-| `infra/`, `init.sh`, `deploy.sh` | Production on one VPS (Compose, Caddy, WAL-G backup) and monitoring | [docs/dev/production.md](docs/dev/production.md) |
+| `infra/`, `init.sh`, `deploy.sh`, `operator.sh` | Production on one VPS (Compose, Caddy, WAL-G backup) and monitoring | [docs/dev/production.md](docs/dev/production.md) |
 | `examples/` | Integration examples and e2e | [docs/dev/planning.md](docs/dev/planning.md#examples-examples) |
 
 Flows:

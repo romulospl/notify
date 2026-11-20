@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",
+    "build:operator": "node scripts/build-operator.mjs",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -16,6 +17,9 @@
     "operator:create": "node scripts/operator.mjs create",
     "operator:promote": "node scripts/operator.mjs promote",
     "operator:demote": "node scripts/operator.mjs demote",
+    "operator:invite": "node scripts/operator.mjs invite",
+    "operator:uninvite": "node scripts/operator.mjs uninvite",
+    "operator:list": "node scripts/operator.mjs list",
     "db:seed": "node scripts/seed.mjs",
     "umami:service-account": "node scripts/umami-service-account.mjs"
   },
@@ -35,6 +39,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "drizzle-kit": "0.31.11",
+    "esbuild": "0.28.2",
     "eslint": "9.39.5",
     "eslint-config-next": "16.4.3",
     "tailwindcss": "4.3.3",

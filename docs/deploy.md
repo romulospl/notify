@@ -65,7 +65,13 @@ docker compose --env-file .env.production -f infra/compose/prod.yaml
      pnpm --filter @stellytics/portal operator:create --email <email> --name "<name>"
    ```
 
-   Further operators come from `operator:promote` with the same `DATABASE_URL`.
+   Further operators get an invite (ADR 0017). On the server, from the repository folder:
+
+   ```bash
+   sudo ./operator.sh invite
+   ```
+
+   It runs the admin command inside the portal container, which already has the database, SMTP and portal address, so there is no tunnel and no secret leaves the server. It asks for the email twice and emails a link valid for 3 days; the invited person picks their own name and password at `/invite/...`. `operator.sh list` shows operators and pending invites, `operator.sh uninvite --email <email>` cancels one, `operator.sh demote --email <email>` removes the role, and `operator.sh promote --email <email>` still works for an existing account without a project. The portal has no screen for any of this (D3): whoever can SSH into the server with sudo controls who is an operator, so give each person their own SSH key and remove the key to remove the person.
 4. The first base backup starts by itself: when the bucket has none, `deploy.sh` starts `stellytics-backup` in the background. If it cannot list the backups within 2 minutes, it stops with an error after the stack is up: check `WALG_S3_*` and run it again. Check the backup with `docker compose --env-file .env.production -f infra/compose/prod.yaml exec -T -u postgres postgres wal-g backup-list`.
 
 ## 3. Check production

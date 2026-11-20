@@ -27,6 +27,11 @@ export default async function SignInPage({
           Your password was changed. Sign in with the new one.
         </p>
       )}
+      {params.invited === "1" && (
+        <p role="status" className="mt-4 text-sm rounded-control border border-good/30 bg-good-soft px-3 py-2 text-good">
+          Your operator account is ready. Sign in with your email and the password you chose.
+        </p>
+      )}
       <SignInForm next={next} />
       <div className="mt-6 flex justify-between text-sm text-muted">
         <Link href="/sign-up" className={linkClass}>
