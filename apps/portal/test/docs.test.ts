@@ -16,17 +16,29 @@ describe("documentation guides", () => {
     expect(new Set(DOCS.map((d) => d.slug)).size).toBe(DOCS.length);
     const { readFileSync } = await import("node:fs");
     const dockerfile = readFileSync(path.join(repo, "apps/portal/Dockerfile"), "utf8");
+    expect(dockerfile).toContain("COPY docs/guide docs/guide");
     for (const doc of DOCS) {
       expect(doc.slug).toMatch(/^[a-z0-9-]+$/);
       expect(doc.path.endsWith(".md"), doc.path).toBe(true);
       expect(existsSync(path.join(repo, doc.path)), doc.path).toBe(true);
-      const copied = doc.path.startsWith("docs/") ? "COPY docs docs" : path.basename(doc.path) === doc.path ? doc.path : `COPY ${doc.path} `;
-      expect(dockerfile, doc.path).toContain(copied);
+      // The image copies only docs/guide, so every guide must live there.
+      expect(doc.path.startsWith("docs/guide/"), doc.path).toBe(true);
+    }
+  });
+
+  it("the script tag in the guides is the newest published version, with its hash", async () => {
+    const { readFileSync } = await import("node:fs");
+    const sri: Record<string, string> = JSON.parse(readFileSync(path.join(repo, "packages/tracker/published/sri.json"), "utf8"));
+    const { TRACKER_VERSION } = await import("@/lib/tracker-snippet");
+    for (const slug of ["quickstart", "script-tag"]) {
+      const source = await readDoc(findDoc(slug)!);
+      expect(source, slug).toContain(`/s/v${TRACKER_VERSION}/n.js`);
+      expect(source, slug).toContain(`integrity="${sri[TRACKER_VERSION]}"`);
     }
   });
 
   it("only listed slugs open: a path in the URL is not a slug", () => {
-    expect(findDoc("deploy")?.path).toBe("docs/deploy.md");
+    expect(findDoc("quickstart")?.path).toBe("docs/guide/quickstart.md");
     for (const slug of ["", "nope", "../../.env", "docs/deploy.md", "..%2F..%2F.env", "deploy/../../.env"]) {
       expect(findDoc(slug), slug).toBeNull();
     }
@@ -84,16 +96,14 @@ describe("documentation guides", () => {
   });
 
   it("links inside a guide: listed guides stay in the portal, the rest goes to GitHub", () => {
-    const deploy = findDoc("deploy")!;
-    expect(resolveDocLink(deploy, "runbooks/README.md")).toBe("/docs/runbooks");
-    expect(resolveDocLink(deploy, "privacy.md#6-residencia")).toBe("/docs/privacy#6-residencia");
-    expect(resolveDocLink(deploy, "../SECURITY.md")).toBe("/docs/security");
-    expect(resolveDocLink(deploy, "adr/0016-production-on-a-vps.md")).toBe(`${REPO_BLOB_URL}/docs/adr/0016-production-on-a-vps.md`);
-    expect(resolveDocLink(deploy, "../examples/api-backend/README.md")).toBe("/docs/api-backend-example");
+    const otel = findDoc("opentelemetry")!;
+    expect(resolveDocLink(otel, "route-normalization.md")).toBe("/docs/route-normalization");
+    expect(resolveDocLink(otel, "custom-events.md#rules")).toBe("/docs/custom-events#rules");
+    // The long guides stay in the repository and open on GitHub.
+    expect(resolveDocLink(otel, "../privacy.md")).toBe(`${REPO_BLOB_URL}/docs/privacy.md`);
+    expect(resolveDocLink(otel, "../../examples/api-backend/README.md")).toBe(`${REPO_BLOB_URL}/examples/api-backend/README.md`);
     // Climbing above the repository root does not leave it.
-    expect(resolveDocLink(deploy, "../../../etc/passwd")).toBe(`${REPO_BLOB_URL}/etc/passwd`);
-    expect(resolveDocLink(findDoc("security")!, "docs/runbooks/vulnerabilities.md")).toBe("/docs/runbook-vulnerabilities");
-    expect(resolveDocLink(findDoc("runbooks")!, "incidents.md#triagem-inicial")).toBe("/docs/runbook-incidents#triagem-inicial");
-    for (const href of ["https://example.org/x", "#section", "mailto:a@example.org"]) expect(resolveDocLink(deploy, href)).toBe(href);
+    expect(resolveDocLink(otel, "../../../../etc/passwd")).toBe(`${REPO_BLOB_URL}/etc/passwd`);
+    for (const href of ["https://example.org/x", "#section", "mailto:a@example.org"]) expect(resolveDocLink(otel, href)).toBe(href);
   });
 });

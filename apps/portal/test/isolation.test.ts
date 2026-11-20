@@ -490,19 +490,25 @@ describe("public demo", () => {
     await onlyA();
   });
 
-  it("documentation page is public and reads no tenant data", async () => {
+  it("documentation pages are public and read no tenant data", async () => {
+    const { createElement, Fragment } = await import("react");
     const { renderToStaticMarkup } = await import("react-dom/server");
-    const { default: DocsPage } = await import("@/app/docs/page");
+    const { default: DocPage } = await import("@/app/docs/[slug]/page");
+    const { DOCS } = await import("@/lib/docs");
     const { TRACKER_VERSION } = await import("@/lib/tracker-snippet");
     process.env.DEMO_TENANT_SLUG = await slugOf(A.tenantId);
-    // Render the body only: the site shell holds client components.
-    const body = renderToStaticMarkup(DocsPage().props.children);
-    expect(body).toContain(`/s/v${TRACKER_VERSION}/n.js`);
-    expect(body).toContain('href="/docs/onboarding"');
-    // Placeholders only: no site, key or tenant of anyone.
-    expect(body).toContain("&lt;your-site-id&gt;");
-    for (const secret of [A.umamiWebsiteId, B.umamiWebsiteId, A.tenantId, B.tenantId, A.keyPrefix, B.keyPrefix]) {
-      expect(body).not.toContain(secret);
+    for (const doc of DOCS) {
+      const page = await DocPage({ params: Promise.resolve({ slug: doc.slug }) });
+      // Render the body only: the docs layout holds client components.
+      const body = renderToStaticMarkup(createElement(Fragment, null, ...page.props.children));
+      // The guides show the newest script version, with placeholders only.
+      if (doc.slug === "script-tag" || doc.slug === "quickstart") {
+        expect(body, doc.slug).toContain(`/s/v${TRACKER_VERSION}/n.js`);
+        expect(body, doc.slug).toContain("&lt;website-id&gt;");
+      }
+      for (const secret of [A.umamiWebsiteId, B.umamiWebsiteId, A.tenantId, B.tenantId, A.keyPrefix, B.keyPrefix]) {
+        expect(body, doc.slug).not.toContain(secret);
+      }
     }
     expect(umami.requests).toEqual([]);
   });

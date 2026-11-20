@@ -1,151 +1,115 @@
 [
   {
-    "title": "For projects",
-    "text": "Enrol a Stellar project and start measuring its website and API.",
+    "title": "Getting started",
     "links": [
       {
-        "slug": "onboarding",
-        "label": "Tenant onboarding guide",
-        "path": "docs/tenant-onboarding.md",
-        "note": "Sign-up, script, OpenTelemetry dual-export and reading the dashboards"
+        "slug": "overview",
+        "label": "Overview",
+        "path": "docs/guide/overview.md",
+        "note": "What stellytics is and who sees what"
       },
       {
-        "slug": "api-backend-example",
-        "label": "API backend example",
-        "path": "examples/api-backend/README.md",
-        "note": "A Node service exporting OTLP metrics to its own backend and to stellytics"
+        "slug": "quickstart",
+        "label": "Quickstart",
+        "path": "docs/guide/quickstart.md",
+        "note": "From sign-up to the first numbers"
       },
       {
-        "slug": "examples",
-        "label": "Integration examples",
-        "path": "examples/README.md",
-        "note": "Static HTML, SPA, Next.js SSR and a wallet dApp"
-      },
-      {
-        "slug": "ad-blockers",
-        "label": "Ad blockers",
-        "path": "packages/tracker/docs/ad-blockers.md",
-        "note": "Why the script and endpoints use neutral names"
-      },
-      {
-        "slug": "support",
-        "label": "Support",
-        "path": "docs/support.md",
-        "note": "Where to ask and the response times"
+        "slug": "dashboards",
+        "label": "Dashboards",
+        "path": "docs/guide/dashboards.md",
+        "note": "What each number means"
       }
     ]
   },
   {
-    "title": "Privacy and security",
-    "text": "What is collected, what never is, and how to report a vulnerability.",
+    "title": "Web analytics",
     "links": [
       {
-        "slug": "privacy",
-        "label": "Privacy",
-        "path": "docs/privacy.md",
-        "note": "Collected data, truncated IP, retention, erasure and known gaps"
+        "slug": "script-tag",
+        "label": "Script tag",
+        "path": "docs/guide/script-tag.md",
+        "note": "Install the pinned script"
       },
       {
-        "slug": "security",
-        "label": "Security policy",
-        "path": "SECURITY.md",
-        "note": "Private reporting and fix deadlines"
+        "slug": "single-page-apps",
+        "label": "Single-page apps",
+        "path": "docs/guide/single-page-apps.md",
+        "note": "Route changes and hash routes"
       },
       {
-        "slug": "anti-bot-and-supply-chain",
-        "label": "Anti-bot and supply chain",
-        "path": "docs/anti-bot-and-supply-chain.md",
-        "note": "Gateway limits and build and release controls"
+        "slug": "custom-events",
+        "label": "Custom events",
+        "path": "docs/guide/custom-events.md",
+        "note": "Record actions beyond page views"
       },
       {
-        "slug": "sla",
-        "label": "Availability and fix commitments",
-        "path": "docs/sla.md",
-        "note": "RFP targets, what the project commits to and how it is measured"
+        "slug": "wallets-kit",
+        "label": "Stellar Wallets Kit",
+        "path": "docs/guide/wallets-kit.md",
+        "note": "Count wallet connections"
       }
     ]
   },
   {
-    "title": "Running it",
-    "text": "Deploy the platform on one VPS and operate it.",
+    "title": "API analytics",
     "links": [
       {
-        "slug": "deploy",
-        "label": "Deploy guide",
-        "path": "docs/deploy.md",
-        "note": "Install, first start, checks, backup, restore and monitoring"
+        "slug": "opentelemetry",
+        "label": "OpenTelemetry",
+        "path": "docs/guide/opentelemetry.md",
+        "note": "Dual-export your API metrics"
       },
       {
-        "slug": "runbooks",
-        "label": "Runbooks",
-        "path": "docs/runbooks/README.md",
-        "note": "Incidents, backup and restore, secret rotation, vulnerabilities, Umami upgrade"
-      },
-      {
-        "slug": "runbook-incidents",
-        "label": "Runbook: incidents",
-        "path": "docs/runbooks/incidents.md",
-        "note": "Triage and response for each monitoring alert and for portal or ingestion outages"
-      },
-      {
-        "slug": "runbook-backup-restore",
-        "label": "Runbook: backup and restore",
-        "path": "docs/runbooks/backup-and-restore.md",
-        "note": "When to restore, how to diagnose a failed backup and how to check the result"
-      },
-      {
-        "slug": "runbook-secret-rotation",
-        "label": "Runbook: secret rotation",
-        "path": "docs/runbooks/secret-rotation.md",
-        "note": "What each secret affects and how to rotate it safely"
-      },
-      {
-        "slug": "runbook-umami-upgrade",
-        "label": "Runbook: Umami upgrade",
-        "path": "docs/runbooks/umami-upgrade.md",
-        "note": "Moving to a new pinned Umami release and checking it"
-      },
-      {
-        "slug": "runbook-vulnerabilities",
-        "label": "Runbook: vulnerability response",
-        "path": "docs/runbooks/vulnerabilities.md",
-        "note": "From a private report to a released fix within the published deadlines"
-      },
-      {
-        "slug": "handover",
-        "label": "Handover to a community operator",
-        "path": "docs/handover.md",
-        "note": "Repository, data migration and domain"
+        "slug": "route-normalization",
+        "label": "Route normalization",
+        "path": "docs/guide/route-normalization.md",
+        "note": "How paths become routes"
       }
     ]
   },
   {
-    "title": "How it is built",
-    "text": "Architecture, decisions and the state of the work.",
+    "title": "Privacy",
     "links": [
       {
-        "slug": "architecture",
-        "label": "Architecture",
-        "path": "docs/architecture.md",
-        "note": "Components, data flows and where everything runs"
+        "slug": "data-collected",
+        "label": "Data collected",
+        "path": "docs/guide/data-collected.md",
+        "note": "What is stored and what never is"
       },
       {
-        "slug": "adrs",
-        "label": "Architecture decisions (ADRs)",
-        "path": "docs/adr/README.md",
-        "note": "Every decision, with status and date"
+        "slug": "residency-and-erasure",
+        "label": "Residency and erasure",
+        "path": "docs/guide/residency-and-erasure.md",
+        "note": "Where data lives and how to delete it"
+      }
+    ]
+  },
+  {
+    "title": "Reference",
+    "links": [
+      {
+        "slug": "read-api",
+        "label": "Read API",
+        "path": "docs/guide/read-api.md",
+        "note": "Global metrics for SCF operators"
       },
       {
-        "slug": "progress",
-        "label": "Progress",
-        "path": "docs/progress.md",
-        "note": "What is done, what is open and what is pending"
-      },
+        "slug": "troubleshooting",
+        "label": "Troubleshooting",
+        "path": "docs/guide/troubleshooting.md",
+        "note": "When numbers do not show up"
+      }
+    ]
+  },
+  {
+    "title": "Operations",
+    "links": [
       {
-        "slug": "contributing",
-        "label": "Contributing",
-        "path": "CONTRIBUTING.md",
-        "note": "Environment, checks, dependency and license rules"
+        "slug": "self-hosting",
+        "label": "Self hosting",
+        "path": "docs/guide/self-hosting.md",
+        "note": "Run your own instance"
       }
     ]
   }
