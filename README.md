@@ -32,7 +32,7 @@ stellytics is a free, shared platform where the numbers come from measurement in
 - session duration and bounce rate;
 - country, device and browser;
 - optional custom events (`window.stellytics.event`), with no wallet address, hash or amount;
-- an opt-in adapter for the Stellar Wallets Kit (`window.stellytics.wallets`), which reports only the selected wallet and disconnections, never the address ([ADR 0010](docs/adr/0010-wallets-kit-opt-in-adapter.md)).
+- an opt-in adapter for the Stellar Wallets Kit (`window.stellytics.wallets`), which reports only the selected wallet and disconnections, never the address ([ADR 0010](docs/decisions.md#0010-wallets-kit-opt-in-adapter)).
 
 **API**, from the OpenTelemetry data a project already sends to its own APM (dual-export):
 
@@ -95,17 +95,17 @@ There are two flows, and they never mix:
 |---|---|---|
 | Portal | Next.js | Public demo dashboards, the public project card, the documentation at `/docs` and a read-only API for the SCF (`/api/v1`, with a read key) |
 | Tracking script | TypeScript | Fixed, immutable versions (`/s/vX.Y.Z/n.js`), with SRI and a name that ad blockers do not block |
-| Web ingestion gateway | Go | Anti-bot (rate limiting, JS execution proof, per-IP fingerprint limit), IP truncation and a cap on relays to Umami to contain saturation ([ADR 0011](docs/adr/0011-umami-relay-limit.md)) |
+| Web ingestion gateway | Go | Anti-bot (rate limiting, JS execution proof, per-IP fingerprint limit), IP truncation and a cap on relays to Umami to contain saturation ([ADR 0011](docs/decisions.md#0011-umami-relay-limit)) |
 | [Umami](https://umami.is) v3.4.1 | Next.js | Web analytics engine, used without a fork and never exposed |
 | API collector | OpenTelemetry Collector + Go components | Key-based authentication, route normalization and metric storage |
 | Rollup | Go | Rolls up 1-minute API metrics into 1 hour and 1 day and applies retention (API metrics and Umami web events) |
 | Database | PostgreSQL 17 | Separate databases: `umami` (web analytics) and `stellytics` (projects, keys and API metrics) |
-| Infra | Docker Compose, Caddy, shell install scripts | One VPS, continuous encrypted backups to S3-compatible storage, rebuildable from this repository ([ADR 0016](docs/adr/0016-production-on-a-vps.md)) |
-| Monitoring | Prometheus, blackbox exporter, Alertmanager | Separate host: availability of the portal, web ingestion and API ingestion measured from the outside, with email alerts ([ADR 0005](docs/adr/0005-external-monitoring.md)) |
+| Infra | Docker Compose, Caddy, shell install scripts | One VPS, continuous encrypted backups to S3-compatible storage, rebuildable from this repository ([ADR 0016](docs/decisions.md#0016-production-on-a-vps)) |
+| Monitoring | Prometheus, blackbox exporter, Alertmanager | Separate host: availability of the portal, web ingestion and API ingestion measured from the outside, with email alerts ([ADR 0005](docs/decisions.md#0005-external-monitoring)) |
 
 In production every service runs in Docker Compose. Caddy is the only one with public ports: it terminates TLS and forwards the portal, web ingestion and API ingestion (OTLP over HTTP and gRPC) over the Docker network.
 
-The full picture, with both flows step by step, is in [`docs/architecture.md`](docs/architecture.md). Decisions and discarded alternatives are in the [ADRs](docs/adr/README.md).
+The full picture, with both flows step by step, is in [`docs/architecture.md`](docs/architecture.md). The architecture decisions, and why each was made, are in [`docs/decisions.md`](docs/decisions.md).
 
 ## What this version does not include
 
@@ -120,7 +120,7 @@ Progress and open items are tracked in [`docs/progress.md`](docs/progress.md).
 | To | Read |
 |---|---|
 | Integrate a project (script, dual-export) | [`docs/tenant-onboarding.md`](docs/tenant-onboarding.md) and [`examples/`](examples/README.md) |
-| Understand the architecture | [`docs/architecture.md`](docs/architecture.md) and the [ADRs](docs/adr/README.md) |
+| Understand the architecture | [`docs/architecture.md`](docs/architecture.md) and [`docs/decisions.md`](docs/decisions.md) |
 | Deploy and operate an instance | [`docs/deploy.md`](docs/deploy.md) and the [runbooks](docs/runbooks/README.md) |
 | Check privacy and collected data | [`docs/privacy.md`](docs/privacy.md) |
 | Check anti-bot and supply chain measures | [`docs/anti-bot-and-supply-chain.md`](docs/anti-bot-and-supply-chain.md) |
@@ -200,7 +200,7 @@ services/            Single Go module (go.mod)
 infra/               Docker Compose, Caddy, monitoring and operations scripts
 examples/            Reference integrations (HTML, SPA, SSR, backend with OTel)
 scripts/             Dependency license and vulnerability checks
-docs/                ADRs, specs, guides, runbooks and progress log
+docs/                decisions, specs, guides, runbooks and progress log
 ```
 
 The portal, the script, each Go service, `infra/` and `examples/` have their own `README.md`.
@@ -233,7 +233,7 @@ Details are in [`docs/anti-bot-and-supply-chain.md`](docs/anti-bot-and-supply-ch
 The full guide is in [`CONTRIBUTING.md`](CONTRIBUTING.md), and vulnerabilities are reported as described in [`SECURITY.md`](SECURITY.md). Questions and bugs go to the [issues](https://github.com/romulospl/stellytics/issues/new/choose), which are the public support channel.
 
 - Commits follow [Conventional Commits 1.0.0-beta.4](https://www.conventionalcommits.org/en/v1.0.0-beta.4/), for example `feat(collector): add Stellar address normalization`.
-- New architecture decisions become an ADR in [`docs/adr/`](docs/adr/README.md), based on the [template](docs/adr/template.md).
+- New architecture decisions become a numbered section in [`docs/decisions.md`](docs/decisions.md).
 
 ## License
 

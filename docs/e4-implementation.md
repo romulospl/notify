@@ -1,6 +1,6 @@
 # E4: what was implemented
 
-Record of the implementation of epic [E4 (#4)](https://github.com/romulospl/stellytics/issues/4), web analytics dashboards, started on **14 November 2026**. E4 has no spec of its own: it runs entirely inside the portal and uses contracts that already exist, the isolation of [ADR 0003](adr/0003-portal-isolation.md) and of section 4 of the [E2 spec](specs/e2-tenants-and-access-control.md), and the Umami 3.4.1 API checked in [ADR 0001](adr/0001-base-tool.md).
+Record of the implementation of epic [E4 (#4)](https://github.com/romulospl/stellytics/issues/4), web analytics dashboards, started on **14 November 2026**. E4 has no spec of its own: it runs entirely inside the portal and uses contracts that already exist, the isolation of [ADR 0003](decisions.md#0003-portal-isolation) and of section 4 of the [E2 spec](specs/e2-tenants-and-access-control.md), and the Umami 3.4.1 API checked in [ADR 0001](decisions.md#0001-base-tool).
 
 ## 1. Status
 

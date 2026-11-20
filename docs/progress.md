@@ -8,9 +8,9 @@ Record of what has been done, the decisions taken and the next steps. Updated on
 |---|---|
 | MVP scope | Defined from the RFP (section [MVP](#1-mvp-defined-from-the-rfp)) |
 | Backlog | 10 epics and 78 issues on GitHub; 2 open: #174 (handover) and #182 (production backup). On 2026-11-20 the other open issues were closed as not planned: epics E1, E7, E8, E9 and E10, plus #43–#47, #64, #65 and #140 |
-| Base tool | **Umami v3.4.1** ([ADR 0001](adr/0001-base-tool.md)) |
-| Architecture and stack | Defined ([ADR 0002](adr/0002-architecture-and-stack.md)) |
-| Production | One VPS with Docker Compose and Caddy, installed by `init.sh` and `deploy.sh`, continuous WAL-G backup, no high availability ([ADR 0016](adr/0016-production-on-a-vps.md)). Portal, web gateway, Umami, OTel collector and rollup all run in `infra/compose/prod.yaml`. External monitoring by `infra/monitoring/configure.sh` (#15). A proof of concept is live at `stellytics.xyz`, `e.stellytics.xyz` and `otlp.stellytics.xyz`, with no pilots yet. Data residency region: the proof of concept runs in **Brazil**; production moves to an **EU region** in Tranche 1 |
+| Base tool | **Umami v3.4.1** ([ADR 0001](decisions.md#0001-base-tool)) |
+| Architecture and stack | Defined ([ADR 0002](decisions.md#0002-architecture-and-stack)) |
+| Production | One VPS with Docker Compose and Caddy, installed by `init.sh` and `deploy.sh`, continuous WAL-G backup, no high availability ([ADR 0016](decisions.md#0016-production-on-a-vps)). Portal, web gateway, Umami, OTel collector and rollup all run in `infra/compose/prod.yaml`. External monitoring by `infra/monitoring/configure.sh` (#15). A proof of concept is live at `stellytics.xyz`, `e.stellytics.xyz` and `otlp.stellytics.xyz`, with no pilots yet. Data residency region: the proof of concept runs in **Brazil**; production moves to an **EU region** in Tranche 1 |
 | Code | Epics E2–E6 closed: portal, tracking script and web gateway, API pipeline, and the tenant and SCF web and API dashboards. Details in [`e2-implementation.md`](e2-implementation.md), [`e4-implementation.md`](e4-implementation.md) and [`e6-implementation.md`](e6-implementation.md) |
 | Portal | Since #186 (2026-11-20) the portal is a public, read-only demo: `/demo`, `/operator`, `/p/<slug>`, `/docs` and the read API. Sign-up, login and the signed-in tenant and operator pages were removed; the library layer behind them and its tests remain ([`dev/portal.md`](dev/portal.md)) |
 | Validation | Deploy guide followed end to end with local stand-ins: team rehearsal on a clean Ubuntu 24.04 container (PR #176) and a full run of [`validation/deploy.md`](validation/deploy.md) on throwaway VMs, including alerts, restore and rollback (PR #178). #42 closed on 2026-11-19; an outside-operator run is optional, for later |
@@ -55,7 +55,7 @@ The MVP is the smallest version that **real pilot projects** (3 with web analyti
 
 All of these were done after the MVP code, except the handover itself:
 
-- SLA targets and the vulnerability and support commitments (#52, [`sla.md`](sla.md)); high availability was dropped by [ADR 0016](adr/0016-production-on-a-vps.md)
+- SLA targets and the vulnerability and support commitments (#52, [`sla.md`](sla.md)); high availability was dropped by [ADR 0016](decisions.md#0016-production-on-a-vps)
 - Load test for 1 million requests per day (#51)
 - SCF read keys for other systems to consume the metrics (#48)
 - Sign-up with prior approval (#49)
@@ -90,15 +90,15 @@ Repository: [romulospl/stellytics](https://github.com/romulospl/stellytics/issue
 
 ## 3. Decisions
 
-The ADRs are indexed in [`adr/README.md`](adr/README.md). The ones that shape the current system:
+The architecture decisions are summarized in [`decisions.md`](decisions.md). The ones that shape the current system:
 
-- **Umami as the base tool ([ADR 0001](adr/0001-base-tool.md)):** MIT license, active maintainers, PostgreSQL only. Pinned to **v3.4.1**. Umami has no open sign-up, so sign-up, the comparative dashboard and the API metrics live in the portal; session recording and heatmaps are off.
-- **Architecture and stack ([ADR 0002](adr/0002-architecture-and-stack.md)):** TypeScript for the Next.js portal and the tracking script; Go only for ingestion (web gateway and an OCB-built OTel collector); PostgreSQL with `umami` and `stellytics` databases, native monthly partitioning and 1 min → 1 h → 1 day rollups, no TimescaleDB (TSL license). The infrastructure part was superseded by ADR 0016.
-- **Isolation in the portal ([ADR 0003](adr/0003-portal-isolation.md)) and the [E2 spec](specs/e2-tenants-and-access-control.md):** the portal reads Umami with a service account that sees everything, so isolation is the portal's job. Decisions D1–D6: one tenant per user; the SCF operator is not a tenant member; no admin role (operators are created by script); one database user per service; the API service comes from the ingest key; the operator can reactivate a removed tenant.
-- **Production on one VPS ([ADR 0016](adr/0016-production-on-a-vps.md)):** one path, a Debian/Ubuntu VPS with Docker Compose, Caddy and encrypted WAL-G backup to S3-compatible storage. Provider and region are the operator's choice. It removed the managed path (Hetzner, OpenTofu, Ansible, [ADR 0004](adr/0004-hosting-and-backup.md)) and all high availability from #52 ([ADR 0009](adr/0009-high-availability.md)): replication, standby, ingestion replicas and the failover runbook. The RFP does not require high availability; it requires infrastructure recreatable from the monorepo.
-- **Optional RFP features ([ADR 0015](adr/0015-optional-rfp-features.md)):** custom events and the opt-in Stellar Wallets Kit adapter ([ADR 0008](adr/0008-custom-events-and-wallets-kit.md), [ADR 0010](adr/0010-wallets-kit-opt-in-adapter.md)).
+- **Umami as the base tool ([ADR 0001](decisions.md#0001-base-tool)):** MIT license, active maintainers, PostgreSQL only. Pinned to **v3.4.1**. Umami has no open sign-up, so sign-up, the comparative dashboard and the API metrics live in the portal; session recording and heatmaps are off.
+- **Architecture and stack ([ADR 0002](decisions.md#0002-architecture-and-stack)):** TypeScript for the Next.js portal and the tracking script; Go only for ingestion (web gateway and an OCB-built OTel collector); PostgreSQL with `umami` and `stellytics` databases, native monthly partitioning and 1 min → 1 h → 1 day rollups, no TimescaleDB (TSL license). The infrastructure part was superseded by ADR 0016.
+- **Isolation in the portal ([ADR 0003](decisions.md#0003-portal-isolation)) and the [E2 spec](specs/e2-tenants-and-access-control.md):** the portal reads Umami with a service account that sees everything, so isolation is the portal's job. Decisions D1–D6: one tenant per user; the SCF operator is not a tenant member; no admin role (operators are created by script); one database user per service; the API service comes from the ingest key; the operator can reactivate a removed tenant.
+- **Production on one VPS ([ADR 0016](decisions.md#0016-production-on-a-vps)):** one path, a Debian/Ubuntu VPS with Docker Compose, Caddy and encrypted WAL-G backup to S3-compatible storage. Provider and region are the operator's choice. It removed the managed path (Hetzner, OpenTofu, Ansible, [ADR 0004](decisions.md#0004-hosting-and-backup)) and all high availability from #52 ([ADR 0009](decisions.md#0009-high-availability)): replication, standby, ingestion replicas and the failover runbook. The RFP does not require high availability; it requires infrastructure recreatable from the monorepo.
+- **Optional RFP features ([ADR 0015](decisions.md#0015-optional-rfp-features)):** custom events and the opt-in Stellar Wallets Kit adapter ([ADR 0008](decisions.md#0008-custom-events-and-wallets-kit), [ADR 0010](decisions.md#0010-wallets-kit-opt-in-adapter)).
 - **Public demo ([`dev/portal.md`](dev/portal.md#public-pages-and-demo)):** `/` is a public page and `/demo` and `/operator` work without sign-in, read-only: sample data by default, or one real tenant (`DEMO_TENANT_SLUG`) through a `DemoContext` that only the tenant read functions accept. Not an RFP requirement; added for the SCF submission.
-- **Other ADRs:** external monitoring ([0005](adr/0005-external-monitoring.md)), SCF read API ([0006](adr/0006-scf-read-api.md)), sign-up with approval ([0007](adr/0007-sign-up-with-approval.md)), relay limit to Umami ([0011](adr/0011-umami-relay-limit.md), **not enabled in production pending a maintainer decision**), API ingestion through Caddy ([0012](adr/0012-api-ingestion-through-caddy.md)).
+- **Other decisions:** external monitoring ([0005](decisions.md#0005-external-monitoring)), SCF read API ([0006](decisions.md#0006-scf-read-api)), sign-up with approval ([0007](decisions.md#0007-sign-up-with-approval)), relay limit to Umami ([0011](decisions.md#0011-umami-relay-limit), **not enabled in production pending a maintainer decision**), API ingestion through Caddy ([0012](decisions.md#0012-api-ingestion-through-caddy)).
 
 ## 4. Record by epic
 
@@ -108,8 +108,8 @@ Dates are when the work landed. Entries describe the state on `main` today; for 
 
 - **#11, #12, #13 (2026-11-13):** monorepo with MIT `LICENSE`, pnpm workspaces, Turborepo and `services/go.mod`; local Compose with Postgres 17 and Umami 3.4.1 pinned by digest; CI on GitHub Actions (actions pinned by SHA, Postgres in tests, Compose tested on every PR). `main` has **no branch protection** by decision of 2026-11-13.
 - **#55, #56:** Renovate with a 14-day wait, release workflow with SBOM and cosign-signed GHCR images; `SECURITY.md`, `CONTRIBUTING.md` and issue templates.
-- **#14 (2026-11-14 to 2026-11-19):** production on a VPS ([ADR 0016](adr/0016-production-on-a-vps.md), PR #169), step by step in [`deploy.md`](deploy.md). `deploy.sh` builds images from the checkout and checks the variables of `.env.production.example`; the daily base backup runs from `stellytics-backup.timer` at 03:00 UTC. Restore (including point in time) is tested on every PR by `infra/compose/test/prod-stack-test.sh`, which also checks that only Caddy publishes ports, that Umami has no route and that Postgres listens only on loopback.
-- **#15 (2026-11-14):** Prometheus, blackbox and Alertmanager on a host separate from production ([ADR 0005](adr/0005-external-monitoring.md)), tested in the CI `monitoring` job. PR #172 made it cover the ingestion dependencies, backups and the rollup.
+- **#14 (2026-11-14 to 2026-11-19):** production on a VPS ([ADR 0016](decisions.md#0016-production-on-a-vps), PR #169), step by step in [`deploy.md`](deploy.md). `deploy.sh` builds images from the checkout and checks the variables of `.env.production.example`; the daily base backup runs from `stellytics-backup.timer` at 03:00 UTC. Restore (including point in time) is tested on every PR by `infra/compose/test/prod-stack-test.sh`, which also checks that only Caddy publishes ports, that Umami has no route and that Postgres listens only on loopback.
+- **#15 (2026-11-14):** Prometheus, blackbox and Alertmanager on a host separate from production ([ADR 0005](decisions.md#0005-external-monitoring)), tested in the CI `monitoring` job. PR #172 made it cover the ingestion dependencies, backups and the rollup.
 - **#132:** Go Dockerfiles moved to `golang:1.26.11` for reachable stdlib vulnerabilities found by the dependency scan.
 - **Open: #140**, an account action: enable GitHub private vulnerability reporting and install the Renovate app (without it `renovate.json` has no effect).
 
@@ -127,7 +127,7 @@ Tenant dashboard with the 7 metrics at `/sites/[siteId]` (#28) and the SCF web o
 
 ### E5: API pipeline (closed)
 
-Collector with key authentication, dropping traces, spans and logs, route normalization, Postgres schema (#30–#33); rollup 1m → 1h → 1d with 35 days at 1 min and 25 months in the rollups, run every 15 minutes by `services/rollup` (#34); example backend and dual-export guide in `examples/api-backend` (#35); end-to-end test in the CI `compose` job (#36). Spec: [`specs/e5-api-pipeline.md`](specs/e5-api-pipeline.md). The collector and the rollup run in production since PR #143; OTLP (HTTP and gRPC) enters through Caddy on a separate API host ([ADR 0012](adr/0012-api-ingestion-through-caddy.md)).
+Collector with key authentication, dropping traces, spans and logs, route normalization, Postgres schema (#30–#33); rollup 1m → 1h → 1d with 35 days at 1 min and 25 months in the rollups, run every 15 minutes by `services/rollup` (#34); example backend and dual-export guide in `examples/api-backend` (#35); end-to-end test in the CI `compose` job (#36). Spec: [`specs/e5-api-pipeline.md`](specs/e5-api-pipeline.md). The collector and the rollup run in production since PR #143; OTLP (HTTP and gRPC) enters through Caddy on a separate API host ([ADR 0012](decisions.md#0012-api-ingestion-through-caddy)).
 
 ### E6: API dashboards (closed)
 
@@ -149,9 +149,9 @@ Nothing done yet: #44 → #45/#46 → #47. See [section 6](#6-next-steps).
 
 ### E9: post-MVP
 
-- **#48:** SCF read keys and the `/api/v1` read API ([ADR 0006](adr/0006-scf-read-api.md)).
-- **#49:** optional sign-up with prior approval, `SIGNUP_APPROVAL` ([ADR 0007](adr/0007-sign-up-with-approval.md)).
-- **#50:** custom events (`window.stellytics.event`) and the opt-in Wallets Kit adapter, shown on the site dashboard (PR #168, [ADR 0015](adr/0015-optional-rfp-features.md)).
+- **#48:** SCF read keys and the `/api/v1` read API ([ADR 0006](decisions.md#0006-scf-read-api)).
+- **#49:** optional sign-up with prior approval, `SIGNUP_APPROVAL` ([ADR 0007](decisions.md#0007-sign-up-with-approval)).
+- **#50:** custom events (`window.stellytics.event`) and the opt-in Wallets Kit adapter, shown on the site dashboard (PR #168, [ADR 0015](decisions.md#0015-optional-rfp-features)).
 - **#51:** load test in `services/loadtest/`, report in [`reports/load-1m-per-day.md`](reports/load-1m-per-day.md). Measured on a local machine, so it does not prove production. Umami saturates near 200 page views per second.
 - **#52:** SLA targets and error budget in [`sla.md`](sla.md). The high-availability primitives built for it were removed by ADR 0016.
 - **#53:** runbooks in [`runbooks/`](runbooks/README.md); none exercised on a real production yet.
@@ -169,7 +169,7 @@ The early drafts of the proposal and interest form (PR #112) were removed from t
 |---|---|
 | [`CLAUDE.md`](../CLAUDE.md) | Context for Claude Code; component guides in [`dev/`](dev/planning.md) |
 | [`README.md`](../README.md) | Project overview, metrics, architecture, privacy and contribution |
-| [`adr/`](adr/README.md) | Index, template and ADRs 0001–0016 |
+| [`decisions.md`](decisions.md) | Architecture decisions 0001–0017, one section each |
 | [`specs/`](specs/e2-tenants-and-access-control.md) | E2 and E5 specs |
 | [`deploy.md`](deploy.md), [`validation/`](validation/deploy.md) | Deploy guide and outside-validation scripts |
 | [`tenant-onboarding.md`](tenant-onboarding.md) | Tenant onboarding for web and API |
@@ -196,4 +196,4 @@ After the MVP: [#174](https://github.com/romulospl/stellytics/issues/174), the h
 Pending decisions:
 
 - **Data residency region:** the region of the VPS and the backup bucket is the operator's choice: the proof of concept runs in Brazil and production moves to an EU region in Tranche 1 ([`privacy.md`](privacy.md)). The move itself is still to be done.
-- **`RELAY_MAX_INFLIGHT`:** stays off in production until the maintainer decides ([ADR 0011](adr/0011-umami-relay-limit.md)).
+- **`RELAY_MAX_INFLIGHT`:** stays off in production until the maintainer decides ([ADR 0011](decisions.md#0011-umami-relay-limit)).

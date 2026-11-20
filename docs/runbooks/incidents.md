@@ -1,6 +1,6 @@
 # Runbook: incidents
 
-It covers the five real alerts from the external monitoring ([`alerts.yml`](../../infra/monitoring/prometheus/rules/alerts.yml), [ADR 0005](../adr/0005-external-monitoring.md)) and an outage of the portal or of web ingestion. The `Watchdog` alert is an always-on heartbeat, not an incident; if it **stops arriving** at the external service configured in `DEADMAN_URL`, the problem is the monitoring host (see `ProberDown`).
+It covers the five real alerts from the external monitoring ([`alerts.yml`](../../infra/monitoring/prometheus/rules/alerts.yml), [ADR 0005](../decisions.md#0005-external-monitoring)) and an outage of the portal or of web ingestion. The `Watchdog` alert is an always-on heartbeat, not an incident; if it **stops arriving** at the external service configured in `DEADMAN_URL`, the problem is the monitoring host (see `ProberDown`).
 
 ## Initial triage (applies to all)
 

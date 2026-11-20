@@ -10,10 +10,10 @@
 
 `docs/progress.md` (summary, commits and next steps) and `docs/e2-implementation.md`, `docs/e4-implementation.md`, `docs/e6-implementation.md` (what was done, choices and pending items). Update them when closing issues.
 
-## Specs and ADRs
+## Specs and decisions
 
-- `docs/specs/`: one per epic with a contract between components. The spec fixes the contract (tables, roles, formats); a decision with alternatives goes to an ADR. Read `docs/specs/e2-tenants-and-access-control.md` before E2 issues (#16–#21, #58–#60) and `docs/specs/e5-api-pipeline.md` before E5 issues (#30–#36). There is no E3 spec.
-- `docs/adr/` (index in `docs/adr/README.md`). Read ADRs 0001 and 0002 before proposing stack or structure changes, and 0003 before touching data access. A new architecture decision becomes a new ADR from `docs/adr/template.md`. An accepted ADR is not rewritten: create a new one and mark the old one as superseded.
+- `docs/specs/`: one per epic with a contract between components. The spec fixes the contract (tables, roles, formats); a decision with alternatives goes to `docs/decisions.md`. Read `docs/specs/e2-tenants-and-access-control.md` before E2 issues (#16–#21, #58–#60) and `docs/specs/e5-api-pipeline.md` before E5 issues (#30–#36). There is no E3 spec.
+- `docs/decisions.md`: the architecture decisions, one numbered section each. Read decisions 0001 and 0002 before proposing stack or structure changes, and 0003 before touching data access. A new architecture decision becomes a new numbered section in `docs/decisions.md`; when a decision changes, update its section and status there (see "Adding a decision" in that file).
 
 ## Documents to keep up to date
 

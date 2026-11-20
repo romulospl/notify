@@ -1,6 +1,6 @@
 # E6: what was implemented
 
-Record of the implementation of epic [E6 (#6)](https://github.com/romulospl/stellytics/issues/6), API analytics dashboards, started on **14 November 2026**. E6 has no spec of its own: it runs inside the portal and reads the tables that the [E5 spec](specs/e5-api-pipeline.md) fixed (sections 4 and 5), with the isolation of [ADR 0003](adr/0003-portal-isolation.md) and of section 4 of the [E2 spec](specs/e2-tenants-and-access-control.md).
+Record of the implementation of epic [E6 (#6)](https://github.com/romulospl/stellytics/issues/6), API analytics dashboards, started on **14 November 2026**. E6 has no spec of its own: it runs inside the portal and reads the tables that the [E5 spec](specs/e5-api-pipeline.md) fixed (sections 4 and 5), with the isolation of [ADR 0003](decisions.md#0003-portal-isolation) and of section 4 of the [E2 spec](specs/e2-tenants-and-access-control.md).
 
 ## 1. Status
 

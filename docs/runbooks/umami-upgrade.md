@@ -1,6 +1,6 @@
 # Runbook: Umami upgrade
 
-Umami is the base tool ([ADR 0001](../adr/0001-base-tool.md)) and runs **without a patch**, pinned by tag and digest. Rules: [`docs/umami.md`](../umami.md) and `CLAUDE.md` (the version only goes up by PR, with a release at least two weeks old, without a heavy fork).
+Umami is the base tool ([ADR 0001](../decisions.md#0001-base-tool)) and runs **without a patch**, pinned by tag and digest. Rules: [`docs/umami.md`](../umami.md) and `CLAUDE.md` (the version only goes up by PR, with a release at least two weeks old, without a heavy fork).
 
 ## Symptoms (when to use)
 

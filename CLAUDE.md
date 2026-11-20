@@ -63,7 +63,7 @@ Environment, CI, release and dependency rules: [docs/dev/environment.md](docs/de
 
 ## Where the planning is
 
-Backlog, board, specs, ADRs, examples and the documents to keep up to date: [docs/dev/planning.md](docs/dev/planning.md). Before implementing an issue, read it with `gh issue view <n> -R romulospl/stellytics` and follow its "Depends on".
+Backlog, board, specs, decisions, examples and the documents to keep up to date: [docs/dev/planning.md](docs/dev/planning.md). Before implementing an issue, read it with `gh issue view <n> -R romulospl/stellytics` and follow its "Depends on".
 
 ## Commits
 
@@ -77,6 +77,6 @@ Backlog, board, specs, ADRs, examples and the documents to keep up to date: [doc
 
 ## Conventions
 
-- **Everything in English since 2026-11-19:** code, comments, documentation, ADRs, issues, commits and PRs.
-- A new architecture decision becomes a new ADR from `docs/adr/template.md`. An accepted ADR is not rewritten: create a new one and mark the old one as superseded.
+- **Everything in English since 2026-11-19:** code, comments, documentation, decisions, issues, commits and PRs.
+- A new architecture decision becomes a new numbered section in `docs/decisions.md`; when a decision changes, update its section and status there (see "Adding a decision" in that file).
 - After closing an issue, update `docs/progress.md` and the matching `docs/eN-implementation.md`.

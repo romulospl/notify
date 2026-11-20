@@ -4,7 +4,7 @@
 - **Date:** 14 November 2026
 - **Epic:** [#5 (E5)](https://github.com/romulospl/stellytics/issues/5)
 - **Issues covered:** #30, #31, #32, #33, #34, #35 and #36
-- **Depends on:** [ADR 0002](../adr/0002-architecture-and-stack.md) and the [E2 spec](e2-tenants-and-access-control.md) (section 5, ingest key; section 6, tenant status)
+- **Depends on:** [ADR 0002](../decisions.md#0002-architecture-and-stack) and the [E2 spec](e2-tenants-and-access-control.md) (section 5, ingest key; section 6, tenant status)
 
 This document fixes the contract between the collector (`services/collector`), the `stellytics` database and the API dashboards (E6). It covers what goes into the collector, what comes out of it, the route normalization rules, the metric tables and retention. The decisions marked **D1** to **D9** were confirmed on 14 November 2026 and are gathered in [section 8](#8-decisions-made).
 

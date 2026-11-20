@@ -1,6 +1,6 @@
 # Validation script for the deploy guide (#42)
 
-No outside operator has run this script yet. On 2026-11-19 it was run as a simulation by an AI agent on throwaway virtual machines ([report](reports/deploy-2026-11-19-simulation.md)), and its findings were fixed in the guide. #42 was closed on that run and the team rehearsal of PR #176; by maintainer decision, a run by an outside operator is no longer required there and may be done later, for example before the handover (RFP 3.4). The script was written from [`docs/deploy.md`](../deploy.md) after the move to a single VPS ([ADR 0016](../adr/0016-production-on-a-vps.md)), issue #42 and the repository. Its companion for the onboarding guide is [`tenant-onboarding.md`](tenant-onboarding.md).
+No outside operator has run this script yet. On 2026-11-19 it was run as a simulation by an AI agent on throwaway virtual machines ([report](reports/deploy-2026-11-19-simulation.md)), and its findings were fixed in the guide. #42 was closed on that run and the team rehearsal of PR #176; by maintainer decision, a run by an outside operator is no longer required there and may be done later, for example before the handover (RFP 3.4). The script was written from [`docs/deploy.md`](../deploy.md) after the move to a single VPS ([ADR 0016](../decisions.md#0016-production-on-a-vps)), issue #42 and the repository. Its companion for the onboarding guide is [`tenant-onboarding.md`](tenant-onboarding.md).
 
 ## What it is for
 

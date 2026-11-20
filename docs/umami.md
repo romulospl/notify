@@ -1,6 +1,6 @@
 # Umami: access and disabled features
 
-Umami (v3.4.1, [ADR 0001](adr/0001-base-tool.md)) runs **with no patch at all**: the official image, pinned by tag and digest, with the configuration described here. If a patch becomes necessary, it goes on this page, with the reason and how to reapply it on each new version.
+Umami (v3.4.1, [ADR 0001](decisions.md#0001-base-tool)) runs **with no patch at all**: the official image, pinned by tag and digest, with the configuration described here. If a patch becomes necessary, it goes on this page, with the reason and how to reapply it on each new version.
 
 ## Internal network only (#62)
 
