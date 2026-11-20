@@ -1,6 +1,6 @@
 # Só para o teste da pilha de produção (test/prod-stack-test.sh e o job
 # `prod-stack` do CI). Acrescenta um S3 local (SeaweedFS, Apache-2.0) no lugar
-# do Object Storage da Hetzner. Nunca use em produção.
+# do armazenamento S3 de produção. Nunca use em produção.
 
 services:
   s3:

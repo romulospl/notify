@@ -133,8 +133,10 @@ def main():
     for check in checks:
         try:
             problems += check()
-        except (CheckError, OSError, ValueError, KeyError) as error:
-            problems.append(f"check failed: {error}")
+        # Any error fails the check: a crash before publish() would leave an
+        # old stack-ok in place and /healthz/stack answering 200.
+        except Exception as error:
+            problems.append(f"check failed: {type(error).__name__}: {error}")
 
     publish(args.data_dir / "status", not problems)
     for problem in problems:

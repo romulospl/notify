@@ -1,6 +1,6 @@
 # Postgres de produção (#14, ADR 0004): a mesma versão do ambiente local
 # (17.11), na variante Debian, porque os binários do WAL-G usam glibc, mais o
-# WAL-G para o backup contínuo no Object Storage da Hetzner.
+# WAL-G para o backup contínuo num armazenamento compatível com S3 (ADR 0016).
 #
 # Imagem e WAL-G fixados por digest e por hash. Para subir de versão, troque os
 # três valores juntos e confira os hashes na página da release do WAL-G.

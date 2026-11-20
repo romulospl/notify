@@ -36,8 +36,18 @@ compose=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 printf 'Validando a configuração do Compose...\n'
 "${compose[@]}" config --quiet
 
-printf 'Construindo e iniciando a stack de produção...\n'
-"${compose[@]}" up -d --build --wait --remove-orphans
+# With the release images set (by digest, validated above as all four or
+# none), pull them: building would fail ("build tag cannot contain a digest").
+if grep -qE '^PORTAL_IMAGE=.+' "$ENV_FILE"; then
+  printf 'Baixando as imagens da release e iniciando a stack de produção...\n'
+  "${compose[@]}" pull portal ingest-web collector rollup
+  # Postgres with WAL-G has no release-image variable: still built here.
+  "${compose[@]}" build postgres
+  "${compose[@]}" up -d --no-build --wait --remove-orphans
+else
+  printf 'Construindo e iniciando a stack de produção...\n'
+  "${compose[@]}" up -d --build --wait --remove-orphans
+fi
 
 # Backup base diário do Postgres (o WAL vai continuamente pelo archive_command).
 cat > /etc/systemd/system/stellytics-backup.service <<UNIT
