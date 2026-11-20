@@ -1,8 +1,10 @@
-// Operator invites (ADR 0017): the admin script emails a 3-day, single-use
-// link; the portal turns it into an operator account. Runs against the
-// Postgres of DATABASE_URL, with an in-memory SMTP server.
+// Operator invites (ADR 0017). The invite command is disabled while the portal
+// has no /invite/<token> page: the script must refuse and send nothing. The
+// library that accepts an invite, uninvite and list still work, so the tests
+// write the invite row directly. Runs against the Postgres of DATABASE_URL,
+// with an in-memory SMTP server.
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 import { verifyPassword } from "better-auth/crypto";
 import { eq, inArray, like, sql as dsql } from "drizzle-orm";
@@ -40,17 +42,17 @@ function invite(email: string, confirm = email, env?: Record<string, string>) {
   return script(["invite"], { input: `${email}\n${confirm}\n`, env });
 }
 
-// Decodes the quoted-printable body and takes the token from the link.
-function tokenFrom(data: string): string {
-  const body = data.replace(/=\n/g, "").replace(/=([0-9A-F]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-  const match = new RegExp(`${PORTAL_URL}/invite/([A-Za-z0-9_-]{43})`).exec(body);
-  if (!match) throw new Error("no invite link in the email");
-  return match[1]!;
-}
-
+// Writes a pending invite the way the command did: a random token of which
+// only the SHA-256 is stored. A new invite to the same email replaces the old one.
 async function invited(email: string) {
-  expect((await invite(email)).code).toBe(0);
-  return tokenFrom(sink.messages.at(-1)!.data);
+  const token = randomBytes(32).toString("base64url");
+  await db.delete(operatorInvite).where(eq(operatorInvite.email, email));
+  await db.insert(operatorInvite).values({
+    email,
+    tokenHash: createHash("sha256").update(token, "utf8").digest(),
+    expiresAt: dsql`now() + interval '3 days'`,
+  });
+  return token;
 }
 
 function newEmail() {
@@ -80,65 +82,14 @@ afterAll(async () => {
 });
 
 describe("operator:invite", () => {
-  it("asks the email twice, stores only the hash and emails a 3-day link", async () => {
+  it("is disabled: refuses, sends no email and writes no invite", async () => {
     const email = newEmail();
-    const result = await invite(email.toUpperCase(), email);
-    expect(result.code).toBe(0);
-
-    const [row] = await db.select().from(operatorInvite).where(eq(operatorInvite.email, email));
-    expect(row).toBeDefined();
-    const days = (row!.expiresAt.getTime() - row!.createdAt.getTime()) / 86_400_000;
-    expect(days).toBeCloseTo(3, 5);
-
-    expect(sink.messages).toHaveLength(1);
-    expect(sink.messages[0]!.to).toEqual([email]);
-    const token = tokenFrom(sink.messages[0]!.data);
-    // The token goes only to the email: never to the terminal or the database.
-    expect(result.out).not.toContain(token);
-    expect(row!.tokenHash.toString("hex")).not.toContain(Buffer.from(token).toString("hex"));
-
-    const entries = (await db.select().from(auditLog).where(eq(auditLog.action, "operator.invited"))).filter(
-      (a) => (a.details as { inviteId?: string }).inviteId === row!.id,
-    );
-    expect(entries).toMatchObject([{ actorUserId: null }]);
-  });
-
-  it("sends nothing when the two emails differ", async () => {
-    const email = newEmail();
-    const result = await invite(email, newEmail());
+    const result = await invite(email);
     expect(result.code).toBe(1);
-    expect(result.out).toContain("don't match");
+    expect(result.out).toContain("Invites are disabled");
+    expect(result.out).toContain("create");
     expect(sink.messages).toEqual([]);
     expect(await db.select().from(operatorInvite).where(eq(operatorInvite.email, email))).toEqual([]);
-  });
-
-  it("refuses an email that already has an account", async () => {
-    const existing = newEmail();
-    await db.insert(user).values({ id: randomUUID(), name: "T", email: existing, emailVerified: true });
-    const result = await invite(existing);
-    expect(result.code).toBe(1);
-    expect(result.out).toContain("operator:promote");
-    expect(sink.messages).toEqual([]);
-  });
-
-  it("leaves no invite behind when the email cannot be sent", async () => {
-    const email = newEmail();
-    const result = await invite(email, email, { SMTP_URL: "smtp://127.0.0.1:1" });
-    expect(result.code).toBe(1);
-    expect(result.out).toContain("No invite was created");
-    expect(await db.select().from(operatorInvite).where(eq(operatorInvite.email, email))).toEqual([]);
-  });
-
-  it("refuses to run without PORTAL_URL or BETTER_AUTH_URL", async () => {
-    const result = await invite(newEmail(), undefined, { PORTAL_URL: "", BETTER_AUTH_URL: "" });
-    expect(result.code).toBe(1);
-    expect(result.out).toContain("PORTAL_URL");
-  });
-
-  it("falls back to BETTER_AUTH_URL, as inside the portal container", async () => {
-    const email = newEmail();
-    expect((await invite(email, email, { PORTAL_URL: "", BETTER_AUTH_URL: `${PORTAL_URL}/` })).code).toBe(0);
-    expect(tokenFrom(sink.messages.at(-1)!.data)).toHaveLength(43);
   });
 
   it("a new invite to the same email replaces the previous link", async () => {

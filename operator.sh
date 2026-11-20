@@ -6,7 +6,7 @@
 # secret leaves the server. Whoever can SSH into the server and use sudo can
 # run it; that is the group that controls who is an operator.
 #
-#   sudo ./operator.sh invite                   # asks the email twice, emails a 3-day link
+#   sudo ./operator.sh invite                   # disabled in this version: refuses and sends nothing
 #   sudo ./operator.sh list                     # operators and pending invites
 #   sudo ./operator.sh uninvite --email <email>
 #   sudo ./operator.sh promote  --email <email>

@@ -4,7 +4,7 @@
 // cannot make other operators.
 //
 // Usage:
-//   pnpm operator:invite                         # asks the email twice, emails a 3-day link
+//   pnpm operator:invite                         # disabled in this version, see below
 //   pnpm operator:uninvite --email person@example.org
 //   pnpm operator:list
 //   read -rs OPERATOR_PASSWORD && export OPERATOR_PASSWORD
@@ -12,7 +12,10 @@
 //   pnpm operator:promote --email person@example.org
 //   pnpm operator:demote  --email person@example.org
 //
-// - invite: emails a link valid for 3 days and usable once; the invited person
+// - invite: DISABLED while the portal has no /invite/<token> page (it is public
+//   and read-only since #186); the command refuses and sends nothing. Use
+//   create instead. What it does when enabled:
+//   emails a link valid for 3 days and usable once; the invited person
 //   picks a name and password at /invite/<token> and gets an operator account.
 //   Needs SMTP_URL, PORTAL_URL (or BETTER_AUTH_URL; e.g. https://stellytics.xyz)
 //   and optionally MAIL_FROM. In production, run it inside the portal container
@@ -49,6 +52,17 @@ function fail(message) {
 class Refused extends Error {}
 
 if (!COMMANDS.includes(command)) fail(`Use: operator.mjs ${COMMANDS.join("|")} [--email ...]`);
+
+// The invite link points to /invite/<token>, a page this version of the portal
+// does not have. Sending it would email a dead link, so the command refuses
+// before asking anything. Turn it back on together with that page.
+const INVITES_ENABLED = false;
+if (command === "invite" && !INVITES_ENABLED) {
+  fail(
+    "Invites are disabled in this version: the portal has no page to accept them. " +
+      "Nothing was sent. Create the account with `create --email ... --name ...` (password in OPERATOR_PASSWORD).",
+  );
+}
 
 // Asks the email twice. Lines come from the terminal or, without one, from stdin.
 async function askEmail() {
