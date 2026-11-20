@@ -21,7 +21,7 @@ Step by step in `docs/deploy.md`; overview in `docs/architecture.md` (update it 
 
 - Load: `docs/reports/load-1m-per-day.md` (tool in `services/loadtest/`, which refuses a remote target without `-allow-remote`; measured only on a local machine).
 - Availability: `docs/sla.md`. One VPS does not sustain 99.99%; HA was dropped as outside the RFP (ADR 0016, ADR 0009 rejected).
-- Handover: `docs/handover.md` with `infra/scripts/db-export|db-import|db-fingerprint.sh` (import deletes databases: needs `--yes`, refuses a target with tenants and validates dumps before any `DROP`).
+- Handover: `infra/scripts/db-export|db-import|db-fingerprint.sh` (import deletes databases: needs `--yes`, refuses a target with tenants and validates dumps before any `DROP`).
 
 ## Runbooks (#53)
 

@@ -8,7 +8,7 @@
 
 ## Progress
 
-`docs/progress.md` (summary, commits and next steps) and `docs/e2-implementation.md`, `docs/e4-implementation.md`, `docs/e6-implementation.md` (what was done, choices and pending items). Update them when closing issues.
+`docs/e2-implementation.md`, `docs/e4-implementation.md`, `docs/e6-implementation.md` (what was done, choices and pending items). Update them when closing issues.
 
 ## Specs and decisions
 

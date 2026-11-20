@@ -12,7 +12,7 @@ Sections verified directly in the code: 3.1 (`tracker.ts`, `relay.go`), 3.3 (`au
 - **Visitors of the portal itself:** the public home page (`/`) loads the same tracking script, with the same handling as tenant sites, when the public demo uses a real project (`DEMO_TENANT_SLUG`). That project's numbers are public at `/demo`; they are aggregates, with no per-visitor data.
 - **Tenant API calls (API analytics):** only counters and histograms per route, method and status, every minute. Traces, spans and logs are dropped.
 - **Portal users (email, name, hashed password):** these are personal data and live in the `stellytics` database. The portal does not store the IP of whoever signs in.
-- **Where they would live:** in the region of the VPS and of the S3 backup bucket that the operator chooses; the proof of concept runs in **Brazil** and production moves to an **EU region** in Tranche 1 (`docs/progress.md`).
+- **Where they would live:** in the region of the VPS and of the S3 backup bucket that the operator chooses; the proof of concept runs in **Brazil** and production moves to an **EU region** in Tranche 1.
 - **Erasure:** exists now (#154), with three paths: the user deletes their own account at `/settings` (their project and the collected data go with it); the SCF operator erases the data of a removed project; and automatic retention deletes web events older than 183 days (section 6). What does not exist is erasing *the data of one specific visitor* without erasing the whole site: section 7 explains why.
 
 ## 2. Roles (proposal to validate)

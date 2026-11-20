@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Imports the db-export.sh dumps into the DESTINATION Postgres (#54, docs/handover.md).
+# Imports the db-export.sh dumps into the DESTINATION Postgres (#54).
 #
 # The destination has already gone through `site.yml` (Postgres with the roles created by the
 # init scripts). This script STOPS the application, DROPS and recreates the

@@ -4,7 +4,7 @@ Open-source **web and API analytics** for projects in the [Stellar](https://stel
 
 Each project measures the usage of its website and API. SCF operators get one comparable view across projects. Nothing is collected that identifies a visitor.
 
-> **Status: public demo.** The ingestion pipelines, the dashboards and the production infrastructure are implemented and tested in CI, and a proof of concept is live at [stellytics.xyz](https://stellytics.xyz). The demo shows **sample data, not real usage**, until a real project is configured for it. This version of the portal is public and read-only: it has no sign-up and no login. There are no pilots yet; what is left is in [`docs/progress.md`](docs/progress.md).
+> **Status: public demo.** The ingestion pipelines, the dashboards and the production infrastructure are implemented and tested in CI, and a proof of concept is live at [stellytics.xyz](https://stellytics.xyz). The demo shows **sample data, not real usage**, until a real project is configured for it. This version of the portal is public and read-only: it has no sign-up and no login. There are no pilots yet.
 
 ## See it live
 
@@ -113,8 +113,6 @@ The full picture, with both flows step by step, is in [`docs/architecture.md`](d
 - **Per-project private dashboards.** The demo shows one project: sample data by default, or the single project named in `DEMO_TENANT_SLUG`. No other project has a public page.
 - **Pilots.** No real SCF project is instrumented yet.
 
-Progress and open items are tracked in [`docs/progress.md`](docs/progress.md).
-
 ## Documentation
 
 | To | Read |
@@ -125,7 +123,6 @@ Progress and open items are tracked in [`docs/progress.md`](docs/progress.md).
 | Check privacy and collected data | [`docs/privacy.md`](docs/privacy.md) |
 | Check anti-bot and supply chain measures | [`docs/anti-bot-and-supply-chain.md`](docs/anti-bot-and-supply-chain.md) |
 | Check availability and current limits | [`docs/sla.md`](docs/sla.md) and the [load report](docs/reports/load-1m-per-day.md) |
-| Hand the platform over to another operator | [`docs/handover.md`](docs/handover.md) |
 | Validate the deploy and onboarding guides with someone who did not write them | [`docs/validation/deploy.md`](docs/validation/deploy.md) and [`docs/validation/tenant-onboarding.md`](docs/validation/tenant-onboarding.md) |
 
 ## Running locally

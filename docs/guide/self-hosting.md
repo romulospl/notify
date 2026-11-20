@@ -28,5 +28,4 @@ The [deploy guide](../deploy.md) has every step, plus how to check, update, back
 ## Operate
 
 - [Runbooks](../runbooks/README.md) for incidents, backups, secret rotation, vulnerabilities and Umami upgrades.
-- [Handover](../handover.md) for passing the instance to a new operator.
 - [Security policy](../../SECURITY.md) for reporting vulnerabilities.

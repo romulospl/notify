@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exports the stellytics and umami databases to a folder (#54, docs/handover.md).
+# Exports the stellytics and umami databases to a folder (#54).
 #
 # Generates stellytics.dump and umami.dump (pg_dump custom format, compressed), the
 # origin's fingerprint (fingerprint.txt) and sha256sums. Run on the origin

@@ -113,9 +113,11 @@ post() { curl -sk -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: appli
 for path in /v1/traces /v1/metrics /v1/logs; do
   [ "$(post "$path")" = 401 ] || fail "OTLP without a key at $path should give 401"
 done
-for path in /healthz /e /api/send /v1/metrics; do
+for path in /healthz /e /api/send; do
   [ "$(get api.localhost "$path")" = 404 ] || fail "API host should give 404 on GET $path"
 done
+# A browser on an OTLP path gets 405 from Caddy, never the collector.
+[ "$(get api.localhost /v1/metrics)" = 405 ] || fail "API host should give 405 on GET /v1/metrics"
 # The bare root sends a browser to the portal operator view; a POST there stays 404.
 [ "$(curl -sk --resolve api.localhost:443:127.0.0.1 -o /dev/null -w '%{http_code} %{redirect_url}' https://api.localhost/)" = "302 https://portal.localhost/operator" ] || fail "API host root should redirect to /operator"
 [ "$(post /)" = 404 ] || fail "API host should give 404 on POST /"

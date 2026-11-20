@@ -5,7 +5,8 @@
 # - the gateway publishes only /e, /c, /s/ and /healthz; the rest answers 404,
 #   except /healthz/stack, which Caddy itself answers (stack check);
 # - the collector publishes only OTLP (HTTP at /v1/traces, /v1/metrics and
-#   /v1/logs, and gRPC), always with an ingest key; the rest answers 404 (ADR 0012);
+#   /v1/logs, and gRPC), always with an ingest key; other methods on those
+#   paths answer 405 with a short text, and the rest answers 404 (ADR 0012);
 # - a GET of the bare root of either ingestion host redirects to the portal
 #   (/demo and /operator), so a person opening it in a browser sees the platform.
 #
@@ -109,6 +110,14 @@
 	}
 	handle @otlp {
 		reverse_proxy collector:4318
+	}
+	# A browser opening an OTLP path (for example, a link in the docs) gets a
+	# short explanation instead of a bare 404; the collector is never reached.
+	@otlpbrowse path /v1/traces /v1/metrics /v1/logs
+	handle @otlpbrowse {
+		header Allow "POST"
+		header Cache-Control "no-store"
+		respond "OTLP/HTTP endpoint: send data with POST and an ingest key (Authorization: Bearer ntf_...). Without a key the answer is 401." 405
 	}
 	@root {
 		method GET HEAD
