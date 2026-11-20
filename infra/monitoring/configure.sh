@@ -20,7 +20,7 @@ set -a; . "$env_file"; set +a
 mkdir -p "$out/prometheus/targets" "$out/alertmanager/secrets"
 
 {
-  printf -- '- targets: ["https://%s/api/auth/ok"]\n  labels:\n    component: portal\n' "$PORTAL_HOST"
+  printf -- '- targets: ["https://%s/api/health"]\n  labels:\n    component: portal\n' "$PORTAL_HOST"
   printf -- '- targets: ["https://%s/healthz"]\n  labels:\n    component: ingest-web\n' "$INGEST_HOST"
   # VPS internal check (stellytics-check): backup, WAL, containers, disk.
   printf -- '- targets: ["https://%s/healthz/stack"]\n  labels:\n    component: stack\n' "$INGEST_HOST"

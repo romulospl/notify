@@ -16,7 +16,7 @@ Production is a single VM (ADR 0004). A monitor inside it goes down along with i
 1. **A second, small VM in another Hetzner data center** (`fsn1`, Falkenstein; production is in `nbg1`). An OpenTofu rule prevents putting both in the same location. Firewall with SSH only from the administration networks.
 2. **Prometheus + blackbox exporter + Alertmanager**, in Docker Compose (`infra/monitoring/`), with the same `base` and `docker` roles as production's Ansible (`infra/ansible/monitoring.yml`).
 3. **What is probed**, over HTTPS, as a client sees it:
-   - the portal (`/api/auth/ok`);
+   - the portal (`/api/health`);
    - the web gateway (`/healthz`);
    - API ingestion, once the collector (#30) is published in production (variable `monitor_api_url`).
 

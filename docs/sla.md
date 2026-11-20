@@ -35,7 +35,7 @@ Availability of an endpoint = fraction of the probes, in the window, that passed
 
 | Component | Probe (`infra/monitoring`) | Status |
 |---|---|---|
-| Portal / dashboards | `GET /api/auth/ok` on the portal host, blackbox `http_2xx` module, every 15 s | Exists |
+| Portal / dashboards | `GET /api/health` on the portal host, blackbox `http_2xx` module, every 15 s | Exists |
 | Web ingestion | `GET /healthz` on the ingestion host: 2xx only with Postgres and Umami responding | Exists |
 | API ingestion | `POST` without a key to `API_URL` (optional in `infra/monitoring/configure.sh`), expects the collector's 401 | Exists if `API_URL` is set; does not prove that a metric is stored |
 

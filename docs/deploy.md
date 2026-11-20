@@ -79,7 +79,7 @@ docker compose --env-file .env.production -f infra/compose/prod.yaml
 From any machine, without logging in:
 
 ```bash
-curl -fsS https://<portal_host>/api/auth/ok            # portal: {"ok":true}
+curl -fsS https://<portal_host>/api/health            # portal: {"ok":true}
 curl -fsS https://<ingest_host>/healthz                # gateway: ok (503 when Postgres or Umami is down)
 curl -fsS https://<ingest_host>/healthz/stack          # stack check: ok (503 until the first base backup exists)
 curl -fsS "https://<ingest_host>/c?s=00000000-0000-4000-8000-000000000000"  # challenge {"t":...,"d":12}

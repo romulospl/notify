@@ -135,7 +135,7 @@ jobs:
             echo "stellytics_ingest should not read the user table"; exit 1
           fi
           docker compose exec -T umami curl -fsS http://localhost:3000/api/heartbeat
-          curl -fsS http://127.0.0.1:3000/api/auth/ok
+          curl -fsS http://127.0.0.1:3000/api/health
           # Mailpit receives the portal emails (#60).
           curl -fsS http://127.0.0.1:8025/api/v1/info >/dev/null
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/sign-up)" = 200

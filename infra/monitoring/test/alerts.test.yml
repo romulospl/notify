@@ -10,7 +10,7 @@ tests:
   # Target down: fires after 1 minute, not before.
   - interval: 15s
     input_series:
-      - series: 'probe_success{job="endpoints", instance="https://app.example.org/api/auth/ok", component="portal"}'
+      - series: 'probe_success{job="endpoints", instance="https://app.example.org/api/health", component="portal"}'
         values: "1 1 0x8"
     alert_rule_test:
       - eval_time: 45s
@@ -22,11 +22,11 @@ tests:
           - exp_labels:
               severity: critical
               job: endpoints
-              instance: https://app.example.org/api/auth/ok
+              instance: https://app.example.org/api/health
               component: portal
             exp_annotations:
               summary: "portal is down"
-              description: "https://app.example.org/api/auth/ok has not answered with 2xx for over a minute."
+              description: "https://app.example.org/api/health has not answered with 2xx for over a minute."
 
   # The stack check does not fire EndpointDown, but StackUnhealthy,
   # after 5 minutes.

@@ -7,7 +7,7 @@ It covers the five real alerts from the external monitoring ([`alerts.yml`](../.
 1. Look from outside, from any machine (commands from step 3 ("Check production") of [`docs/deploy.md`](../deploy.md)):
 
    ```bash
-   curl -fsS https://<portal_host>/api/auth/ok           # portal: {"ok":true}
+   curl -fsS https://<portal_host>/api/health           # portal: {"ok":true}
    curl -fsS https://<ingest_host>/healthz               # gateway (503: Postgres or Umami down)
    curl -fsS https://<ingest_host>/healthz/stack         # stack check on the VPS
    curl -fsS "https://<ingest_host>/c?s=00000000-0000-4000-8000-000000000000"

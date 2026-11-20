@@ -117,7 +117,7 @@ services:
     ports:
       - "127.0.0.1:${PORTAL_PORT:-3000}:3000"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/auth/ok >/dev/null"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null"]
       interval: 5s
       timeout: 5s
       retries: 20
