@@ -2,7 +2,7 @@
 
 Next.js 16 (App Router, `src/proxy.ts` instead of the old `middleware.ts`), Better Auth with Drizzle, Tailwind 4, Vitest. UI, comments and docs in English. Read [ADR 0003](../decisions.md) and `docs/specs/e2-tenants-and-access-control.md` before touching data access.
 
-> **Current state (since #186):** the portal is public and read-only. Its only routes are `/`, `/demo`, `/operator`, `/p/<slug>`, `/docs`, `/docs/<slug>`, `/api/v1/*` and `/api/health`. The signed-in pages were removed: `/sign-up`, `/sign-in`, `/onboarding`, `/dashboard`, `/sites`, `/services`, `/settings`, the signed-in operator pages (`/operator/tenants`, `/operator/keys` and the rest; `/operator` is now the public demo view of the SCF operator) and `/invite`. The session, tenant and operator layer in `src/lib/` and its tests remain, so the sections below still describe that code; wherever they name one of the removed routes, the route no longer exists.
+> **Current state (since #186):** the portal is public and read-only. Its only routes are `/`, `/demo`, `/operator`, `/p` (redirects to the demo card), `/p/<slug>`, `/docs`, `/docs/<slug>`, `/api/v1/*` and `/api/health`. The signed-in pages were removed: `/sign-up`, `/sign-in`, `/onboarding`, `/dashboard`, `/sites`, `/services`, `/settings`, the signed-in operator pages (`/operator/tenants`, `/operator/keys` and the rest; `/operator` is now the public demo view of the SCF operator) and `/invite`. The session, tenant and operator layer in `src/lib/` and its tests remain, so the sections below still describe that code; wherever they name one of the removed routes, the route no longer exists.
 
 ## Access and isolation (ADR 0003, #18, #21)
 

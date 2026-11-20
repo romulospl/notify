@@ -13,7 +13,7 @@ The interface is in English, because the audience is the Stellar ecosystem proje
 | `/` | Home page |
 | `/demo` | The dashboards of the demo project: web traffic and API metrics |
 | `/operator` | The SCF operator view of the demo project |
-| `/p/<slug>` | Public card of the demo project (30-day totals only). Any other slug answers 404 before anything is read |
+| `/p/<slug>` | Public card of the demo project (30-day totals only). Any other slug answers 404 before anything is read; `/p` alone redirects to the demo project's card |
 | `/docs`, `/docs/<slug>` | Documentation index and the guides of this repository, rendered from their Markdown files; `mermaid` blocks are drawn as diagrams |
 | `/api/v1/projects`, `/api/v1/web`, `/api/v1/api` | Read-only API for the SCF, authenticated by a read key ([ADR 0006](../../docs/decisions.md#0006-scf-read-api)) |
 | `/api/health` | Answers `{"ok":true}` without reading the database or Umami; used by the container healthcheck and the external monitoring probe |
