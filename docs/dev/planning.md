@@ -19,7 +19,7 @@
 
 - **Privacy (#40):** `docs/privacidade.md` (collected data, truncated IP, residency, retention, gaps). Update it when touching personal data, logs, cookies or retention.
 - **Anti-bot and supply chain (#41):** `docs/anti-bot-e-cadeia-de-suprimentos.md` (gateway layers with limits and what they do not stop; supply-chain controls with their files). Update it when changing gateway limits, `release.yml`, `renovate.json` or the deploy.
-- **Guides (#42, #43):** `docs/deploy.md` (audited against `infra/`, not yet tested by an outsider) and `docs/onboarding-de-tenant.md` (sign-up, script, dual-export and dashboards, no real pilot yet). Both issues stay open until those tests.
+- **Guides (#42, #43):** `docs/deploy.md` (#42 closed: followed end to end with local stand-ins in PRs #176 and #178; not yet run by an outsider on a real account) and `docs/onboarding-de-tenant.md` (sign-up, script, dual-export and dashboards, no real pilot yet; #43 stays open until a pilot uses it). Validation scripts and reports in `docs/validation/`.
 - **SLA and support (#52):** `docs/sla.md` and `docs/suporte.md`.
 - **SCF proposal (#64, #65):** drafts in `docs/proposta/` (`proposal.md`, `interest-form.md`), in English, with RFP facts from Raven and the rest marked as unverified. Budget, team, pilots and referral code are Romulo's; nothing was sent to SCF.
 

@@ -1,6 +1,6 @@
 # Validation script for the deploy guide (#42)
 
-No outside operator has run this script yet. On 2026-11-19 it was run as a simulation by an AI agent on throwaway virtual machines ([report](reports/deploy-2026-11-19-simulation.md)); that run does not count for #42 (rule 1 and section 8), and its findings were fixed in the guide. The script was written from [`docs/deploy.md`](../deploy.md) after the move to a single VPS ([ADR 0016](../adr/0016-producao-em-vps.md)), issue #42 and the repository. Its companion for the onboarding guide is [`onboarding-de-tenant.md`](onboarding-de-tenant.md).
+No outside operator has run this script yet. On 2026-11-19 it was run as a simulation by an AI agent on throwaway virtual machines ([report](reports/deploy-2026-11-19-simulation.md)), and its findings were fixed in the guide. #42 was closed on that run and the team rehearsal of PR #176; by maintainer decision, a run by an outside operator is no longer required there and may be done later, for example before the handover (RFP 3.4). The script was written from [`docs/deploy.md`](../deploy.md) after the move to a single VPS ([ADR 0016](../adr/0016-producao-em-vps.md)), issue #42 and the repository. Its companion for the onboarding guide is [`onboarding-de-tenant.md`](onboarding-de-tenant.md).
 
 ## What it is for
 
@@ -139,13 +139,13 @@ Total time until the first dashboard data: <hh:mm>
 - What they would not do alone in production:
 ```
 
-## 8. How the result feeds the #42 criterion
+## 8. How the result is used
 
-Proposal, for the maintainers to confirm:
+#42 was closed on 2026-11-19 without an outside run (maintainer decision; see the issue). For a later outside run:
 
-1. The second criterion counts as met when there is at least one report with every required step (●) marked **OK**, including the alert test (D20).
+1. It counts as validated when there is at least one report with every required step (●) marked **OK**, including the alert test (D20).
 2. A step marked **OK with help** counts as a guide failure: it becomes a finding, a fix PR, and the step is repeated before it counts.
-3. Reports stay in the repository, so #42 and epic #7 can point to the evidence.
+3. Reports stay in `docs/validation/reports/`, so the guide and epic #7 can point to the evidence.
 
 ## 9. Known limits
 
