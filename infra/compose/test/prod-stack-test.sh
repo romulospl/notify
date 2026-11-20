@@ -98,9 +98,11 @@ license_files=$(compose exec -T portal sh -c 'find /app -path "*/node_modules/*"
 [ -z "$license_files" ] || fail "portal image contains removed dependencies: $license_files"
 
 [ "$(get ingest.localhost /healthz)" = 200 ] || fail "gateway at /healthz"
-for path in /api/send /api/heartbeat /api/websites /api/record /; do
+for path in /api/send /api/heartbeat /api/websites /api/record /x; do
   [ "$(get ingest.localhost "$path")" = 404 ] || fail "ingestion host should give 404 at $path"
 done
+# The bare root sends a browser to the portal demo.
+[ "$(curl -sk --resolve ingest.localhost:443:127.0.0.1 -o /dev/null -w '%{http_code} %{redirect_url}' https://ingest.localhost/)" = "302 https://portal.localhost/demo" ] || fail "ingestion host root should redirect to /demo"
 # On the portal host, /api/heartbeat belongs to Next (404), not Umami.
 [ "$(curl -sk --resolve portal.localhost:443:127.0.0.1 https://portal.localhost/api/heartbeat)" != "ok" ] || fail "the portal host reaches Umami"
 [ "$(curl -sk --resolve alias.localhost:443:127.0.0.1 -o /dev/null -w '%{http_code}' https://alias.localhost/docs)" = 301 ] || fail "the portal alias does not redirect"
@@ -111,9 +113,12 @@ post() { curl -sk -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: appli
 for path in /v1/traces /v1/metrics /v1/logs; do
   [ "$(post "$path")" = 401 ] || fail "OTLP without a key at $path should give 401"
 done
-for path in / /healthz /e /api/send /v1/metrics; do
+for path in /healthz /e /api/send /v1/metrics; do
   [ "$(get api.localhost "$path")" = 404 ] || fail "API host should give 404 on GET $path"
 done
+# The bare root sends a browser to the portal operator view; a POST there stays 404.
+[ "$(curl -sk --resolve api.localhost:443:127.0.0.1 -o /dev/null -w '%{http_code} %{redirect_url}' https://api.localhost/)" = "302 https://portal.localhost/operator" ] || fail "API host root should redirect to /operator"
+[ "$(post /)" = 404 ] || fail "API host should give 404 on POST /"
 [ "$(post /api/send)" = 404 ] || fail "API host reaches another route by POST"
 # Local gRPC: without a key, the collector answers Unauthenticated (grpc-status 16).
 # The body is an empty gRPC message (5 header bytes): the server reads the

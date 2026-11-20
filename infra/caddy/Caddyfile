@@ -5,7 +5,9 @@
 # - the gateway publishes only /e, /c, /s/ and /healthz; the rest answers 404,
 #   except /healthz/stack, which Caddy itself answers (stack check);
 # - the collector publishes only OTLP (HTTP at /v1/traces, /v1/metrics and
-#   /v1/logs, and gRPC), always with an ingest key; the rest answers 404 (ADR 0012).
+#   /v1/logs, and gRPC), always with an ingest key; the rest answers 404 (ADR 0012);
+# - a GET of the bare root of either ingestion host redirects to the portal
+#   (/demo and /operator), so a person opening it in a browser sees the platform.
 #
 # The ingestion host name must not contain terms that ad blockers block
 # (`umami`, `analytics`, `track`, `collect`; see CLAUDE.md).
@@ -77,6 +79,13 @@
 		encode zstd gzip
 		reverse_proxy ingest-web:8080
 	}
+	@root {
+		method GET HEAD
+		path /
+	}
+	handle @root {
+		redir https://{$PORTAL_HOST}/demo 302
+	}
 	handle {
 		respond 404
 	}
@@ -100,6 +109,13 @@
 	}
 	handle @otlp {
 		reverse_proxy collector:4318
+	}
+	@root {
+		method GET HEAD
+		path /
+	}
+	handle @root {
+		redir https://{$PORTAL_HOST}/operator 302
 	}
 	handle {
 		respond 404
