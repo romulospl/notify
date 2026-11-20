@@ -70,7 +70,7 @@ Repository: [romulospl/stellytics](https://github.com/romulospl/stellytics/issue
   - numbered `[X.Y]`, each linked to its epic as a **sub-issue**;
   - each has "What to do", acceptance criteria as a checklist and "Depends on", with links;
   - the `[X.Y]` number identifies the issue within the epic but **is not the execution order**: "Depends on" is.
-- **Labels:** `epic`; one per epic; `mvp` on the issues of E1–E8; a post-MVP label on E9; E10 issues carry only their epic label; a separate label marks priority.
+- **Labels:** `epic`; one per epic; `mvp` on the issues of E1–E8; `post-mvp` on E9; E10 issues carry only their epic label; `urgent` marks priority.
 
 | Epic | Issues | Scope | State |
 |---|---|---|---|
