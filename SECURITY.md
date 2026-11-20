@@ -23,11 +23,11 @@ If possible, include:
 | Acknowledgement | within 3 business days |
 | Initial assessment and severity of a potentially critical or high report | within 48 consecutive hours |
 | Initial assessment and severity of other reports | within 7 calendar days |
-| Fix for critical severity | within 7 calendar days |
-| Fix for high severity | within 14 calendar days |
+| Fix for critical severity | within 24 hours |
+| Fix for high severity | within 7 calendar days |
 | Fix for medium or low severity | within 90 calendar days |
 
-Deadlines run from receipt of the report or from discovery by the project, and include nights, weekends and holidays; they do not restart after classification. Severity follows CVSS 3.1. These commitments assume the two maintainers, without continuous on-call coverage. The RFP target of 24 hours for critical and high issues remains an external target, not a commitment; we aim to contain critical issues within 72 hours. If no fix is available for a dependency or a deadline is at risk, we apply containment, record the risk and inform the reporter; containment does not count as a fix.
+Deadlines run from receipt of the report or from discovery by the project, and include nights, weekends and holidays; they do not restart after classification. Severity follows CVSS 3.1. These commitments assume the two maintainers, without continuous on-call coverage. Critical issues are fixed within 24 hours of receipt or discovery. If no fix is available for a dependency or a deadline is at risk, we apply containment, record the risk and inform the reporter; containment does not count as a fix.
 
 Critical or high security fixes may skip the 14-day dependency waiting period when the risk of waiting outweighs the risk of updating. The exception is specific to the dependency and version, recorded and reviewed in the PR, with the tests and signed release described in the [runbook](docs/runbooks/vulnerabilidades.md). After the fix is published, we publish a GitHub advisory and credit the reporter, if they wish.
 
