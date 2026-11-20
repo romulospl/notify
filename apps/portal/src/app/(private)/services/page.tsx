@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireTenantContext } from "@/lib/access";
 import { listApiServices } from "@/lib/data/api-services";
+import { env } from "@/lib/env";
 import { CreateServiceForm } from "./key-forms";
 import { cardClass } from "@/components/ui/card";
 
@@ -23,7 +24,7 @@ export default async function ServicesPage() {
 
       {canWrite ? (
         <div className="mt-6">
-          <CreateServiceForm />
+          <CreateServiceForm collectorUrl={env.collectorUrl} />
         </div>
       ) : (
         <p className="mt-6 text-sm text-muted">This project was removed; new services can&apos;t be added.</p>

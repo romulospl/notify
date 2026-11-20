@@ -19,7 +19,7 @@ const secondary =
   "rounded-control border border-border-strong px-3 py-1 text-sm hover:bg-surface-2 disabled:opacity-60";
 
 // Mostra a chave recém-criada. Ela só existe aqui, até sair da página.
-function KeyReveal({ state }: { state: KeyActionState }) {
+function KeyReveal({ state, collectorUrl }: { state: KeyActionState; collectorUrl: string }) {
   const [copied, setCopied] = useState(false);
   if (state.status === "error") {
     return (
@@ -46,13 +46,14 @@ function KeyReveal({ state }: { state: KeyActionState }) {
         </button>
       </div>
       <p className="mt-2 text-muted">
-        Send it as <code>Authorization: Bearer &lt;key&gt;</code> in your OTLP exporter.
+        Send your OpenTelemetry metrics to <code className="break-all">{collectorUrl}</code> with the header{" "}
+        <code>Authorization: Bearer &lt;key&gt;</code>.
       </p>
     </div>
   );
 }
 
-export function CreateServiceForm() {
+export function CreateServiceForm({ collectorUrl }: { collectorUrl: string }) {
   const [state, action, pending] = useActionState(createServiceAction, idle);
   return (
     <div>
@@ -65,7 +66,7 @@ export function CreateServiceForm() {
           {pending ? "Creating…" : "Create service"}
         </button>
       </form>
-      <KeyReveal state={state} />
+      <KeyReveal state={state} collectorUrl={collectorUrl} />
       {state.status === "created" && (
         <Link href={`/services/${state.serviceId}/keys`} className="mt-2 inline-block text-sm underline">
           Manage this service&apos;s keys
@@ -75,7 +76,15 @@ export function CreateServiceForm() {
   );
 }
 
-export function CreateKeyButton({ serviceId, disabled }: { serviceId: string; disabled: boolean }) {
+export function CreateKeyButton({
+  serviceId,
+  disabled,
+  collectorUrl,
+}: {
+  serviceId: string;
+  disabled: boolean;
+  collectorUrl: string;
+}) {
   const [state, action, pending] = useActionState(createKeyAction.bind(null, serviceId), idle);
   return (
     <div>
@@ -84,7 +93,7 @@ export function CreateKeyButton({ serviceId, disabled }: { serviceId: string; di
           {pending ? "Creating…" : "Create key"}
         </button>
       </form>
-      <KeyReveal state={state} />
+      <KeyReveal state={state} collectorUrl={collectorUrl} />
     </div>
   );
 }

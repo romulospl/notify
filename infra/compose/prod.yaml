@@ -128,6 +128,8 @@ services:
       SIGNUP_APPROVAL: ${SIGNUP_APPROVAL:-false}
       # Gateway address in the installation tag shown on each site's page.
       INGEST_URL: https://${INGEST_HOST:?}
+      # Collector OTLP address shown with each service's ingest keys.
+      COLLECTOR_URL: https://${API_HOST:?}
     depends_on:
       postgres:
         condition: service_healthy

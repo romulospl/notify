@@ -105,6 +105,8 @@ services:
       SIGNUP_APPROVAL: ${SIGNUP_APPROVAL:-false}
       # Gateway address in the installation tag shown on each site's page.
       INGEST_URL: http://localhost:${INGEST_WEB_PORT:-3002}
+      # Collector OTLP address shown with each service's ingest keys.
+      COLLECTOR_URL: http://127.0.0.1:${COLLECTOR_HTTP_PORT:-4318}
     depends_on:
       postgres:
         condition: service_healthy

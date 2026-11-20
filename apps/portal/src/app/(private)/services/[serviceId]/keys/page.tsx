@@ -3,7 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireTenantContext } from "@/lib/access";
 import { getApiService, listIngestKeys, MAX_ACTIVE_KEYS } from "@/lib/data/api-services";
+import { env } from "@/lib/env";
 import { CreateKeyButton, RevokeKeyButton } from "../../key-forms";
+import { OtlpEndpoint } from "../../otlp-endpoint";
 import { ServiceTabs } from "../service-tabs";
 import { cardClass } from "@/components/ui/card";
 import { StatusChip } from "@/components/ui/status-chip";
@@ -30,13 +32,14 @@ export default async function ServicePage({ params }: { params: Promise<{ servic
       </Link>
       <h1 className="mt-2 text-2xl font-semibold tracking-tight">{service.name}</h1>
       <ServiceTabs serviceId={service.id} current="keys" />
+      <OtlpEndpoint url={env.collectorUrl} />
       <p className="mt-6 text-muted">
         {active} of {MAX_ACTIVE_KEYS} active keys. Create a new key before revoking the old one to rotate without
         losing data.
       </p>
 
       <div className="mt-6">
-        <CreateKeyButton serviceId={service.id} disabled={!canCreate} />
+        <CreateKeyButton serviceId={service.id} disabled={!canCreate} collectorUrl={env.collectorUrl} />
       </div>
 
       <div className={`${cardClass} mt-8 overflow-x-auto px-4 py-1`}>

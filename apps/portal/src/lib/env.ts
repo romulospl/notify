@@ -35,6 +35,12 @@ export const env = {
   get ingestUrl() {
     return (process.env.INGEST_URL ?? "http://localhost:3002").replace(/\/$/, "");
   },
+  // Public OTLP address of the API collector, shown with each service's ingest
+  // keys so the tenant knows where to send metrics. In production it is
+  // https://API_HOST (prod.yaml), serving OTLP/HTTP and gRPC on port 443.
+  get collectorUrl() {
+    return (process.env.COLLECTOR_URL ?? "http://127.0.0.1:4318").replace(/\/$/, "");
+  },
   // Cadastro com aprovação prévia (#49, ADR 0007): com `true` ou `1`, projeto
   // novo nasce `pending` até um operador aprovar. Desligado por padrão. Lido a
   // cada cadastro; mudar o valor exige reiniciar o portal.

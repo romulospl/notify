@@ -33,7 +33,7 @@ Next.js 16 (App Router, `src/proxy.ts` instead of the old `middleware.ts`), Bett
 
 ## Keys
 
-- **Ingest keys (#59):** format and hash in `src/lib/ingest-key.ts` (contract with the collector), functions in `src/lib/data/api-services.ts`, screens in `/services`. The full key exists only in the creation response: never in logs, the database or error messages. "Last used" is written by the collector once per key per UTC day through `ingest_key_touch(text)` (migration 0008, `SECURITY DEFINER`, `EXECUTE` only for `stellytics_collector`).
+- **Ingest keys (#59):** format and hash in `src/lib/ingest-key.ts` (contract with the collector), functions in `src/lib/data/api-services.ts`, screens in `/services`. The key reveal, the **Ingest keys** tab (`otlp-endpoint.tsx`) and the empty service dashboard show the collector address from `COLLECTOR_URL` (`https://API_HOST` in `prod.yaml`). The full key exists only in the creation response: never in logs, the database or error messages. "Last used" is written by the collector once per key per UTC day through `ingest_key_touch(text)` (migration 0008, `SECURITY DEFINER`, `EXECUTE` only for `stellytics_collector`).
 - **SCF read keys (#48, ADR 0006):** `nrk_` keys (`src/lib/read-key.ts`, table `operator_api_key`, migrations 0006 and 0007, screens in `/operator/keys`, functions in `src/lib/data/operator/api-keys.ts`) and the read-only API `GET /api/v1/projects|web|api?period=`, authenticated by `authenticateReadKey` in `access.ts`, which returns an `OperatorContext`. Identical 401 for every failure, no CORS, `no-store`. In-memory limits: 60/min per key and 120/min per truncated IP before the database query; Caddy does not rate-limit by IP.
 - Integration tests leave rows in `audit_log`, which only accepts inserts.
 

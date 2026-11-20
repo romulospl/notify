@@ -5,6 +5,7 @@ import { requireTenantContext } from "@/lib/access";
 import { getApiService } from "@/lib/data/api-services";
 import { type ApiCounts, ENDPOINT_LIMIT, getServiceDashboard } from "@/lib/data/api-metrics";
 import { getProject } from "@/lib/data/tenants";
+import { env } from "@/lib/env";
 import { bucketLabel, formatCount, formatLatency, formatShare, statusLabel } from "@/lib/format";
 import { ChartFrame } from "@/components/charts/chart-frame";
 import { ColumnChart } from "@/components/charts/column-chart";
@@ -84,7 +85,8 @@ export default async function ServicePage({
 
       {totals.requests === 0 && (
         <p className="mt-6 rounded-card border border-dashed border-border-strong p-4 text-sm text-muted">
-          No requests in this period yet. Send OpenTelemetry HTTP server metrics or traces with an{" "}
+          No requests in this period yet. Send OpenTelemetry HTTP server metrics or traces to{" "}
+          <code className="break-all">{env.collectorUrl}</code> with an{" "}
           <Link href={`/services/${service.id}/keys`} className="underline">
             ingest key
           </Link>{" "}
