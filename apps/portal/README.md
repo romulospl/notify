@@ -30,7 +30,7 @@ The code under `src/lib/` still has the session, tenant and operator layer: Bett
 
 Two consequences to know about:
 
-- The operator invite command still emails a link to `/invite/<token>`, but that page does not exist in this version.
+- Operator invites are disabled: the page that accepted them (`/invite/<token>`) does not exist in this version, so `operator:invite` refuses and sends nothing. Use `operator:create`.
 - Projects, sites, services and keys cannot be created from the portal. The development seed below creates test data.
 
 ## Running
@@ -118,7 +118,7 @@ Use `127.0.0.1`, not `localhost`: if another program listens on the same port ov
 | `UMAMI_API_KEY` | For real data | API key of the service account. Without it the portal starts, but reads no web statistics |
 | `INGEST_URL` | No | Public gateway address used in the installation tag of the quickstart at `/docs` (default `http://localhost:3002`; `https://INGEST_HOST` in `prod.yaml`) |
 | `COLLECTOR_URL` | No | Public OTLP address of the API collector, shown in the quickstart at `/docs` (default `http://127.0.0.1:4318`; `https://API_HOST` in `prod.yaml`) |
-| `SMTP_URL` | For e-mail | SMTP server used by the operator invite command, e.g. `smtp://mailpit:1025` or `smtps://user:password@host:465` |
+| `SMTP_URL` | No | SMTP server of the mail layer (operator invites, disabled in this version), e.g. `smtp://mailpit:1025` or `smtps://user:password@host:465` |
 | `MAIL_FROM` | No | Sender (default `stellytics <no-reply@stellytics.localhost>`) |
 
 ## Database and migrations
