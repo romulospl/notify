@@ -42,7 +42,7 @@ export function DocsSidebar({ sections, current, base }: { sections: SidebarSect
     .filter((section) => section.links.length > 0);
 
   const item = (active: boolean) =>
-    `block py-1.5 text-[0.9375rem] ${active ? "font-medium text-fg" : "text-muted hover:text-fg"}`;
+    `block py-1.5 text-[0.9375rem] ${active ? "text-fg" : "text-muted hover:text-fg"}`;
   const label = "font-mono text-xs font-medium tracking-wide text-fg";
 
   return (
@@ -77,18 +77,6 @@ export function DocsSidebar({ sections, current, base }: { sections: SidebarSect
         aria-label="Guides"
         className={`${open ? "block" : "hidden"} mt-6 min-h-0 flex-1 overflow-y-auto pb-6 text-sm lg:block`}
       >
-        {!q && (
-          <div className="mb-8">
-            <p className={label}>Getting started</p>
-            <ul className="mt-2.5 space-y-1">
-              <li>
-                <Link href={base} aria-current={current ? undefined : "page"} className={item(!current)}>
-                  Overview
-                </Link>
-              </li>
-            </ul>
-          </div>
-        )}
         {shown.map((section) => (
           <div key={section.title} className="mb-8">
             <p className={label}>{section.title}</p>
@@ -100,7 +88,14 @@ export function DocsSidebar({ sections, current, base }: { sections: SidebarSect
                     aria-current={link.slug === current ? "page" : undefined}
                     className={item(link.slug === current)}
                   >
-                    {link.label}
+                    {link.slug === current ? (
+                      <>
+                        <span aria-hidden="true" className="text-accent-text">[</span> {link.label}{" "}
+                        <span aria-hidden="true" className="text-accent-text">]</span>
+                      </>
+                    ) : (
+                      link.label
+                    )}
                   </Link>
                 </li>
               ))}

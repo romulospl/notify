@@ -18,13 +18,9 @@ COPY apps/portal apps/portal
 # Versions and SRI hashes of the tracking script, for the installation tag on
 # each site's page (src/lib/tracker-snippet.ts).
 COPY packages/tracker/published/sri.json packages/tracker/published/sri.json
-# Guides rendered at /docs/[slug] (src/lib/docs-index.json): the build reads
-# these Markdown files and prerenders one page each.
-COPY docs docs
-COPY SECURITY.md CONTRIBUTING.md ./
-COPY examples/README.md examples/README.md
-COPY examples/api-backend/README.md examples/api-backend/README.md
-COPY packages/tracker/docs/ad-blockers.md packages/tracker/docs/ad-blockers.md
+# Guides rendered at /docs/[slug] (src/lib/docs-index.json, all under
+# docs/guide/): the build reads these Markdown files and prerenders one page each.
+COPY docs/guide docs/guide
 RUN pnpm --filter @stellytics/portal build
 # Operator admin command bundled with its dependencies (ADR 0017).
 RUN pnpm --filter @stellytics/portal build:operator

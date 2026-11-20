@@ -9,7 +9,7 @@ import index from "./docs-index.json";
 // never becomes part of a file path, so nothing outside it can be read.
 
 export type DocLink = { slug: string; label: string; path: string; note: string };
-export type DocSection = { title: string; text: string; links: DocLink[] };
+export type DocSection = { title: string; links: DocLink[] };
 
 export const DOC_SECTIONS: DocSection[] = index;
 export const DOCS: DocLink[] = DOC_SECTIONS.flatMap((section) => section.links);
