@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fingerprint of the stellytics and umami databases (#54, docs/handover.md).
+# Fingerprint of the stellytics and umami databases (#54).
 #
 # Prints, as stable text, everything the data migration must preserve:
 # rows and checksum of each table (partitions included), sequence values,

@@ -104,7 +104,7 @@ Logs: `compose logs <service>` (caddy, portal, ingest-web, collector, rollup, um
 
 `/demo` and `/operator` work without sign-in. Out of the box they show **sample data** (made-up numbers; only the home page says so). To show a real project instead, use one you own: everything in it becomes public.
 
-1. The project must already exist in the `stellytics` database, with a website whose domain is exactly `<portal_host>` and, for API metrics, a service and ingest key used by a backend pointed at `https://<api_host>` (for example [`examples/api-backend`](../examples/api-backend/README.md)). This version of the portal cannot create projects, sites, services or keys ([`apps/portal/README.md`](../apps/portal/README.md)); they come from a previous version or a database import ([`handover.md`](handover.md)).
+1. The project must already exist in the `stellytics` database, with a website whose domain is exactly `<portal_host>` and, for API metrics, a service and ingest key used by a backend pointed at `https://<api_host>` (for example [`examples/api-backend`](../examples/api-backend/README.md)). This version of the portal cannot create projects, sites, services or keys ([`apps/portal/README.md`](../apps/portal/README.md)); they come from a previous version or a database import (`infra/scripts/db-import.sh`).
 2. Set `UMAMI_API_KEY` (step 2 of "First start") and the project's slug in `DEMO_TENANT_SLUG` in `.env.production`, then run `sudo ./deploy.sh`.
 3. Check: `curl -s https://<portal_host>/ | grep data-site` shows the tracker tag with the hash of the newest version in `packages/tracker/published/sri.json`, and `/demo` and `/operator` open in a private window.
 
@@ -192,9 +192,9 @@ Prometheus and Alertmanager listen on loopback only: `ssh -N -L 9090:127.0.0.1:9
 
 ## Remove a deployment
 
-For a test deploy, or after a handover ([`handover.md`](handover.md)) once the new operator has confirmed their copy. Removing the VPS disk and the bucket deletes the data and every backup for good.
+For a test deploy, or after a handover once the new operator has confirmed their copy. Removing the VPS disk and the bucket deletes the data and every backup for good.
 
-1. Decide what to keep. To keep the data, take a base backup (`systemctl start stellytics-backup`) and keep the bucket and `WALG_LIBSODIUM_KEY`, or export it as in `handover.md`.
+1. Decide what to keep. To keep the data, take a base backup (`systemctl start stellytics-backup`) and keep the bucket and `WALG_LIBSODIUM_KEY`, or export it with `infra/scripts/db-export.sh`.
 2. On the monitoring host first, so removing production does not raise alerts: `cd infra/monitoring && docker compose down -v`. Remove or pause the check at the heartbeat service (`DEADMAN_URL`), which would otherwise report the monitor as down.
 3. On the VPS: `systemctl disable --now stellytics-backup.timer stellytics-check.timer`, then `compose down`.
 4. At the providers: delete the VPS with its data disk (`/srv/stellytics`), the monitoring host, the DNS records, and, unless you kept it in step 1, the bucket. Revoke the bucket access key and the SMTP credentials used by the portal and by the monitor.
@@ -206,7 +206,7 @@ For a test deploy, or after a handover ([`handover.md`](handover.md)) once the n
 - **Rate limits:** Caddy does not limit by IP and the collector does not limit by key; the collector's memory cap is `COLLECTOR_MEM_LIMIT` (default `512m`). The SCF read API limit is in the portal's memory ([ADR 0006](decisions.md#0006-scf-read-api)).
 - **Restore in production:** tested in CI with a local S3, not against the real bucket. Rehearse on a throwaway VPS before you need it.
 - **Umami and Postgres upgrades:** by PR only (images pinned by digest); there is no major Postgres upgrade guide.
-- **Handover:** plan and tested data migration in [`handover.md`](handover.md) ([#54](https://github.com/romulospl/stellytics/issues/54)).
+- **Handover:** data migration with `infra/scripts/db-export.sh`, `db-import.sh` and `db-fingerprint.sh`, tested in CI ([#54](https://github.com/romulospl/stellytics/issues/54)).
 
 ## How this guide was checked
 

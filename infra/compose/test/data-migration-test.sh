@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test of the data migration between operators (#54, docs/handover.md).
+# Test of the data migration between operators (#54).
 #
 # Starts an ORIGIN stack (Postgres 17 with WAL-G, Umami and portal, with the
 # production images and Compose), writes real data to both databases

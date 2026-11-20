@@ -79,4 +79,4 @@ Backlog, board, specs, decisions, examples and the documents to keep up to date:
 
 - **Everything in English since 2026-11-19:** code, comments, documentation, decisions, issues, commits and PRs.
 - A new architecture decision becomes a new numbered section in `docs/decisions.md`; when a decision changes, update its section and status there (see "Adding a decision" in that file).
-- After closing an issue, update `docs/progress.md` and the matching `docs/eN-implementation.md`.
+- After closing an issue, update the matching `docs/eN-implementation.md`.

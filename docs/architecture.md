@@ -155,7 +155,7 @@ Why two languages: TypeScript for everything that has a screen and for the brows
 
 This document describes what is on `main`. Differences from the design above:
 
-- The **API collector and the rollup** are in `infra/compose/prod.yaml`; Caddy publishes the OTLP routes as described in [ADR 0014](decisions.md#0014-infra-in-docker-compose). The local CI stack tests the Caddy routes; no real production has been applied yet ([`progress.md`](progress.md)).
+- The **API collector and the rollup** are in `infra/compose/prod.yaml`; Caddy publishes the OTLP routes as described in [ADR 0014](decisions.md#0014-infra-in-docker-compose). The local CI stack tests the Caddy routes; no real production has been applied yet.
 - The API ingestion monitoring tests the OTLP host with a POST without a key (`API_URL` in `infra/monitoring/configure.sh`, [ADR 0005](decisions.md#0005-external-monitoring)).
 - Grafana, planned in ADR 0002, has not been adopted for now; ADR 0005 explains why.
 - High availability and SLA targets are left for after the MVP (issue [#52](https://github.com/romulospl/stellytics/issues/52)).
